@@ -1,0 +1,814 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+<meta name="theme-color" content="#13294B" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<title>PLP Finance</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Kanit:wght@400;500;600;700&family=Noto+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<script src="https://cdn.tailwindcss.com"></script>
+<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone@7.23.5/babel.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore-compat.js"></script>
+<style>
+  :root{
+    --primary:#13294B; --accent:#FF7A1A; --tint:#FFF1E6; --soft:#EAF0F8;
+    --bg:#F4F6F8; --card:#FFFFFF; --ink:#171A1F; --muted:#6B7280; --line:#E6E8EC;
+    --pos:#16A34A; --neg:#DC2626;
+  }
+  *{ -webkit-tap-highlight-color:transparent; box-sizing:border-box; }
+  body{ margin:0; background:var(--bg); font-family:'Noto Sans Thai',sans-serif; color:var(--ink); }
+  .kanit{ font-family:'Kanit',sans-serif; }
+  .num{ font-family:'Kanit',sans-serif; font-variant-numeric:tabular-nums; }
+  .shell{ max-width:480px; margin:0 auto; min-height:100vh; background:var(--bg); position:relative; box-shadow:0 0 40px rgba(0,0,0,.06); }
+  .scrim{ background:linear-gradient(180deg, var(--primary) 0%, color-mix(in srgb, var(--primary) 86%, #000) 100%); }
+  .card{ background:var(--card); border-radius:18px; box-shadow:0 1px 3px rgba(16,24,40,.06), 0 1px 2px rgba(16,24,40,.04); }
+  .press:active{ transform:scale(.97); transition:transform .08s; }
+  .pill{ background:var(--soft); color:var(--primary); }
+  .hide-scroll::-webkit-scrollbar{ display:none; }
+  .hide-scroll{ -ms-overflow-style:none; scrollbar-width:none; }
+  @keyframes fade{ from{opacity:0; transform:translateY(6px)} to{opacity:1; transform:none} }
+  .fade{ animation:fade .22s ease both; }
+  @keyframes spin{ to{ transform:rotate(360deg) } }
+  .spin{ animation:spin .8s linear infinite; }
+  input,select,button,textarea{ font-family:inherit; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script>
+/* ============================================================
+   ⚙️ CONFIG — แก้ 2 จุดนี้ก่อนใช้งาน
+   ============================================================ */
+
+// 1) วาง firebaseConfig ของโปรเจกต์พี่ตรงนี้ (Firebase Console > Project settings)
+const firebaseConfig = {
+  apiKey: "AIzaSyAVaizHIgRcgrufwwI1ohbOinOy0DtTiM0",
+  authDomain: "plp-finance.firebaseapp.com",
+  projectId: "plp-finance",
+  storageBucket: "plp-finance.firebasestorage.app",
+  messagingSenderId: "772651276984",
+  appId: "1:772651276984:web:46a5953931ba72c146724d"
+};
+
+// 2) PIN แอดมินครั้งแรก (ใช้ login ครั้งแรกตอนยังไม่มี user ในระบบ) — เปลี่ยนเลขนี้ แล้วเปลี่ยน PIN อีกทีหลังเข้าใช้
+const SETUP_ADMIN_PIN = "246810";
+
+/* ============================================================ */
+
+window.SETUP_ADMIN_PIN = SETUP_ADMIN_PIN;
+window.FB_OK = false; window.FB_ERR = "";
+try {
+  firebase.initializeApp(firebaseConfig);
+  window.FB_OK = !String(firebaseConfig.projectId).startsWith("PASTE");
+  if (!window.FB_OK) window.FB_ERR = "ยังไม่ได้วาง firebaseConfig";
+} catch (e) { window.FB_ERR = e.message; }
+</script>
+
+<script type="text/babel" data-presets="react">
+const { useState, useMemo, useEffect, useRef } = React;
+
+const FB_OK = window.FB_OK, FB_ERR = window.FB_ERR, SETUP_ADMIN_PIN = window.SETUP_ADMIN_PIN;
+const db = FB_OK ? firebase.firestore() : null;
+const FieldValue = firebase.firestore.FieldValue;
+
+/* ---------- shops (config คงที่) ---------- */
+const SHOPS = [
+  { id:'otteri', name:'Otteri', brand:'Otteri Wash & Dry', sub:'สาขา 1 · วัยทำงาน', type:'laundry', emoji:'🧺',
+    theme:{ primary:'#13294B', accent:'#FF7A1A', tint:'#FFF1E6', soft:'#E9EFF7' } },
+  { id:'teddy1', name:'Teddy 1', brand:'Teddy Laundry', sub:'นอก ม.ศิลปากร', type:'laundry', emoji:'🧸',
+    theme:{ primary:'#8A5A34', accent:'#F4A93C', tint:'#FBF0DF', soft:'#F3EADF' } },
+  { id:'teddy2', name:'Teddy 2', brand:'Teddy Laundry', sub:'ใน ม.ศิลปากร', type:'laundry', emoji:'🧸',
+    theme:{ primary:'#6E4423', accent:'#E0A92E', tint:'#FAF1DA', soft:'#F0E7D8' } },
+  { id:'owlcha', name:'Owl Cha', brand:'อาวน์ชา', sub:'ร้านน้ำชา', type:'drink', emoji:'🧋',
+    theme:{ primary:'#5E4B8B', accent:'#E0A92E', tint:'#F1ECFA', soft:'#ECE7F5' } },
+];
+const DEFAULT_CATS = {
+  laundry:{ income:['เครื่องซัก','เครื่องอบ','บริการ ซัก-อบ-พับ','Delivery','ขายสินค้า'],
+            expense:['ค่าเช่าที่','ค่าน้ำ-ค่าไฟ','เงินเดือนพนักงาน','วัตถุดิบ/ของใช้','ซ่อมบำรุงเครื่อง','การตลาด','อื่นๆ'] },
+  drink:{ income:['ขายหน้าร้าน','เดลิเวอรี','Referral','อื่นๆ'],
+          expense:['ค่าเช่าที่','ค่าน้ำ-ค่าไฟ','เงินเดือนพนักงาน','วัตถุดิบ (นม/ชา)','แก้ว/อุปกรณ์','การตลาด','อื่นๆ'] },
+};
+const ROLES = {
+  admin:{ label:'Admin', desc:'เข้าถึงทุกฟังก์ชัน ทุกร้าน', color:'#13294B' },
+  partner:{ label:'หุ้นส่วน', desc:'ดูข้อมูลเฉพาะร้านที่ถือหุ้น (อ่านอย่างเดียว)', color:'#0E7C66' },
+  staff:{ label:'พนักงาน', desc:'กรอกข้อมูลเฉพาะร้านตัวเอง', color:'#B45309' },
+};
+
+/* ---------- helpers ---------- */
+const pad=(n)=>String(n).padStart(2,'0');
+const today=()=>{ const d=new Date(); return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; };
+const ymOf=(ds)=>ds.slice(0,7);
+const baht=(n)=> (n<0?'-':'')+'฿'+Math.abs(Math.round(n||0)).toLocaleString('en-US');
+const hhmm=(ts)=>{ try{ const d=ts.toDate(); return pad(d.getHours())+':'+pad(d.getMinutes()); }catch(e){ return '—'; } };
+const sumBy=(arr,fn)=>arr.reduce((s,x)=>s+(fn(x)?Number(x.amount)||0:0),0);
+
+/* ---------- firestore ops ---------- */
+async function findUserByPin(pin){
+  const s=await db.collection('users').where('pin','==',pin).limit(1).get();
+  if(s.empty) return null; const d=s.docs[0]; return {id:d.id, ...d.data()};
+}
+async function usersEmpty(){ const s=await db.collection('users').limit(1).get(); return s.empty; }
+async function createAdmin(pin){
+  const data={name:'แอดมิน', role:'admin', pin, shopIds:'all', active:true, createdAt:FieldValue.serverTimestamp()};
+  const ref=await db.collection('users').add(data); return {id:ref.id, ...data};
+}
+async function allUsers(){ const s=await db.collection('users').get(); return s.docs.map(d=>({id:d.id,...d.data()})); }
+async function addUser({name,role,pin,shopIds}){
+  if(await findUserByPin(pin)) throw new Error('PIN นี้ถูกใช้แล้ว เลือกเลขอื่น');
+  await db.collection('users').add({name,role,pin,shopIds,active:true,createdAt:FieldValue.serverTimestamp()});
+}
+async function setUserActive(id,active){ await db.collection('users').doc(id).update({active}); }
+
+async function addTxn({shopId,kind,category,amount,method,note,by}){
+  const date=today(), ym=ymOf(date);
+  await db.collection('transactions').add({
+    shopId, kind, category, amount:Number(amount), method, note:note||'',
+    date, ym, skey:`${shopId}_${ym}`, by, source:'manual', ts:FieldValue.serverTimestamp()
+  });
+}
+async function delTxn(id){ await db.collection('transactions').doc(id).delete(); }
+async function monthTxns(shopId, ym){
+  const s=await db.collection('transactions').where('skey','==',`${shopId}_${ym}`).get();
+  return s.docs.map(d=>({id:d.id,...d.data()}));
+}
+
+async function customCats(shopId,kind){
+  const s=await db.collection('customCategories').where('ckey','==',`${shopId}_${kind}`).get();
+  return s.docs.map(d=>d.data().name);
+}
+async function addCat(shopId,kind,name){
+  await db.collection('customCategories').add({shopId,kind,name,ckey:`${shopId}_${kind}`,createdAt:FieldValue.serverTimestamp()});
+}
+
+async function getSettings(shopId){
+  const d=await db.collection('settings').doc(shopId).get();
+  return d.exists? {openingFloat:0,bankBalance:0,...d.data()} : {openingFloat:0,bankBalance:0};
+}
+async function saveSettings(shopId,data){ await db.collection('settings').doc(shopId).set(data,{merge:true}); }
+
+async function getCashCount(shopId,date){
+  const d=await db.collection('cashCounts').doc(`${shopId}_${date}`).get();
+  return d.exists? d.data().amount : null;
+}
+async function saveCashCount(shopId,date,amount,by){
+  await db.collection('cashCounts').doc(`${shopId}_${date}`).set({shopId,date,amount:Number(amount),by,ts:FieldValue.serverTimestamp()});
+}
+
+/* ---------- icons ---------- */
+const I={
+  home:(p)=><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"{...p}><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M9.5 21v-6h5v6"/></svg>,
+  receipt:(p)=><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"{...p}><path d="M5 3h14v18l-2.5-1.6L14 21l-2-1.6L10 21l-2.5-1.6L5 21Z"/><path d="M8.5 8h7M8.5 12h7"/></svg>,
+  chart:(p)=><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"{...p}><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>,
+  wallet:(p)=><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"{...p}><path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H19a2 2 0 0 1 2 2"/><path d="M3 7.5V18a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-3.5"/><path d="M21 11h-4a1.8 1.8 0 0 0 0 3.6h4"/></svg>,
+  gear:(p)=><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"{...p}><circle cx="12" cy="12" r="3.2"/><path d="M12 2.5v2.2M12 19.3v2.2M21.5 12h-2.2M4.7 12H2.5M18.7 5.3l-1.6 1.6M6.9 17.1l-1.6 1.6M18.7 18.7l-1.6-1.6M6.9 6.9 5.3 5.3"/></svg>,
+  plus:(p)=><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"{...p}><path d="M12 5v14M5 12h14"/></svg>,
+  up:(p)=><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"{...p}><path d="M12 19V5M6 11l6-6 6 6"/></svg>,
+  down:(p)=><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"{...p}><path d="M12 5v14M6 13l6 6 6-6"/></svg>,
+  users:(p)=><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"{...p}><circle cx="9" cy="8" r="3"/><path d="M3.5 20a5.5 5.5 0 0 1 11 0"/><path d="M16 5.2a3 3 0 0 1 0 5.6M17.5 14.4A5.5 5.5 0 0 1 20.5 20"/></svg>,
+  chevron:(p)=><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"{...p}><path d="m9 6 6 6-6 6"/></svg>,
+  back:(p)=><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"{...p}><path d="m15 6-6 6 6 6"/></svg>,
+  swap:(p)=><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"{...p}><path d="M4 8h13l-3-3M20 16H7l3 3"/></svg>,
+  check:(p)=><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"{...p}><path d="m5 12 5 5L20 7"/></svg>,
+  cash:(p)=><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"{...p}><rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 9v6M18 9v6"/></svg>,
+  bank:(p)=><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"{...p}><path d="M3 9.5 12 4l9 5.5"/><path d="M5 9.5V18M19 9.5V18M9 9.5V18M15 9.5V18M3.5 21h17"/></svg>,
+  eye:(p)=><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"{...p}><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="2.6"/></svg>,
+  logout:(p)=><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"{...p}><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3"/><path d="M10 17l-5-5 5-5M5 12h11"/></svg>,
+  trash:(p)=><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"{...p}><path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13"/></svg>,
+  table:(p)=><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"{...p}><rect x="3.5" y="4.5" width="17" height="15" rx="2"/><path d="M3.5 9.5h17M9.5 9.5v10M15 9.5v10"/></svg>,
+  spark:(p)=><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"{...p}><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M18 6l-2.5 2.5M8.5 15.5 6 18"/></svg>,
+};
+
+/* ---------- small ui ---------- */
+function Spinner({c='var(--primary)'}){
+  return <svg className="spin" viewBox="0 0 24 24" width="26" height="26" fill="none" stroke={c} strokeWidth="2.4" strokeLinecap="round"><path d="M12 3a9 9 0 1 0 9 9" opacity=".9"/></svg>;
+}
+function Loading({label='กำลังโหลด...'}){
+  return <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:10,padding:'48px 0',color:'var(--muted)'}}>
+    <Spinner/><span style={{fontSize:13}}>{label}</span></div>;
+}
+function useToast(){
+  const [msg,setMsg]=useState(null);
+  const show=(m,type='ok')=>{ setMsg({m,type}); setTimeout(()=>setMsg(null),2400); };
+  const node = msg && (
+    <div className="fade" style={{position:'fixed',bottom:96,left:'50%',transform:'translateX(-50%)',zIndex:99,
+      background: msg.type==='err'?'#B42318':'#171A1F', color:'#fff', padding:'11px 18px', borderRadius:13,
+      fontSize:14, maxWidth:'88%', textAlign:'center', boxShadow:'0 6px 20px rgba(0,0,0,.25)'}}>{msg.m}</div>
+  );
+  return [show,node];
+}
+
+/* ============================================================ APP */
+function App(){
+  const [user,setUser]=useState(null);
+  const [shopId,setShopId]=useState(null);
+
+  const myShops = useMemo(()=>{
+    if(!user) return [];
+    return user.shopIds==='all' ? SHOPS : SHOPS.filter(s=>(user.shopIds||[]).includes(s.id));
+  },[user]);
+
+  const shop = SHOPS.find(s=>s.id===shopId);
+  useEffect(()=>{
+    if(shop){ const r=document.documentElement.style; const t=shop.theme;
+      r.setProperty('--primary',t.primary); r.setProperty('--accent',t.accent);
+      r.setProperty('--tint',t.tint); r.setProperty('--soft',t.soft);
+      document.querySelector('meta[name=theme-color]').setAttribute('content',t.primary);
+    }
+  },[shopId]);
+
+  const onLogin=async(pin)=>{
+    let u=await findUserByPin(pin);
+    if(!u){ if((await usersEmpty()) && pin===SETUP_ADMIN_PIN) u=await createAdmin(pin); }
+    if(!u || u.active===false) return false;
+    setUser(u);
+    const ms = u.shopIds==='all' ? SHOPS : SHOPS.filter(s=>(u.shopIds||[]).includes(s.id));
+    if(ms.length===1) setShopId(ms[0].id);
+    return true;
+  };
+  const logout=()=>{ setUser(null); setShopId(null); };
+
+  if(!FB_OK) return <div className="shell"><ConfigError/></div>;
+  if(!user) return <div className="shell"><Login onLogin={onLogin}/></div>;
+  if(!shopId) return <div className="shell"><Picker shops={myShops} onPick={setShopId} user={user} logout={logout}/></div>;
+  return <div className="shell"><Main shop={shop} user={user} canSwitch={myShops.length>1}
+    onSwitch={()=>setShopId(null)} logout={logout}/></div>;
+}
+
+function ConfigError(){
+  return <div style={{padding:'80px 28px'}}>
+    <div className="kanit" style={{fontSize:22,fontWeight:700,marginBottom:10}}>ยังตั้งค่าไม่เสร็จ</div>
+    <div style={{color:'var(--muted)',fontSize:14,lineHeight:1.7}}>
+      เปิดไฟล์ <b>index.html</b> แล้ววาง <b>firebaseConfig</b> ของโปรเจกต์ในส่วน CONFIG ด้านบนสุดของไฟล์ก่อนครับ
+      <div style={{marginTop:8,padding:'10px 12px',background:'#FEF3F2',color:'#B42318',borderRadius:10,fontSize:12.5}}>
+        {FB_ERR}</div>
+    </div>
+  </div>;
+}
+
+/* ---------- LOGIN ---------- */
+function Login({onLogin}){
+  const [pin,setPin]=useState('');
+  const [busy,setBusy]=useState(false);
+  const [err,setErr]=useState(false);
+  const press=async(k)=>{
+    if(busy) return;
+    if(k==='del'){ setPin(p=>p.slice(0,-1)); setErr(false); return; }
+    if(pin.length>=6) return;
+    const np=pin+k; setPin(np); setErr(false);
+    if(np.length===6){
+      setBusy(true);
+      const ok=await onLogin(np).catch(()=>false);
+      if(!ok){ setErr(true); setPin(''); setBusy(false); }
+    }
+  };
+  return (
+    <div className="fade" style={{minHeight:'100vh'}}>
+      <div className="scrim" style={{padding:'64px 24px 40px', color:'#fff'}}>
+        <div className="kanit" style={{fontSize:13, letterSpacing:3, opacity:.7}}>PLP GROUP</div>
+        <div className="kanit" style={{fontSize:30, fontWeight:700, marginTop:6}}>ระบบบัญชี & บริหาร</div>
+        <div style={{opacity:.8, marginTop:4, fontSize:14}}>ซักผ้า 3 สาขา · น้ำชา 1 ร้าน</div>
+      </div>
+      <div style={{padding:'28px 24px'}}>
+        <div style={{textAlign:'center', color: err?'#B42318':'var(--muted)', marginBottom:14, fontSize:14}}>
+          {busy? 'กำลังเข้าสู่ระบบ...' : err? 'PIN ไม่ถูกต้อง ลองใหม่' : 'ใส่รหัส PIN เพื่อเข้าใช้งาน'}</div>
+        <div style={{display:'flex', justifyContent:'center', gap:12, marginBottom:30}}>
+          {[0,1,2,3,4,5].map(i=>(
+            <div key={i} style={{width:15,height:15,borderRadius:99,
+              background:i<pin.length?'var(--primary)':'var(--line)', transition:'background .15s'}}/>
+          ))}
+        </div>
+        <div style={{display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:14, maxWidth:280, margin:'0 auto', opacity:busy?.5:1}}>
+          {['1','2','3','4','5','6','7','8','9','','0','del'].map((k,i)=> k==='' ? <div key={i}/> :
+            <button key={i} onClick={()=>press(k)} className="press kanit"
+              style={{height:66, borderRadius:18, border:'none', background:k==='del'?'transparent':'var(--card)',
+                fontSize:24, fontWeight:500, color:'var(--ink)', boxShadow:k==='del'?'none':'0 1px 3px rgba(0,0,0,.06)'}}>
+              {k==='del'?'⌫':k}</button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- PICKER ---------- */
+function Picker({shops,onPick,user,logout}){
+  return (
+    <div className="fade">
+      <div className="scrim" style={{padding:'52px 22px 26px', color:'#fff', borderRadius:'0 0 26px 26px'}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start'}}>
+          <div>
+            <div className="kanit" style={{fontSize:24, fontWeight:700}}>เลือกร้าน</div>
+            <div style={{opacity:.82, fontSize:14, marginTop:3}}>สวัสดี {user.name} · {ROLES[user.role].label}</div>
+          </div>
+          <button onClick={logout} className="press" style={{border:'none',background:'rgba(255,255,255,.16)',color:'#fff',
+            borderRadius:11,padding:'8px 11px',display:'flex',alignItems:'center',gap:5,fontSize:13}}><I.logout/></button>
+        </div>
+      </div>
+      <div style={{padding:'18px 16px 24px'}}>
+        {shops.map(s=>(
+          <button key={s.id} onClick={()=>onPick(s.id)} className="card press"
+            style={{width:'100%', border:'none', textAlign:'left', padding:14, marginBottom:12,
+              display:'flex', alignItems:'center', gap:14}}>
+            <div style={{width:54,height:54, borderRadius:16, background:s.theme.tint,
+              display:'grid', placeItems:'center', fontSize:26, flexShrink:0,
+              boxShadow:`inset 0 0 0 2px ${s.theme.accent}33`}}>{s.emoji}</div>
+            <div style={{flex:1, minWidth:0}}>
+              <div className="kanit" style={{fontWeight:600, fontSize:18, color:s.theme.primary}}>{s.name}</div>
+              <div style={{fontSize:13, color:'var(--muted)'}}>{s.sub}</div>
+            </div>
+            <span style={{width:9,height:9,borderRadius:99,background:s.theme.accent}}/>
+            <I.chevron style={{color:'var(--muted)'}}/>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ---------- MAIN SHELL ---------- */
+function Main({shop,user,canSwitch,onSwitch,logout}){
+  const [tab,setTab]=useState('home');
+  const readOnly = user.role==='partner';
+  const [toast,toastNode]=useToast();
+
+  const tabs=[
+    {k:'home',label:'หน้าแรก',icon:I.home},
+    {k:'record',label:'บันทึก',icon:I.receipt},
+    {k:'analyze',label:'วิเคราะห์',icon:I.chart},
+    {k:'capital',label:'ทุน',icon:I.wallet},
+    {k:'settings',label:'ตั้งค่า',icon:I.gear},
+  ].filter(x=> !(user.role==='staff' && (x.k==='capital'||x.k==='analyze')));
+
+  return (
+    <div style={{paddingBottom:78}}>
+      <div className="scrim" style={{color:'#fff', padding:'14px 16px 16px', borderRadius:'0 0 22px 22px', position:'sticky', top:0, zIndex:30}}>
+        <div style={{display:'flex', alignItems:'center', gap:11}}>
+          <div style={{width:42,height:42,borderRadius:13, background:'rgba(255,255,255,.16)', display:'grid', placeItems:'center', fontSize:22}}>{shop.emoji}</div>
+          <div style={{flex:1, minWidth:0}}>
+            <div className="kanit" style={{fontWeight:600, fontSize:18, lineHeight:1.1}}>{shop.name}</div>
+            <div style={{fontSize:12, opacity:.82}}>{user.name} · {ROLES[user.role].label}</div>
+          </div>
+          {canSwitch && <button onClick={onSwitch} className="press" style={{border:'none', background:'rgba(255,255,255,.16)', color:'#fff', borderRadius:11, padding:'8px 10px', display:'flex', alignItems:'center', gap:5, fontSize:12.5}}><I.swap/> สลับร้าน</button>}
+        </div>
+      </div>
+
+      <div className="fade" key={tab}>
+        {tab==='home' && <Home shop={shop} user={user} setTab={setTab}/>}
+        {tab==='record' && <Record shop={shop} user={user} readOnly={readOnly} toast={toast}/>}
+        {tab==='analyze' && <Phase2 title="วิเคราะห์ยอดขาย" icon={I.chart}
+          items={['กราฟยอดขายตามวัน (จ–อา)','กราฟยอดขายตามช่วงเวลา','สรุปกำไร-ขาดทุน','คำแนะนำจัดกะ/วัตถุดิบ']}/>}
+        {tab==='capital' && <Phase2 title="ทุน / หุ้นส่วน" icon={I.wallet}
+          items={['สัดส่วนการถือหุ้นแต่ละร้าน','เพิ่มทุน / ถอนทุน','คำนวณปันผล','ประวัติเงินลงทุน']}/>}
+        {tab==='settings' && <Settings shop={shop} user={user} logout={logout} toast={toast}/>}
+      </div>
+
+      <div style={{position:'fixed', bottom:0, left:'50%', transform:'translateX(-50%)', width:'100%', maxWidth:480, background:'#fff', borderTop:'1px solid var(--line)', display:'flex', padding:'8px 0 calc(8px + env(safe-area-inset-bottom))', zIndex:30}}>
+        {tabs.map(x=>{ const on=tab===x.k; const Ic=x.icon; return (
+          <button key={x.k} onClick={()=>setTab(x.k)} className="press" style={{flex:1, border:'none', background:'none', display:'flex', flexDirection:'column', alignItems:'center', gap:3, color:on?'var(--primary)':'#9AA1AB'}}>
+            <Ic/><span className="kanit" style={{fontSize:11, fontWeight:on?600:400}}>{x.label}</span>
+          </button>
+        );})}
+      </div>
+      {toastNode}
+    </div>
+  );
+}
+
+/* ---------- HOME ---------- */
+function Home({shop,user,setTab}){
+  const [load,setLoad]=useState(true);
+  const [txns,setTxns]=useState([]);
+  const [cfg,setCfg]=useState({openingFloat:0,bankBalance:0});
+  const [counted,setCounted]=useState(null);
+  const [countInput,setCountInput]=useState('');
+  const [savingCount,setSavingCount]=useState(false);
+  const td=today();
+
+  const refresh=async()=>{
+    setLoad(true);
+    try{
+      const [t,s,c]=await Promise.all([ monthTxns(shop.id, ymOf(td)), getSettings(shop.id), getCashCount(shop.id,td) ]);
+      setTxns(t); setCfg(s); setCounted(c); if(c!=null) setCountInput(String(c));
+    }catch(e){ console.error(e); }
+    setLoad(false);
+  };
+  useEffect(()=>{ refresh(); },[shop.id]);
+
+  const tToday = txns.filter(t=>t.date===td);
+  const cashIn = sumBy(tToday, x=>x.kind==='income'&&x.method==='cash');
+  const cashOut= sumBy(tToday, x=>x.kind==='expense'&&x.method==='cash');
+  const bankIn = sumBy(tToday, x=>x.kind==='income'&&x.method==='bank');
+  const bankOut= sumBy(tToday, x=>x.kind==='expense'&&x.method==='bank');
+  const shouldCash = (cfg.openingFloat||0) + cashIn - cashOut;
+  const diff = counted==null ? null : counted - shouldCash;
+
+  const mIncome = sumBy(txns, x=>x.kind==='income');
+  const mExpense= sumBy(txns, x=>x.kind==='expense');
+  const recent = [...txns].sort((a,b)=>(b.ts?.seconds||0)-(a.ts?.seconds||0)).slice(0,6);
+
+  const doCount=async()=>{
+    if(countInput==='') return;
+    setSavingCount(true);
+    try{ await saveCashCount(shop.id,td,Number(countInput),{id:user.id,name:user.name}); setCounted(Number(countInput)); }
+    catch(e){ console.error(e); }
+    setSavingCount(false);
+  };
+
+  if(load) return <Loading/>;
+
+  return (
+    <div style={{padding:'16px 16px 8px'}}>
+      <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:12}}>
+        <Stat icon={I.cash} label="เงินสดในร้าน (ควรมี)" value={baht(shouldCash)} accent/>
+        <Stat icon={I.bank} label="เงินในบัญชี" value={baht(cfg.bankBalance)}/>
+      </div>
+
+      {/* reconciliation */}
+      <div className="card" style={{padding:16, marginBottom:14}}>
+        <div className="kanit" style={{fontWeight:600, fontSize:15.5, marginBottom:12}}>กระทบยอดเงินสด · วันนี้</div>
+        <Row l="เงินทอนตั้งต้น" r={baht(cfg.openingFloat)}/>
+        <Row l="รายรับเงินสด" r={baht(cashIn)}/>
+        <Row l="รายจ่ายเงินสด" r={baht(-cashOut)} rc={cashOut?'var(--neg)':'var(--ink)'}/>
+        <div style={{borderTop:'1px dashed var(--line)', margin:'8px 0'}}/>
+        <Row l="ควรมีในลิ้นชัก" r={baht(shouldCash)} bold/>
+
+        {user.role!=='partner' && (
+          <div style={{display:'flex',gap:8,marginTop:10}}>
+            <input value={countInput} onChange={e=>setCountInput(e.target.value.replace(/[^0-9]/g,''))} inputMode="numeric"
+              placeholder="กรอกยอดนับจริง" className="num"
+              style={{flex:1,padding:'11px 14px',border:'1.5px solid var(--line)',borderRadius:12,outline:'none',fontSize:15}}/>
+            <button onClick={doCount} className="press kanit" style={{padding:'0 16px',borderRadius:12,border:'none',
+              background:'var(--primary)',color:'#fff',fontSize:14,fontWeight:600,opacity:countInput===''?.5:1,
+              display:'flex',alignItems:'center'}}>{savingCount?'...':'บันทึก'}</button>
+          </div>
+        )}
+        {counted!=null && (
+          <div style={{marginTop:10, padding:'10px 12px', borderRadius:12,
+            background: diff===0?'#ECFDF3':'#FEF3F2', color: diff===0?'#067647':'#B42318',
+            display:'flex', justifyContent:'space-between', alignItems:'center', fontSize:13.5}}>
+            <span style={{display:'flex',alignItems:'center',gap:6}}>
+              {diff===0?<I.check/>:null}{diff===0?'นับจริงตรงกัน':'ส่วนต่างจากที่ควรมี'}</span>
+            <span className="num" style={{fontWeight:700}}>{diff>0?'+':''}{baht(diff)}</span>
+          </div>
+        )}
+      </div>
+
+      {/* quick actions */}
+      {user.role!=='partner' && (
+        <div style={{display:'flex', gap:12, marginBottom:14}}>
+          <button onClick={()=>setTab('record')} className="card press" style={{flex:1,border:'none',padding:'14px 8px',
+            display:'flex',flexDirection:'column',alignItems:'center',gap:8}}>
+            <span style={{width:46,height:46,borderRadius:14,background:'#ECFDF3',color:'#16A34A',display:'grid',placeItems:'center'}}><I.up/></span>
+            <span className="kanit" style={{fontWeight:600,fontSize:14}}>บันทึกรายรับ</span></button>
+          <button onClick={()=>setTab('record')} className="card press" style={{flex:1,border:'none',padding:'14px 8px',
+            display:'flex',flexDirection:'column',alignItems:'center',gap:8}}>
+            <span style={{width:46,height:46,borderRadius:14,background:'#FEF3F2',color:'#DC2626',display:'grid',placeItems:'center'}}><I.down/></span>
+            <span className="kanit" style={{fontWeight:600,fontSize:14}}>บันทึกรายจ่าย</span></button>
+        </div>
+      )}
+
+      {/* month summary */}
+      <div className="card" style={{padding:16, marginBottom:14}}>
+        <div className="kanit" style={{fontWeight:600, fontSize:15.5, marginBottom:14}}>สรุปเดือนนี้</div>
+        <div style={{display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8, textAlign:'center'}}>
+          <PL label="รายรับ" v={mIncome} c="#16A34A"/>
+          <PL label="รายจ่าย" v={mExpense} c="#DC2626"/>
+          <PL label="กำไร" v={mIncome-mExpense} c="var(--primary)" big/>
+        </div>
+      </div>
+
+      {/* recent */}
+      <div className="card" style={{padding:'14px 0 6px'}}>
+        <div style={{display:'flex', justifyContent:'space-between', padding:'0 16px 8px', alignItems:'center'}}>
+          <div className="kanit" style={{fontWeight:600, fontSize:15.5}}>รายการล่าสุด</div>
+          <button onClick={()=>setTab('record')} style={{border:'none', background:'none', color:'var(--primary)', fontSize:13, display:'flex', alignItems:'center', gap:2}}>ทั้งหมด <I.chevron/></button>
+        </div>
+        {recent.length? recent.map(r=><TxnRow key={r.id} r={r}/>) :
+          <div style={{padding:'24px 16px',textAlign:'center',color:'var(--muted)',fontSize:13.5}}>ยังไม่มีรายการเดือนนี้</div>}
+      </div>
+    </div>
+  );
+}
+
+function Stat({icon:Ic,label,value,accent}){
+  return <div className="card" style={{padding:14, background:accent?'var(--primary)':'#fff', color:accent?'#fff':'var(--ink)'}}>
+    <div style={{display:'flex', alignItems:'center', gap:7, color:accent?'#fff':'var(--muted)', opacity:accent?.9:1}}>
+      <Ic/><span style={{fontSize:12}}>{label}</span></div>
+    <div className="num" style={{fontSize:24, fontWeight:700, marginTop:8}}>{value}</div>
+  </div>;
+}
+function Row({l,r,rc,bold}){
+  return <div style={{display:'flex', justifyContent:'space-between', padding:'5px 0', alignItems:'baseline'}}>
+    <span style={{fontSize:14, color: bold?'var(--ink)':'var(--muted)', fontWeight:bold?600:400}}>{l}</span>
+    <span className="num" style={{fontSize:bold?16:15, fontWeight:bold?700:500, color:rc||'var(--ink)'}}>{r}</span></div>;
+}
+function PL({label,v,c,big}){
+  return <div><div style={{fontSize:11.5, color:'var(--muted)', marginBottom:4}}>{label}</div>
+    <div className="num" style={{fontSize:big?19:16, fontWeight:700, color:c}}>{baht(v)}</div></div>;
+}
+function TxnRow({r,onDel}){
+  const inc=r.kind==='income';
+  return <div style={{display:'flex', alignItems:'center', gap:12, padding:'10px 16px'}}>
+    <span style={{width:40,height:40,borderRadius:12, flexShrink:0, background:inc?'#ECFDF3':'#FEF3F2', color:inc?'#16A34A':'#DC2626', display:'grid', placeItems:'center'}}>{inc?<I.up/>:<I.down/>}</span>
+    <div style={{flex:1, minWidth:0}}>
+      <div style={{fontSize:14.5, fontWeight:500}}>{r.category}</div>
+      <div style={{fontSize:11.5, color:'var(--muted)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis'}}>
+        {r.by?.name||'—'} · {hhmm(r.ts)} · {r.method==='cash'?'เงินสด':'โอน'}</div>
+    </div>
+    <div className="num" style={{fontSize:15, fontWeight:600, color:inc?'#16A34A':'#DC2626'}}>{inc?'+':'-'}{baht(r.amount).replace('฿','')}</div>
+    {onDel && <button onClick={()=>onDel(r)} className="press" style={{border:'none',background:'none',color:'#C0C4CC',marginLeft:2}}><I.trash/></button>}
+  </div>;
+}
+
+/* ---------- RECORD ---------- */
+function Record({shop,user,readOnly,toast}){
+  const [mode,setMode]=useState('inc');
+  const kind = mode==='inc'?'income':'expense';
+  const [cats,setCats]=useState([]);
+  const [cat,setCat]=useState('');
+  const [amt,setAmt]=useState('');
+  const [pay,setPay]=useState('cash');
+  const [note,setNote]=useState('');
+  const [list,setList]=useState([]);
+  const [load,setLoad]=useState(true);
+  const [saving,setSaving]=useState(false);
+  const [addingCat,setAddingCat]=useState(false);
+  const [newCat,setNewCat]=useState('');
+  const td=today();
+
+  const loadCats=async()=>{
+    const custom=await customCats(shop.id,kind);
+    const base=DEFAULT_CATS[shop.type][kind];
+    const merged=[...base,...custom.filter(c=>!base.includes(c))];
+    setCats(merged); setCat(merged[0]||'');
+  };
+  const loadList=async()=>{
+    setLoad(true);
+    try{ const t=await monthTxns(shop.id, ymOf(td)); setList(t.filter(x=>x.date===td && x.kind===kind).sort((a,b)=>(b.ts?.seconds||0)-(a.ts?.seconds||0))); }
+    catch(e){ console.error(e); }
+    setLoad(false);
+  };
+  useEffect(()=>{ loadCats(); loadList(); },[shop.id,mode]);
+
+  const total=list.reduce((s,r)=>s+(Number(r.amount)||0),0);
+  const save=async()=>{
+    if(!amt||!cat) return;
+    setSaving(true);
+    try{
+      await addTxn({shopId:shop.id,kind,category:cat,amount:Number(amt),method:pay,note,by:{id:user.id,name:user.name}});
+      setAmt(''); setNote(''); await loadList();
+      toast(`บันทึก${mode==='inc'?'รายรับ':'รายจ่าย'} ${baht(Number(amt))} แล้ว`);
+    }catch(e){ toast('บันทึกไม่สำเร็จ','err'); }
+    setSaving(false);
+  };
+  const saveCat=async()=>{
+    if(!newCat.trim()) return;
+    try{ await addCat(shop.id,kind,newCat.trim()); setNewCat(''); setAddingCat(false); await loadCats(); toast('เพิ่มหมวดแล้ว'); }
+    catch(e){ toast('เพิ่มไม่สำเร็จ','err'); }
+  };
+  const onDel=async(r)=>{
+    try{ await delTxn(r.id); await loadList(); toast('ลบรายการแล้ว'); }catch(e){ toast('ลบไม่สำเร็จ','err'); }
+  };
+
+  return (
+    <div style={{padding:'14px 16px 8px'}}>
+      <div style={{display:'flex', background:'var(--soft)', borderRadius:14, padding:4, marginBottom:14}}>
+        {[['inc','รายรับ','#16A34A'],['exp','รายจ่าย','#DC2626']].map(([k,l,c])=>(
+          <button key={k} onClick={()=>setMode(k)} className="press kanit" style={{flex:1, padding:'10px', borderRadius:11, border:'none', fontWeight:600, fontSize:15, background:mode===k?'#fff':'transparent', color:mode===k?c:'var(--muted)', boxShadow:mode===k?'0 1px 3px rgba(0,0,0,.08)':'none'}}>{l}</button>
+        ))}
+      </div>
+
+      {mode==='inc' && shop.type==='laundry' && !readOnly && (
+        <div style={{width:'100%', border:'1.5px dashed var(--accent)', background:'var(--tint)', borderRadius:16, padding:'13px 15px', marginBottom:14, display:'flex', alignItems:'center', gap:12}}>
+          <span style={{width:42,height:42,borderRadius:12, background:'#fff', color:'var(--accent)', display:'grid', placeItems:'center', flexShrink:0}}><I.table/></span>
+          <div style={{flex:1}}>
+            <div className="kanit" style={{fontWeight:600, fontSize:14.5, color:'var(--primary)'}}>นำเข้ารายรับจาก Excel</div>
+            <div style={{fontSize:11.5, color:'var(--muted)'}}>ยอดเครื่องซัก/อบ · จะเปิดใช้เมื่อมีไฟล์ตัวอย่าง (Phase ถัดไป)</div>
+          </div>
+        </div>
+      )}
+
+      {readOnly ? (
+        <div className="card" style={{padding:16, marginBottom:14, display:'flex', gap:10, alignItems:'center', color:'var(--muted)', fontSize:13.5}}>
+          <I.eye/> โหมดหุ้นส่วน — ดูได้อย่างเดียว เพิ่ม/แก้รายการไม่ได้</div>
+      ) : (
+        <div className="card" style={{padding:16, marginBottom:14}}>
+          <div className="kanit" style={{fontWeight:600, fontSize:15, marginBottom:12}}>
+            {mode==='inc' && shop.type==='laundry' ? 'เพิ่มรายรับอื่นๆ (กรอกเอง)' : `เพิ่ม${mode==='inc'?'รายรับ':'รายจ่าย'}`}</div>
+
+          <label style={lbl}>หมวดรายการ</label>
+          <div style={{display:'flex', gap:8, overflowX:'auto', paddingBottom:6, marginBottom:12}} className="hide-scroll">
+            {cats.map(c=>(
+              <button key={c} onClick={()=>setCat(c)} className="press kanit" style={{whiteSpace:'nowrap', padding:'8px 13px', borderRadius:11, fontSize:13, fontWeight:500, border:`1.5px solid ${cat===c?'var(--primary)':'var(--line)'}`, background:cat===c?'var(--primary)':'#fff', color:cat===c?'#fff':'var(--ink)'}}>{c}</button>
+            ))}
+            <button onClick={()=>setAddingCat(v=>!v)} className="press" style={{whiteSpace:'nowrap', padding:'8px 12px', borderRadius:11, border:'1.5px dashed var(--line)', background:'#fff', color:'var(--muted)', fontSize:13, display:'flex', alignItems:'center', gap:3}}><I.plus/> เพิ่มหมวด</button>
+          </div>
+          {addingCat && (
+            <div style={{display:'flex',gap:8,marginBottom:12}}>
+              <input value={newCat} onChange={e=>setNewCat(e.target.value)} placeholder="ชื่อหมวดใหม่"
+                style={{flex:1,padding:'10px 13px',border:'1.5px solid var(--line)',borderRadius:11,outline:'none',fontSize:14}}/>
+              <button onClick={saveCat} className="press kanit" style={{padding:'0 16px',border:'none',borderRadius:11,background:'var(--primary)',color:'#fff',fontSize:14,fontWeight:600}}>เพิ่ม</button>
+            </div>
+          )}
+
+          <label style={lbl}>จำนวนเงิน (บาท)</label>
+          <input value={amt} onChange={e=>setAmt(e.target.value.replace(/[^0-9]/g,''))} inputMode="numeric" placeholder="0" className="num"
+            style={{width:'100%', padding:'14px 16px', fontSize:26, fontWeight:700, border:'1.5px solid var(--line)', borderRadius:14, outline:'none', marginBottom:12, color:'var(--ink)'}}/>
+
+          <label style={lbl}>ช่องทาง</label>
+          <div style={{display:'flex', gap:8, marginBottom:12}}>
+            {[['cash','เงินสด',I.cash],['bank','เงินโอน',I.bank]].map(([k,l,Ic])=>(
+              <button key={k} onClick={()=>setPay(k)} className="press" style={{flex:1, padding:'11px', borderRadius:12, fontSize:14, fontWeight:500, display:'flex', justifyContent:'center', alignItems:'center', gap:7, border:`1.5px solid ${pay===k?'var(--primary)':'var(--line)'}`, background:pay===k?'var(--soft)':'#fff', color:pay===k?'var(--primary)':'var(--ink)'}}><Ic/>{l}</button>
+            ))}
+          </div>
+
+          <label style={lbl}>หมายเหตุ (ถ้ามี)</label>
+          <input value={note} onChange={e=>setNote(e.target.value)} placeholder="เช่น โอนผ่านพร้อมเพย์"
+            style={{width:'100%',padding:'11px 14px',border:'1.5px solid var(--line)',borderRadius:12,outline:'none',fontSize:14,marginBottom:14}}/>
+
+          <button onClick={save} disabled={saving} className="press kanit" style={{width:'100%', padding:'15px', borderRadius:14, border:'none', background:'var(--primary)', color:'#fff', fontSize:16, fontWeight:600, opacity:(amt&&!saving)?1:.5}}>
+            {saving?'กำลังบันทึก...':`บันทึก${mode==='inc'?'รายรับ':'รายจ่าย'}${amt?` · ${baht(Number(amt))}`:''}`}</button>
+        </div>
+      )}
+
+      <div className="card" style={{padding:'14px 0 6px'}}>
+        <div style={{display:'flex', justifyContent:'space-between', padding:'0 16px 8px', alignItems:'center'}}>
+          <div className="kanit" style={{fontWeight:600, fontSize:15}}>{mode==='inc'?'รายรับ':'รายจ่าย'}วันนี้</div>
+          <div className="num" style={{fontWeight:700, fontSize:16, color:mode==='inc'?'#16A34A':'#DC2626'}}>{mode==='inc'?'+':'-'}{baht(total).replace('฿','')}</div>
+        </div>
+        {load? <Loading label="กำลังโหลดรายการ..."/> :
+          list.length? list.map(r=><TxnRow key={r.id} r={r} onDel={readOnly?null:onDel}/>) :
+          <div style={{padding:'24px 16px',textAlign:'center',color:'var(--muted)',fontSize:13.5}}>ยังไม่มีรายการวันนี้</div>}
+      </div>
+    </div>
+  );
+}
+const lbl={display:'block', fontSize:12, color:'var(--muted)', marginBottom:6, fontWeight:500};
+
+/* ---------- SETTINGS ---------- */
+function Settings({shop,user,logout,toast}){
+  const isAdmin = user.role==='admin';
+  const [cfg,setCfg]=useState(null);
+  const [bank,setBank]=useState(''); const [floatv,setFloatv]=useState('');
+  const [savingCfg,setSavingCfg]=useState(false);
+  const [users,setUsers]=useState(null);
+  const [showAdd,setShowAdd]=useState(false);
+
+  useEffect(()=>{ (async()=>{
+    const s=await getSettings(shop.id); setCfg(s); setBank(String(s.bankBalance||0)); setFloatv(String(s.openingFloat||0));
+    if(isAdmin) setUsers(await allUsers());
+  })(); },[shop.id]);
+
+  const saveCfg=async()=>{
+    setSavingCfg(true);
+    try{ await saveSettings(shop.id,{bankBalance:Number(bank||0),openingFloat:Number(floatv||0)}); toast('บันทึกการตั้งค่าแล้ว'); }
+    catch(e){ toast('บันทึกไม่สำเร็จ','err'); }
+    setSavingCfg(false);
+  };
+  const reloadUsers=async()=> setUsers(await allUsers());
+
+  return (
+    <div style={{padding:'14px 16px 8px'}}>
+      {/* account */}
+      <div className="card" style={{padding:16, marginBottom:14, display:'flex', alignItems:'center', gap:13}}>
+        <span style={{width:48,height:48,borderRadius:99, background:'var(--soft)', color:'var(--primary)', display:'grid', placeItems:'center', fontWeight:600, fontSize:18}} className="kanit">{(user.name||'?')[0]}</span>
+        <div style={{flex:1}}>
+          <div className="kanit" style={{fontWeight:600, fontSize:16}}>{user.name}</div>
+          <div style={{fontSize:12.5, color:'var(--muted)'}}>{ROLES[user.role].label} · {ROLES[user.role].desc}</div>
+        </div>
+      </div>
+
+      {isAdmin && cfg && (
+        <div className="card" style={{padding:16, marginBottom:14}}>
+          <div className="kanit" style={{fontWeight:600, fontSize:15, marginBottom:4}}>ตั้งค่าการเงิน · {shop.name}</div>
+          <div style={{fontSize:11.5,color:'var(--muted)',marginBottom:12}}>ยอดเริ่มต้นสำหรับกระทบยอด (อัปเดตเองได้)</div>
+          <label style={lbl}>เงินในบัญชีปัจจุบัน (บาท)</label>
+          <input value={bank} onChange={e=>setBank(e.target.value.replace(/[^0-9]/g,''))} inputMode="numeric" className="num"
+            style={{width:'100%',padding:'12px 14px',border:'1.5px solid var(--line)',borderRadius:12,outline:'none',fontSize:18,fontWeight:600,marginBottom:12}}/>
+          <label style={lbl}>เงินทอนตั้งต้นในลิ้นชัก (บาท)</label>
+          <input value={floatv} onChange={e=>setFloatv(e.target.value.replace(/[^0-9]/g,''))} inputMode="numeric" className="num"
+            style={{width:'100%',padding:'12px 14px',border:'1.5px solid var(--line)',borderRadius:12,outline:'none',fontSize:18,fontWeight:600,marginBottom:14}}/>
+          <button onClick={saveCfg} className="press kanit" style={{width:'100%',padding:'13px',border:'none',borderRadius:13,background:'var(--primary)',color:'#fff',fontWeight:600,fontSize:15}}>{savingCfg?'กำลังบันทึก...':'บันทึกการตั้งค่า'}</button>
+        </div>
+      )}
+
+      {isAdmin && (
+        <div className="card" style={{padding:'16px 0 8px', marginBottom:14}}>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'0 16px 10px'}}>
+            <div className="kanit" style={{fontWeight:600, fontSize:15}}>ผู้ใช้งานระบบ</div>
+            <button onClick={()=>setShowAdd(true)} className="press" style={{border:'none',background:'var(--soft)',color:'var(--primary)',borderRadius:10,padding:'7px 11px',fontSize:13,display:'flex',alignItems:'center',gap:4}}><I.plus/> เพิ่ม</button>
+          </div>
+          {users==null? <Loading label="โหลดผู้ใช้..."/> : users.map(u=>(
+            <div key={u.id} style={{display:'flex',alignItems:'center',gap:12,padding:'10px 16px'}}>
+              <span style={{width:38,height:38,borderRadius:99,background:'var(--soft)',color:ROLES[u.role]?.color||'#888',display:'grid',placeItems:'center',fontWeight:600}} className="kanit">{(u.name||'?')[0]}</span>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:14.5,fontWeight:500}}>{u.name} {u.active===false&&<span style={{fontSize:11,color:'#DC2626'}}>(ปิดใช้งาน)</span>}</div>
+                <div style={{fontSize:12,color:'var(--muted)'}}>{ROLES[u.role]?.label} · {u.shopIds==='all'?'ทุกร้าน':(u.shopIds||[]).map(id=>SHOPS.find(s=>s.id===id)?.name).join(', ')}</div>
+              </div>
+              {u.id!==user.id && (
+                <button onClick={async()=>{ await setUserActive(u.id, u.active===false); reloadUsers(); }} className="press"
+                  style={{border:'none',background:'none',fontSize:12.5,color:u.active===false?'#16A34A':'#DC2626',fontWeight:600}}>
+                  {u.active===false?'เปิด':'ปิด'}</button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      <button onClick={logout} className="press kanit" style={{width:'100%',padding:'14px',border:'1.5px solid var(--line)',borderRadius:14,background:'#fff',color:'#DC2626',fontWeight:600,fontSize:15,display:'flex',justifyContent:'center',alignItems:'center',gap:8}}>
+        <I.logout/> ออกจากระบบ</button>
+
+      {showAdd && <AddUserSheet onClose={()=>setShowAdd(false)} onSaved={()=>{ setShowAdd(false); reloadUsers(); }} toast={toast}/>}
+    </div>
+  );
+}
+
+function AddUserSheet({onClose,onSaved,toast}){
+  const [name,setName]=useState(''); const [role,setRole]=useState('staff');
+  const [pin,setPin]=useState(''); const [shopIds,setShopIds]=useState([]);
+  const [busy,setBusy]=useState(false);
+  const toggleShop=(id)=> setShopIds(p=> p.includes(id)? p.filter(x=>x!==id):[...p,id]);
+
+  const save=async()=>{
+    if(!name.trim()||pin.length!==6){ toast('กรอกชื่อ และ PIN 6 หลัก','err'); return; }
+    if(role!=='admin' && shopIds.length===0){ toast('เลือกร้านอย่างน้อย 1 ร้าน','err'); return; }
+    setBusy(true);
+    try{ await addUser({name:name.trim(),role,pin,shopIds: role==='admin'?'all':shopIds}); toast('เพิ่มผู้ใช้แล้ว'); onSaved(); }
+    catch(e){ toast(e.message||'เพิ่มไม่สำเร็จ','err'); setBusy(false); }
+  };
+
+  return (
+    <div style={{position:'fixed', inset:0, zIndex:60, maxWidth:480, margin:'0 auto'}}>
+      <div onClick={onClose} style={{position:'absolute', inset:0, background:'rgba(0,0,0,.4)'}}/>
+      <div className="fade" style={{position:'absolute', bottom:0, left:0, right:0, background:'var(--bg)', borderRadius:'22px 22px 0 0', maxHeight:'90vh', overflowY:'auto', paddingBottom:24}}>
+        <div style={{position:'sticky',top:0,background:'var(--bg)',padding:'14px 16px',display:'flex',alignItems:'center',gap:12,borderBottom:'1px solid var(--line)'}}>
+          <button onClick={onClose} className="press" style={{border:'none',background:'none',color:'var(--ink)'}}><I.back/></button>
+          <div className="kanit" style={{fontWeight:600,fontSize:17}}>เพิ่มผู้ใช้งาน</div>
+        </div>
+        <div style={{padding:16}}>
+          <label style={lbl}>ชื่อ</label>
+          <input value={name} onChange={e=>setName(e.target.value)} placeholder="ชื่อผู้ใช้"
+            style={{width:'100%',padding:'12px 14px',border:'1.5px solid var(--line)',borderRadius:12,outline:'none',fontSize:15,marginBottom:14}}/>
+
+          <label style={lbl}>บทบาท</label>
+          <div style={{display:'flex',gap:8,marginBottom:14}}>
+            {Object.entries(ROLES).map(([k,v])=>(
+              <button key={k} onClick={()=>setRole(k)} className="press kanit" style={{flex:1,padding:'10px 4px',borderRadius:11,fontSize:13,fontWeight:500,border:`1.5px solid ${role===k?v.color:'var(--line)'}`,background:role===k?v.color:'#fff',color:role===k?'#fff':'var(--ink)'}}>{v.label}</button>
+            ))}
+          </div>
+
+          <label style={lbl}>PIN 6 หลัก</label>
+          <input value={pin} onChange={e=>setPin(e.target.value.replace(/[^0-9]/g,'').slice(0,6))} inputMode="numeric" placeholder="● ● ● ● ● ●" className="num"
+            style={{width:'100%',padding:'12px 14px',border:'1.5px solid var(--line)',borderRadius:12,outline:'none',fontSize:20,fontWeight:600,letterSpacing:4,marginBottom:14}}/>
+
+          {role!=='admin' && (<>
+            <label style={lbl}>เข้าถึงร้าน (เลือกได้หลายร้าน)</label>
+            <div style={{display:'flex',flexDirection:'column',gap:8,marginBottom:16}}>
+              {SHOPS.map(s=>{ const on=shopIds.includes(s.id); return (
+                <button key={s.id} onClick={()=>toggleShop(s.id)} className="press" style={{display:'flex',alignItems:'center',gap:11,padding:'11px 13px',borderRadius:12,border:`1.5px solid ${on?s.theme.primary:'var(--line)'}`,background:on?s.theme.tint:'#fff',textAlign:'left'}}>
+                  <span style={{fontSize:20}}>{s.emoji}</span>
+                  <span style={{flex:1,fontSize:14.5,fontWeight:500,color:on?s.theme.primary:'var(--ink)'}}>{s.name}</span>
+                  {on && <span style={{color:s.theme.primary}}><I.check/></span>}
+                </button>
+              );})}
+            </div>
+          </>)}
+
+          <button onClick={save} disabled={busy} className="press kanit" style={{width:'100%',padding:'15px',border:'none',borderRadius:14,background:'var(--primary)',color:'#fff',fontSize:16,fontWeight:600,opacity:busy?.6:1}}>{busy?'กำลังบันทึก...':'บันทึกผู้ใช้'}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- PHASE 2 placeholder ---------- */
+function Phase2({title,icon:Ic,items}){
+  return (
+    <div style={{padding:'40px 24px'}}>
+      <div style={{textAlign:'center'}}>
+        <div style={{width:64,height:64,borderRadius:18,background:'var(--soft)',color:'var(--primary)',display:'grid',placeItems:'center',margin:'0 auto 14px'}}><Ic/></div>
+        <div className="kanit" style={{fontWeight:700,fontSize:20}}>{title}</div>
+        <div style={{color:'var(--muted)',fontSize:13.5,marginTop:4}}>กำลังพัฒนา · Phase ถัดไป</div>
+      </div>
+      <div className="card" style={{padding:'8px 0',marginTop:20}}>
+        {items.map((it,i)=>(
+          <div key={i} style={{display:'flex',alignItems:'center',gap:11,padding:'12px 16px',borderTop:i?'1px solid var(--line)':'none',fontSize:14}}>
+            <span style={{color:'var(--accent)'}}><I.spark/></span>{it}</div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>
