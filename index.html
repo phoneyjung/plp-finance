@@ -16,6 +16,7 @@
 <script src="https://unpkg.com/@babel/standalone@7.23.5/babel.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-auth-compat.js"></script>
 <style>
   :root{
     --primary:#13294B; --accent:#FF7A1A; --tint:#FFF1E6; --soft:#EAF0F8;
@@ -374,8 +375,7 @@ function Main({shop,user,canSwitch,onSwitch,logout}){
       <div className="fade" key={tab}>
         {tab==='home' && <Home shop={shop} user={user} setTab={setTab}/>}
         {tab==='record' && <Record shop={shop} user={user} readOnly={readOnly} toast={toast}/>}
-        {tab==='analyze' && <Phase2 title="วิเคราะห์ยอดขาย" icon={I.chart}
-          items={['กราฟยอดขายตามวัน (จ–อา)','กราฟยอดขายตามช่วงเวลา','สรุปกำไร-ขาดทุน','คำแนะนำจัดกะ/วัตถุดิบ']}/>}
+        {tab==='analyze' && <Analyze shop={shop} user={user}/>}
         {tab==='capital' && <Phase2 title="ทุน / หุ้นส่วน" icon={I.wallet}
           items={['สัดส่วนการถือหุ้นแต่ละร้าน','เพิ่มทุน / ถอนทุน','คำนวณปันผล','ประวัติเงินลงทุน']}/>}
         {tab==='settings' && <Settings shop={shop} user={user} logout={logout} toast={toast}/>}
@@ -859,6 +859,140 @@ function ChangePinSheet({user,onClose,toast}){
   );
 }
 
+/* ---------- PHASE 2 · วิเคราะห์ยอดขาย ---------- */
+function MiniBars({data,color}){
+  const max=Math.max(1,...data.map(d=>d.value));
+  const kS=(n)=> n>=1000?(n/1000).toFixed(n>=10000?0:1)+'k':String(Math.round(n));
+  return (
+    <div style={{display:'flex',alignItems:'flex-end',gap:5,height:120,marginTop:6}}>
+      {data.map((d,i)=>(
+        <div key={i} style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'flex-end',gap:5,height:'100%'}}>
+          <div className="num" style={{fontSize:9,color:'var(--muted)',fontWeight:700,height:12}}>{d.value>0?kS(d.value):''}</div>
+          <div style={{width:'100%',maxWidth:28,height:`${(d.value/max)*86}%`,minHeight:d.value>0?4:1,background:d.value>0?color:'var(--line)',borderRadius:'5px 5px 0 0'}}/>
+          <div style={{fontSize:10,color:'var(--muted)',whiteSpace:'nowrap'}}>{d.label}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+function CatBars({list,color}){
+  const max=Math.max(1,...list.map(x=>x[1]));
+  return (
+    <div style={{marginTop:8}}>
+      {list.map(([cat,val])=>(
+        <div key={cat} style={{marginBottom:11}}>
+          <div style={{display:'flex',justifyContent:'space-between',fontSize:13,marginBottom:5}}>
+            <span style={{color:'var(--ink)'}}>{cat}</span>
+            <span className="num" style={{fontWeight:600}}>{baht(val)}</span>
+          </div>
+          <div style={{height:8,background:'var(--soft)',borderRadius:6,overflow:'hidden'}}>
+            <div style={{height:'100%',width:`${(val/max)*100}%`,background:color,borderRadius:6}}/>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+function Analyze({shop,user}){
+  const TM=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  const curYm=ymOf(today());
+  const [ym,setYm]=useState(curYm);
+  const [load,setLoad]=useState(true);
+  const [txns,setTxns]=useState([]);
+  useEffect(()=>{ (async()=>{ setLoad(true); try{ setTxns(await monthTxns(shop.id,ym)); }catch(e){ console.error(e); } setLoad(false); })(); },[shop.id,ym]);
+
+  const shift=(d)=>{ const [y,m]=ym.split('-').map(Number); const dt=new Date(y,m-1+d,1); setYm(`${dt.getFullYear()}-${pad(dt.getMonth()+1)}`); };
+  const [yy,mm]=ym.split('-').map(Number);
+  const monthLabel=`${TM[mm-1]} ${yy+543}`;
+
+  const inc=txns.filter(t=>t.kind==='income'), exp=txns.filter(t=>t.kind==='expense');
+  const income=sumBy(txns,x=>x.kind==='income'), expense=sumBy(txns,x=>x.kind==='expense'), profit=income-expense;
+
+  const dowSum=[0,0,0,0,0,0,0];
+  inc.forEach(t=>{ const d=new Date(t.date+'T00:00:00'); if(!isNaN(d.getTime())) dowSum[d.getDay()]+=Number(t.amount)||0; });
+  const dowOrder=[1,2,3,4,5,6,0], dowLab=['จ','อ','พ','พฤ','ศ','ส','อา'], dowFull=['อาทิตย์','จันทร์','อังคาร','พุธ','พฤหัสฯ','ศุกร์','เสาร์'];
+  const dowData=dowOrder.map((idx,i)=>({label:dowLab[i],value:dowSum[idx]}));
+
+  const blocks=[{l:'00–06',a:0,b:6},{l:'06–09',a:6,b:9},{l:'09–12',a:9,b:12},{l:'12–15',a:12,b:15},{l:'15–18',a:15,b:18},{l:'18–21',a:18,b:21},{l:'21–24',a:21,b:24}];
+  const timeSum=blocks.map(()=>0);
+  inc.forEach(t=>{ const dt=t.ts&&t.ts.toDate?t.ts.toDate():(t.ts&&t.ts.seconds?new Date(t.ts.seconds*1000):null); if(dt){ const h=dt.getHours(); const bi=blocks.findIndex(b=>h>=b.a&&h<b.b); if(bi>=0) timeSum[bi]+=Number(t.amount)||0; } });
+  const timeData=blocks.map((b,i)=>({label:b.l.slice(0,2),value:timeSum[i]}));
+
+  const agg=(arr)=>{ const m={}; arr.forEach(t=>{ const k=t.category||'อื่นๆ'; m[k]=(m[k]||0)+(Number(t.amount)||0); }); return Object.entries(m).sort((a,b)=>b[1]-a[1]); };
+  const incCats=agg(inc), expCats=agg(exp);
+
+  const peakDowIdx=dowSum.reduce((bi,v,i,a)=>v>a[bi]?i:bi,0);
+  const peakTimeIdx=timeSum.reduce((bi,v,i,a)=>v>a[bi]?i:bi,0);
+  const hasTime=timeSum.some(v=>v>0);
+
+  const card={background:'#fff',border:'1px solid var(--line)',borderRadius:16,padding:16,marginBottom:14};
+  const ttl={fontWeight:600,fontSize:15};
+  const sub={fontSize:11.5,color:'var(--muted)',marginTop:2};
+
+  return (
+    <div style={{padding:'14px 16px 8px'}}>
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:14}}>
+        <button onClick={()=>shift(-1)} className="press" style={{border:'1px solid var(--line)',background:'#fff',borderRadius:10,width:38,height:38,display:'grid',placeItems:'center',color:'var(--ink)'}}><span style={{display:'flex',transform:'rotate(180deg)'}}><I.chevron/></span></button>
+        <div className="kanit" style={{fontWeight:700,fontSize:16}}>{monthLabel}</div>
+        <button onClick={()=>shift(1)} disabled={ym>=curYm} className="press" style={{border:'1px solid var(--line)',background:'#fff',borderRadius:10,width:38,height:38,display:'grid',placeItems:'center',color:ym>=curYm?'#CBD0D6':'var(--ink)'}}><I.chevron/></button>
+      </div>
+
+      {load? <Loading/> : txns.length===0 ? (
+        <div style={{textAlign:'center',padding:'52px 20px',color:'var(--muted)'}}>
+          <div style={{fontSize:40,marginBottom:10}}>📊</div>
+          <div className="kanit" style={{fontWeight:600,fontSize:16,color:'var(--ink)'}}>ยังไม่มีข้อมูลเดือนนี้</div>
+          <div style={{fontSize:13.5,marginTop:4}}>เริ่มบันทึกรายรับ-รายจ่ายในแท็บ “บันทึก”</div>
+        </div>
+      ) : (<>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:10,marginBottom:14}}>
+          {[['รายรับ',income,'var(--pos)'],['รายจ่าย',expense,'var(--neg)'],['กำไรสุทธิ',profit,profit>=0?'var(--primary)':'var(--neg)']].map(([l,v,c])=>(
+            <div key={l} style={{background:'#fff',border:'1px solid var(--line)',borderRadius:14,padding:'12px 8px',textAlign:'center'}}>
+              <div style={{fontSize:11.5,color:'var(--muted)',marginBottom:4}}>{l}</div>
+              <div className="num" style={{fontWeight:700,fontSize:14.5,color:c}}>{baht(v)}</div>
+            </div>
+          ))}
+        </div>
+
+        <div style={card}>
+          <div className="kanit" style={ttl}>รายรับตามวันในสัปดาห์</div>
+          <div style={sub}>วันไหนคนเยอะ — ไว้วางแผนจัดกะพนักงาน</div>
+          <MiniBars data={dowData} color="var(--primary)"/>
+        </div>
+
+        <div style={card}>
+          <div className="kanit" style={ttl}>รายรับตามช่วงเวลา</div>
+          <div style={sub}>ตามเวลาที่บันทึก (น.) — ช่วงคึกไว้เน้นคน/เตรียมของ</div>
+          {hasTime? <MiniBars data={timeData} color="var(--accent)"/>
+            : <div style={{fontSize:12.5,color:'var(--muted)',padding:'18px 0',textAlign:'center'}}>ยังไม่มีข้อมูลเวลา (บันทึกออเดอร์ตามเวลาจริงเพื่อดูช่วงคึก)</div>}
+        </div>
+
+        {income>0 && (
+          <div style={{background:'var(--tint)',border:'1px solid var(--line)',borderRadius:14,padding:'13px 15px',marginBottom:14,display:'flex',gap:11}}>
+            <span style={{color:'var(--accent)',flexShrink:0,marginTop:1}}><I.spark/></span>
+            <div style={{fontSize:13,lineHeight:1.55}}>
+              วันยอดสูงสุด <b>{dowFull[peakDowIdx]}</b>{hasTime && <> · ช่วงคึกสุด <b>{blocks[peakTimeIdx].l} น.</b></>}
+              <div style={{color:'var(--muted)',marginTop:2}}>แนะนำเน้นจัดคนและเตรียมวัตถุดิบ/น้ำยาช่วงนี้</div>
+            </div>
+          </div>
+        )}
+
+        {expCats.length>0 && (
+          <div style={card}>
+            <div className="kanit" style={ttl}>รายจ่ายแยกหมวด</div>
+            <CatBars list={expCats} color="var(--neg)"/>
+          </div>
+        )}
+        {incCats.length>0 && (
+          <div style={card}>
+            <div className="kanit" style={ttl}>รายรับแยกหมวด</div>
+            <CatBars list={incCats} color="var(--pos)"/>
+          </div>
+        )}
+      </>)}
+    </div>
+  );
+}
+
 /* ---------- PHASE 2 placeholder ---------- */
 function Phase2({title,icon:Ic,items}){
   return (
@@ -878,7 +1012,36 @@ function Phase2({title,icon:Ic,items}){
   );
 }
 
-ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+/* ---------- Boot: เชื่อมต่อ + เข้าระบบนิรนามก่อนเข้าแอป (เพื่อให้ผ่าน Security Rules) ---------- */
+function Boot(){
+  const [phase,setPhase]=useState('init'); // init | ready | autherr
+  const [msg,setMsg]=useState('');
+  useEffect(()=>{
+    if(!FB_OK){ setPhase('ready'); return; }
+    let done=false;
+    const unsub=firebase.auth().onAuthStateChanged(u=>{ if(u && !done){ done=true; setPhase('ready'); } });
+    firebase.auth().signInAnonymously().catch(e=>{
+      if(done) return; done=true;
+      setMsg(e.code==='auth/operation-not-allowed'
+        ? 'ยังไม่ได้เปิด Anonymous — ไปที่ Firebase Console → Authentication → Sign-in method → เปิด “Anonymous” แล้วลองใหม่'
+        : ('เชื่อมต่อ Firebase ไม่สำเร็จ: '+(e.message||e.code)));
+      setPhase('autherr');
+    });
+    return ()=>unsub();
+  },[]);
+  if(phase==='init') return <div className="shell" style={{display:'grid',placeItems:'center'}}><Loading label="กำลังเชื่อมต่ออย่างปลอดภัย..."/></div>;
+  if(phase==='autherr') return (
+    <div className="shell" style={{display:'grid',placeItems:'center',padding:24}}>
+      <div style={{textAlign:'center',maxWidth:330}}>
+        <div style={{fontSize:42,marginBottom:12}}>🔐</div>
+        <div className="kanit" style={{fontWeight:700,fontSize:18,marginBottom:8}}>เชื่อมต่อไม่สำเร็จ</div>
+        <div style={{fontSize:13.5,color:'var(--muted)',lineHeight:1.6}}>{msg}</div>
+      </div>
+    </div>
+  );
+  return <App/>;
+}
+ReactDOM.createRoot(document.getElementById('root')).render(<Boot/>);
 </script>
 </body>
 </html>
