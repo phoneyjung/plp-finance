@@ -59,11 +59,10 @@ const firebaseConfig = {
 };
 
 // 2) PIN แอดมินครั้งแรก (ใช้ login ครั้งแรกตอนยังไม่มี user ในระบบ) — เปลี่ยนเลขนี้ แล้วเปลี่ยน PIN อีกทีหลังเข้าใช้
-const SETUP_ADMIN_PIN = "246810";
+window.SETUP_ADMIN_PIN = "246810";
 
 /* ============================================================ */
 
-window.SETUP_ADMIN_PIN = SETUP_ADMIN_PIN;
 window.FB_OK = false; window.FB_ERR = "";
 try {
   firebase.initializeApp(firebaseConfig);
