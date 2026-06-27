@@ -1101,19 +1101,74 @@ function LogSheet({shop,user,onClose,toast}){
   );
 }
 
+const POSTER_BY_SHOP = {
+  teddy1: { url:'poster-teddy.jpg', cx:0.761, cy:0.822, w:0.30 },
+  teddy2: { url:'poster-teddy.jpg', cx:0.761, cy:0.822, w:0.30 },
+  otteri: null,
+  owl: null
+};
+function loadImgEl(src, cors){ return new Promise((res,rej)=>{ const i=new Image(); if(cors) i.crossOrigin='anonymous'; i.onload=()=>res(i); i.onerror=()=>rej(new Error('img')); i.src=src; }); }
+function roundRectPath(ctx,x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
+
 function QrModal({shop,referrer,baseUrl,onClose,toast}){
   const [imgErr,setImgErr]=useState(false);
+  const [view,setView]=useState('qr');
+  const [posterUrl,setPosterUrl]=useState('');
+  const [busy,setBusy]=useState(false);
   const link = baseUrl ? (baseUrl + (baseUrl.includes('?')?'&':'?') + 'ref=' + referrer.id) : '';
   const qrSrc = link ? ('https://api.qrserver.com/v1/create-qr-code/?size=600x600&qzone=2&ecc=M&data=' + encodeURIComponent(link)) : '';
+  const poster = POSTER_BY_SHOP[shop.id];
+
+  const qrBlobUrl = async()=>{ const r=await fetch(qrSrc); const b=await r.blob(); return URL.createObjectURL(b); };
   const download=async()=>{
     if(!qrSrc) return;
-    try{
-      const r=await fetch(qrSrc); const b=await r.blob(); const u=URL.createObjectURL(b);
+    try{ const u=await qrBlobUrl();
       const a=document.createElement('a'); a.href=u; a.download=`QR_${shop.id}_${(referrer.name||'qr').replace(/\s/g,'')}.png`; document.body.appendChild(a); a.click(); a.remove();
       setTimeout(()=>URL.revokeObjectURL(u),3000);
     }catch(e){ window.open(qrSrc,'_blank'); }
   };
   const copyLink=()=>{ if(link) navigator.clipboard.writeText(link).then(()=>toast('คัดลอกลิงก์แล้ว')); };
+
+  const genPoster=async()=>{
+    if(!poster||busy) return;
+    setBusy(true);
+    try{
+      let qrObj=''; try{ qrObj=await qrBlobUrl(); }catch(_){}
+      const [bg, qr] = await Promise.all([
+        loadImgEl(poster.url, false),
+        qrObj? loadImgEl(qrObj,false) : loadImgEl(qrSrc,true)
+      ]);
+      const cw=bg.naturalWidth||bg.width, ch=bg.naturalHeight||bg.height;
+      const cv=document.createElement('canvas'); cv.width=cw; cv.height=ch;
+      const ctx=cv.getContext('2d');
+      ctx.drawImage(bg,0,0,cw,ch);
+      const qs=cw*poster.w, qx=cw*poster.cx - qs/2, qy=ch*poster.cy - qs/2;
+      const pad=qs*0.07;
+      roundRectPath(ctx, qx-pad, qy-pad, qs+pad*2, qs+pad*2, qs*0.10); ctx.fillStyle='#fff'; ctx.fill();
+      ctx.drawImage(qr, qx, qy, qs, qs);
+      const label='ผู้แนะนำ: '+(referrer.name||'');
+      const fs=Math.round(ch*0.026);
+      ctx.font='700 '+fs+'px Kanit, "Noto Sans Thai", sans-serif';
+      ctx.textBaseline='middle';
+      const tw=ctx.measureText(label).width;
+      const tx=Math.round(cw*0.045), ty=Math.round(ch*0.955);
+      const padX=fs*0.55, padY=fs*0.42;
+      roundRectPath(ctx, tx-padX, ty-fs/2-padY, tw+padX*2, fs+padY*2, (fs+padY*2)/2);
+      ctx.fillStyle='rgba(255,255,255,0.86)'; ctx.fill();
+      ctx.fillStyle='#1f2937'; ctx.fillText(label, tx, ty);
+      if(qrObj) setTimeout(()=>URL.revokeObjectURL(qrObj),2000);
+      const blob=await new Promise((res,rej)=>cv.toBlob(b=>b?res(b):rej(new Error('blob')),'image/jpeg',0.92));
+      const url=URL.createObjectURL(blob);
+      setPosterUrl(prev=>{ if(prev) URL.revokeObjectURL(prev); return url; });
+      setView('poster');
+    }catch(e){ console.error('poster',e); toast('สร้างภาพไม่สำเร็จ ลองใหม่อีกครั้ง'); }
+    setBusy(false);
+  };
+  const downloadPoster=()=>{
+    if(!posterUrl) return;
+    const a=document.createElement('a'); a.href=posterUrl; a.download=`poster_${(shop.name||shop.id).replace(/\s/g,'')}_${(referrer.name||'').replace(/\s/g,'')}.jpg`; document.body.appendChild(a); a.click(); a.remove();
+  };
+
   return (
     <Sheet title={`QR · ${referrer.name}`} onClose={onClose} z={80}>
       {!baseUrl ? (
@@ -1121,7 +1176,19 @@ function QrModal({shop,referrer,baseUrl,onClose,toast}){
           <div style={{fontSize:14,color:'#DC2626',fontWeight:600,marginBottom:8}}>ยังไม่ได้ตั้งลิงก์หน้าแอดไลน์</div>
           <div style={{fontSize:13,color:'var(--muted)',lineHeight:1.5}}>ปิดหน้านี้ แล้วแตะการ์ด "ค่าตอบแทน/ลิงก์" ด้านบน ใส่ลิงก์หน้าสแกนของร้าน {shop.name} ก่อน จึงจะสร้าง QR ได้</div>
         </div>
-      ) : (<>
+      ) : view==='poster' ? (<>
+        <div style={{textAlign:'center'}}>
+          <div className="kanit" style={{fontSize:13,color:'var(--muted)',marginBottom:10}}>โปสเตอร์ · {referrer.name}</div>
+          <div style={{borderRadius:14,overflow:'hidden',border:'1px solid var(--line)',display:'inline-block',maxWidth:'100%'}}>
+            <img src={posterUrl} alt="poster" style={{width:'100%',maxWidth:300,display:'block'}}/>
+          </div>
+        </div>
+        <div style={{display:'flex',gap:10,marginTop:16}}>
+          <button onClick={()=>setView('qr')} className="press kanit" style={{flex:1,padding:'13px',border:'1.5px solid var(--line)',background:'#fff',borderRadius:12,fontWeight:600,fontSize:14}}>← กลับไป QR</button>
+          <button onClick={downloadPoster} className="press kanit" style={{flex:1,padding:'13px',border:'none',background:'var(--primary)',color:'#fff',borderRadius:12,fontWeight:600,fontSize:14}}>บันทึกโปสเตอร์</button>
+        </div>
+        <div style={{fontSize:11.5,color:'var(--muted)',textAlign:'center',marginTop:12}}>กดค้างที่รูปเพื่อเซฟก็ได้ · เอาแผ่นนี้ไปติด/ส่งให้ลูกค้าสแกน</div>
+      </>) : (<>
         <div style={{textAlign:'center'}}>
           <div className="kanit" style={{fontSize:13,color:'var(--muted)',marginBottom:10}}>ร้าน {shop.name} · {referrer.name}</div>
           <div style={{background:'#fff',border:'1px solid var(--line)',borderRadius:18,padding:16,display:'inline-block'}}>
@@ -1132,9 +1199,10 @@ function QrModal({shop,referrer,baseUrl,onClose,toast}){
         </div>
         <div style={{display:'flex',gap:10,marginTop:16}}>
           <button onClick={copyLink} className="press kanit" style={{flex:1,padding:'13px',border:'1.5px solid var(--line)',background:'#fff',borderRadius:12,fontWeight:600,fontSize:14}}>คัดลอกลิงก์</button>
-          <button onClick={download} className="press kanit" style={{flex:1,padding:'13px',border:'none',background:'var(--primary)',color:'#fff',borderRadius:12,fontWeight:600,fontSize:14}}>บันทึกรูป QR</button>
+          <button onClick={download} className="press kanit" style={{flex:1,padding:'13px',border:'none',background:'var(--primary)',color:'#fff',borderRadius:12,fontWeight:600,fontSize:14}}>บันทึก QR</button>
         </div>
-        <div style={{fontSize:11.5,color:'var(--muted)',textAlign:'center',marginTop:12}}>กดค้างที่รูปเพื่อบันทึกก็ได้ · เอา QR นี้ไปแปะ/แชร์ให้ลูกค้าสแกน</div>
+        {poster && <button onClick={genPoster} disabled={busy} className="press kanit" style={{width:'100%',marginTop:10,padding:'13px',border:'none',background:busy?'#9ca3af':'#0F172A',color:'#fff',borderRadius:12,fontWeight:700,fontSize:14}}>{busy?'กำลังสร้างภาพ…':'🖼️ สร้างภาพโปสเตอร์'}</button>}
+        <div style={{fontSize:11.5,color:'var(--muted)',textAlign:'center',marginTop:12}}>{poster?'กดสร้างภาพโปสเตอร์ เพื่อได้แผ่นพร้อม QR + ชื่อพนักงาน':'กดค้างที่รูปเพื่อบันทึกก็ได้ · เอา QR นี้ไปแปะ/แชร์ให้ลูกค้าสแกน'}</div>
       </>)}
     </Sheet>
   );
