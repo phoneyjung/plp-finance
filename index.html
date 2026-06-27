@@ -274,8 +274,9 @@ async function updateReferrer(id,data){ await db.collection('transactions').doc(
 async function removeReferrer(id){ await db.collection('transactions').doc(id).delete(); }
 async function referralsForShop(shopId){
   const s=await db.collection('transactions').where('skey','==',`${shopId}_REFC`).get();
-  return s.docs.map(d=>d.data());
+  return s.docs.map(d=>({id:d.id,...d.data()}));
 }
+async function removeReferral(id){ await db.collection('transactions').doc(id).delete(); }
 async function payoutsForShop(shopId){
   const s=await db.collection('transactions').where('skey','==',`${shopId}_PAYOUT`).get();
   return s.docs.map(d=>({id:d.id,...d.data()}));
@@ -1246,6 +1247,7 @@ function Referral({shop,user,toast}){
   const saveCfg=async()=>{ try{ await saveSettings(shop.id,{refRate:Number(cfgRate)||0, refUrl:cfgUrl.trim()},{id:user.id,name:user.name}); setEditCfg(false); await reload(); toast('บันทึกแล้ว'); }catch(e){ toast('บันทึกไม่สำเร็จ','err'); } };
   const addNew=async()=>{ if(!newName.trim())return; setBusy(true); try{ await addReferrer(newName.trim()); setNewName(''); setAdding(false); await reload(); toast('เพิ่มคนแล้ว'); }catch(e){ toast('เพิ่มไม่สำเร็จ','err'); } setBusy(false); };
   const rename=async(r)=>{ setMenuFor(null); const n=window.prompt('แก้ชื่อ', r.name); if(n&&n.trim()&&n.trim()!==r.name){ await updateReferrer(r.id,{name:n.trim()}); await reload(); } };
+  const copyMeLink=(r)=>{ setMenuFor(null); const base=new URL('me.html', location.href).href; const link=`${base}?shop=${shop.id}&ref=${r.id}`; navigator.clipboard.writeText(link).then(()=>toast('คัดลอกลิงก์เช็คยอดแล้ว · ส่งให้ '+r.name)).catch(()=>window.prompt('ลิงก์เช็คยอดของ '+r.name, link)); };
   const remove=async(r)=>{ setMenuFor(null); if(window.confirm(`ลบ ${r.name}? (ยอดที่นับไว้ยังอยู่)`)){ await removeReferrer(r.id); await reload(); } };
 
   const doPay=async(method)=>{
@@ -1258,7 +1260,7 @@ function Referral({shop,user,toast}){
     }catch(e){ console.error(e); toast('จ่ายไม่สำเร็จ','err'); } setBusy(false);
   };
 
-  if(detailFor) return <ReferrerDetail shop={shop} referrer={detailFor} rals={rals.filter(r=>r.refId===detailFor.id)} onBack={()=>setDetailFor(null)}/>;
+  if(detailFor) return <ReferrerDetail shop={shop} user={user} referrer={detailFor} rals={rals.filter(r=>r.refId===detailFor.id)} onBack={()=>setDetailFor(null)} onChanged={reload}/>;
 
   return (
     <div style={{padding:'14px 16px 20px'}} onClick={()=>menuFor&&setMenuFor(null)}>
@@ -1323,6 +1325,7 @@ function Referral({shop,user,toast}){
                   <button onClick={(e)=>{ e.stopPropagation(); setMenuFor(menuFor===r.id?null:r.id); }} className="press" style={{border:'none',background:'none',color:'#C0C4CC',padding:'4px 4px',fontSize:18,lineHeight:1}}>⋮</button>
                   {menuFor===r.id && <div style={{position:'absolute',right:0,top:'100%',background:'#fff',border:'1px solid var(--line)',borderRadius:10,boxShadow:'0 6px 20px rgba(0,0,0,.12)',zIndex:5,overflow:'hidden',minWidth:108}}>
                     <button onClick={()=>rename(r)} className="kanit" style={{display:'block',width:'100%',textAlign:'left',border:'none',background:'#fff',padding:'10px 14px',fontSize:13.5,borderBottom:'1px solid var(--line)'}}>แก้ชื่อ</button>
+                    <button onClick={()=>copyMeLink(r)} className="kanit" style={{display:'block',width:'100%',textAlign:'left',border:'none',background:'#fff',padding:'10px 14px',fontSize:13.5,borderBottom:'1px solid var(--line)'}}>ลิงก์เช็คยอด</button>
                     <button onClick={()=>remove(r)} className="kanit" style={{display:'block',width:'100%',textAlign:'left',border:'none',background:'#fff',padding:'10px 14px',fontSize:13.5,color:'#DC2626'}}>ลบ</button>
                   </div>}
                 </div>
@@ -1368,13 +1371,22 @@ function PaySheet({shop,referrer,stat,rate,busy,onPay,onClose}){
   );
 }
 
-function ReferrerDetail({shop,referrer,rals,onBack}){
+function ReferrerDetail({shop,user,referrer,rals,onBack,onChanged}){
   const [page,setPage]=useState(0);
+  const [busy,setBusy]=useState(false);
+  const isAdmin = user && user.role==='admin';
   const sorted=[...rals].sort((a,b)=>{ const da=ralDate(a), db2=ralDate(b); return (db2?db2.getTime():0)-(da?da.getTime():0); });
   const per=20; const pages=Math.max(1,Math.ceil(sorted.length/per));
   const pg=Math.min(page,pages-1);
   const slice=sorted.slice(pg*per,(pg+1)*per);
   const fmt=(d)=>{ if(!d) return {d:'—',t:''}; const p=n=>String(n).padStart(2,'0'); return {d:`${p(d.getDate())}/${p(d.getMonth()+1)}/${String(d.getFullYear()+543).slice(2)}`, t:`${p(d.getHours())}:${p(d.getMinutes())}`}; };
+  const del=async(r)=>{
+    if(busy||!r.id) return;
+    if(!window.confirm(`ลบรายการนี้? (${r.custName||'ลูกค้า LINE'})\nยอดของ ${referrer.name} จะลดลง 1`)) return;
+    setBusy(true);
+    try{ await removeReferral(r.id); if(onChanged) await onChanged(); }
+    catch(e){ console.error(e); } setBusy(false);
+  };
   return (
     <div style={{padding:'14px 16px 20px'}}>
       <button onClick={onBack} className="press kanit" style={{border:'none',background:'none',color:'var(--primary)',display:'flex',alignItems:'center',gap:4,fontSize:14,fontWeight:600,padding:'4px 0',marginBottom:10}}><I.back/> กลับ</button>
@@ -1389,12 +1401,13 @@ function ReferrerDetail({shop,referrer,rals,onBack}){
       {sorted.length===0 ? <div style={{padding:'30px 0',textAlign:'center',color:'var(--muted)',fontSize:14}}>ยังไม่มีลูกค้าแอดผ่านคนนี้</div> : (<>
         <div style={{border:'1px solid var(--line)',borderRadius:13,overflow:'hidden'}}>
           {slice.map((r,i)=>{ const f=fmt(ralDate(r)); return (
-            <div key={i} style={{display:'flex',alignItems:'center',gap:10,padding:'11px 13px',borderBottom:i<slice.length-1?'1px solid var(--line)':'none'}}>
+            <div key={r.id||i} style={{display:'flex',alignItems:'center',gap:10,padding:'11px 13px',borderBottom:i<slice.length-1?'1px solid var(--line)':'none'}}>
               <span style={{width:28,textAlign:'center',fontSize:12,color:'#C0C4CC',fontWeight:600,flexShrink:0}}>{pg*per+i+1}</span>
               <div style={{flex:1,minWidth:0}}>
                 <div className="kanit" style={{fontSize:14,fontWeight:500,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{r.custName||'ลูกค้า LINE'}</div>
                 <div style={{fontSize:11,color:'var(--muted)'}}>{f.d}{f.t?' · '+f.t+' น.':''}</div>
               </div>
+              {isAdmin && <button onClick={()=>del(r)} disabled={busy} className="press" style={{flexShrink:0,border:'none',background:'none',color:'#D1A0A0',padding:'6px 4px'}} title="ลบรายการนี้"><I.trash/></button>}
             </div>
           ); })}
         </div>
@@ -1405,6 +1418,7 @@ function ReferrerDetail({shop,referrer,rals,onBack}){
             <button onClick={()=>setPage(Math.min(pages-1,pg+1))} disabled={pg>=pages-1} className="press" style={{border:'1px solid var(--line)',background:'#fff',borderRadius:9,padding:'7px 16px',fontSize:16,opacity:pg>=pages-1?0.4:1}}>›</button>
           </div>
         )}
+        {isAdmin && <div style={{fontSize:11,color:'var(--muted)',marginTop:12,textAlign:'center'}}>แตะ 🗑 เพื่อลบรายการที่นับผิด (เช่น ลูกค้าเดิมที่เป็นเพื่อนร้านอยู่แล้ว)</div>}
       </>)}
     </div>
   );

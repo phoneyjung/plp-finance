@@ -114,13 +114,29 @@ function screenAddFriend(){
     +'<div class="sub">แตะปุ่มด้านล่างเพื่อแอดไลน์ร้าน '+nm()+' แล้วระบบจะบันทึกให้อัตโนมัติ</div>'
     +'<a class="btn" href="'+oa()+'">➕ เพิ่มเพื่อน LINE ร้าน</a>';
 }
-function screenDone(dup, dispName){
+function screenDone(dup, dispName, showAdd){
   setHead('เรียบร้อย');
   bd.innerHTML='<div class="ok"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div>'
-    +'<div class="big">'+(dup?'คุณแอดไลน์ร้านนี้ไว้แล้ว':'ขอบคุณที่แอดไลน์ร้าน!')+'</div>'
-    +'<div class="sub">'+(dispName?('คุณ '+dispName+' · '):'')+nm()+(dup?'<br>ไม่ต้องแอดซ้ำนะคะ 😊':'<br>บันทึกเรียบร้อยแล้ว 🎉')+'</div>'
+    +'<div class="big">'+(dup?'คุณลงทะเบียนรับสิทธิ์ไว้แล้ว':'ขอบคุณที่แอดไลน์ร้าน!')+'</div>'
+    +'<div class="sub">'+(dispName?('คุณ '+dispName+' · '):'')+nm()+(dup?'<br>ไม่ต้องลงซ้ำนะคะ 😊':'<br>บันทึกเรียบร้อยแล้ว 🎉')+'</div>'
+    +(showAdd&&oa()?'<a class="btn" href="'+oa()+'">➕ เพิ่มเพื่อน LINE ร้าน</a>':(oa()?'<a class="btn" href="'+oa()+'">เปิดแชทร้าน</a>':''))
+    +'<div class="muted">ปิดหน้านี้ได้เลย</div>';
+}
+function screenAlreadyFriend(dispName){
+  setHead('ลูกค้าเดิม');
+  bd.innerHTML='<div class="ok" style="background:#14B8A6"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-4.5-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 11c0 5.5-7 10-7 10z"/></svg></div>'
+    +'<div class="big">คุณเป็นเพื่อนกับร้านอยู่แล้ว</div>'
+    +'<div class="sub">'+(dispName?('คุณ '+dispName+' · '):'')+nm()+'<br>ขอบคุณที่ใช้บริการนะคะ 😊</div>'
     +(oa()?'<a class="btn" href="'+oa()+'">เปิดแชทร้าน</a>':'')
     +'<div class="muted">ปิดหน้านี้ได้เลย</div>';
+}
+function screenCounted(dispName){
+  setHead('รับสิทธิ์ซักฟรี!');
+  bd.innerHTML='<div class="ok"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div>'
+    +'<div class="big">ลงทะเบียนสำเร็จ 🎉</div>'
+    +'<div class="sub">'+(dispName?('คุณ '+dispName+' · '):'')+nm()+'<br>กดปุ่มด้านล่างเพื่อ <b>เพิ่มเพื่อน</b> รับสิทธิ์ซักฟรี 1 ครั้ง</div>'
+    +(oa()?'<a class="btn" href="'+oa()+'">➕ เพิ่มเพื่อน LINE ร้าน</a>':'')
+    +'<div class="muted">เพิ่มเพื่อนแล้ว แสดงหน้านี้ให้พนักงานดูได้เลย</div>';
 }
 
 (async function(){
@@ -161,19 +177,28 @@ function screenDone(dup, dispName){
 
   const userId = profile.userId;
 
-  // ตรวจว่าเป็นเพื่อนกับ OA หรือยัง (ถ้าเช็คได้)
-  let isFriend = true;
+  // ตรวจว่าเป็นเพื่อนกับ OA หรือยัง (default = ยังไม่เป็นเพื่อน → ถือเป็นลูกค้าใหม่)
+  let isFriend = false;
   try{ const f = await liff.getFriendship(); isFriend = !!f.friendFlag; }
-  catch(e){ isFriend = true; } // เช็คไม่ได้ → ถือว่าผ่าน
+  catch(e){ isFriend = false; }
 
-  if(!isFriend){ screenAddFriend(); return; }
+  const id = shop + '_' + userId;
+  const docRef = db.collection('transactions').doc(id);
+  let snap;
+  try{ snap = await docRef.get(); }catch(e){ snap = {exists:false}; }
 
-  // บันทึก referral (กันซ้ำด้วย doc id = shop_userId)
+  if(snap.exists){
+    // เคยลงทะเบียนแล้ว (กันนับซ้ำ) — ถ้ายังไม่เป็นเพื่อน โชว์ปุ่มเพิ่มเพื่อนด้วย
+    screenDone(true, profile.displayName, !isFriend);
+    return;
+  }
+  if(isFriend){
+    // เป็นเพื่อนกับร้านอยู่แล้วก่อนหน้านี้ = ลูกค้าเดิม → ไม่นับ
+    screenAlreadyFriend(profile.displayName);
+    return;
+  }
+  // ลูกค้าใหม่ (ยังไม่เป็นเพื่อน + ยังไม่เคยลงทะเบียน) → นับให้ผู้แนะนำ
   try{
-    const id = shop + '_' + userId;
-    const docRef = db.collection('transactions').doc(id);
-    const snap = await docRef.get();
-    if(snap.exists){ screenDone(true, profile.displayName); return; }
     await docRef.set({
       _refc:true, skey: shop+'_REFC',
       refId: ref, shopId: shop, custUserId: userId,
@@ -182,8 +207,8 @@ function screenDone(dup, dispName){
       clientTs: new Date().toISOString(),
       ts: firebase.firestore.FieldValue.serverTimestamp()
     });
-    screenDone(false, profile.displayName);
-  }catch(e){ console.error('write',e); screenError('บันทึกไม่สำเร็จ','แต่คุณแอดไลน์ร้านเรียบร้อยแล้ว ขอบคุณค่ะ',true); }
+    screenCounted(profile.displayName);
+  }catch(e){ console.error('write',e); screenError('บันทึกไม่สำเร็จ','ลองสแกนใหม่อีกครั้ง',true); }
 })();
 </script>
 </body>

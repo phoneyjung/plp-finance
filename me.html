@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"/>
+<title>เช็คยอดแนะนำเพื่อน</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  body{font-family:-apple-system,"Segoe UI",Roboto,"Helvetica Neue","Noto Sans Thai",sans-serif;background:#F2F4F7;color:#1A1F26;min-height:100vh;padding:16px;display:flex;justify-content:center}
+  .wrap{width:100%;max-width:430px}
+  .card{background:#fff;border-radius:22px;overflow:hidden;box-shadow:0 8px 30px rgba(0,0,0,.08);margin-bottom:14px}
+  .hd{padding:26px 22px 22px;color:#fff;text-align:center}
+  .hd .ic{width:56px;height:56px;border-radius:50%;background:rgba(255,255,255,.22);display:grid;place-items:center;margin:0 auto 10px}
+  .hd h1{font-size:19px;font-weight:700}
+  .hd p{font-size:13px;opacity:.92;margin-top:3px}
+  .pad{padding:18px}
+  .owed{text-align:center;padding:6px 0 4px}
+  .owed .lbl{font-size:13px;color:#667085}
+  .owed .amt{font-size:40px;font-weight:800;color:#16A34A;line-height:1.1;margin-top:2px}
+  .owed .note{font-size:12px;color:#98A2B3;margin-top:4px}
+  .stats{display:flex;gap:10px;margin-top:16px}
+  .stat{flex:1;background:#F7F9FB;border-radius:13px;padding:12px 4px;text-align:center}
+  .stat b{font-size:21px;font-weight:700;color:#0F766E;display:block}
+  .stat span{font-size:11px;color:#667085}
+  .row{display:flex;justify-content:space-between;align-items:center;padding:11px 2px;border-bottom:1px solid #F0F1F3;font-size:13.5px}
+  .row:last-child{border-bottom:none}
+  .row .k{color:#667085}
+  .row .v{font-weight:600}
+  .sec-title{font-size:14px;font-weight:700;margin:2px 0 10px;color:#1A1F26}
+  .qrbox{text-align:center;padding:6px 0}
+  .qrbox img{width:170px;height:170px;border:1px solid #EAECF0;border-radius:14px;padding:8px;background:#fff}
+  .link{font-size:11px;color:#98A2B3;word-break:break-all;margin:10px 4px 0}
+  .btn{display:block;width:100%;padding:13px;border:none;border-radius:12px;font-size:14px;font-weight:700;color:#fff;background:#12B3B3;margin-top:12px;text-decoration:none;text-align:center;cursor:pointer}
+  .btn.ghost{background:#fff;color:#475467;border:1.5px solid #E4E7EC}
+  .clist .ci{display:flex;align-items:center;gap:10px;padding:10px 2px;border-bottom:1px solid #F2F4F7;font-size:13.5px}
+  .clist .ci:last-child{border-bottom:none}
+  .clist .n{width:24px;text-align:center;color:#C0C4CC;font-size:11px;font-weight:600;flex-shrink:0}
+  .clist .nm{font-weight:500}
+  .clist .dt{font-size:11px;color:#98A2B3}
+  .spin{width:42px;height:42px;border:4px solid #E4E7EC;border-top-color:#9AA1AB;border-radius:50%;animation:sp .8s linear infinite;margin:30px auto}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  .muted{font-size:11px;color:#98A2B3;text-align:center;margin-top:6px;line-height:1.5}
+  .err{text-align:center;padding:40px 20px;color:#B42318;font-size:14px}
+</style>
+</head>
+<body>
+<div class="wrap" id="app">
+  <div class="card"><div class="pad"><div class="spin"></div><div style="text-align:center;color:#667085;font-size:14px">กำลังโหลดยอด…</div></div></div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-auth-compat.js"></script>
+<script>
+const SHOP_NAME = { otteri:'Otteri Wash & Dry', teddy1:'Teddy Wash & Dry', teddy2:'Teddy Wash & Dry', owl:'Owl Cha' };
+const SHOP_COLOR= { otteri:'#0B7AAB', teddy1:'#235A88', teddy2:'#007A6D', owl:'#6E5A47' };
+const firebaseConfig = {
+  apiKey: "AIzaSyAVaizHIgRcgrufwwI1ohbOinOy0DtTiM0",
+  authDomain: "plp-finance.firebaseapp.com",
+  projectId: "plp-finance",
+  storageBucket: "plp-finance.firebasestorage.app",
+  messagingSenderId: "772651276984",
+  appId: "1:772651276984:web:46a5953931ba72c146724d"
+};
+
+const app = document.getElementById('app');
+const pad = n=>String(n).padStart(2,'0');
+const now = ()=>{ const d=new Date(); return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()); };
+const ym  = ()=> now().slice(0,7);
+const baht = n=>'฿'+Number(n||0).toLocaleString('th-TH');
+function qsGet(){ const q=new URLSearchParams(location.search); return { shop:(q.get('shop')||'').trim(), ref:(q.get('ref')||'').trim() }; }
+function whenOf(r){ if(r&&r.ts&&r.ts.seconds) return new Date(r.ts.seconds*1000); if(r&&r.clientTs){ const d=new Date(r.clientTs); if(!isNaN(d)) return d; } if(r&&r.date){ const d=new Date(r.date+'T00:00:00'); if(!isNaN(d)) return d; } return null; }
+function fmtDate(d){ if(!d) return '—'; return pad(d.getDate())+'/'+pad(d.getMonth()+1)+'/'+String(d.getFullYear()+543).slice(2)+' · '+pad(d.getHours())+':'+pad(d.getMinutes())+' น.'; }
+function esc(s){ return String(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+function showErr(msg){ app.innerHTML='<div class="card"><div class="err">'+msg+'</div></div>'; }
+
+async function load(){
+  const { shop, ref } = qsGet();
+  if(!shop || !SHOP_NAME[shop] || !ref){ showErr('ลิงก์ไม่ถูกต้อง<br>กรุณาขอลิงก์เช็คยอดจากเจ้าของร้านอีกครั้ง'); return; }
+
+  try{
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+    await firebase.auth().signInAnonymously();
+
+    const [refDoc, ralsSnap, setDoc, paySnap] = await Promise.all([
+      db.collection('transactions').doc(ref).get(),
+      db.collection('transactions').where('skey','==',shop+'_REFC').get(),
+      db.collection('settings').doc(shop).get(),
+      db.collection('transactions').doc('payout_'+shop+'_'+ref).get()
+    ]);
+
+    const refName = (refDoc.exists && refDoc.data().name) ? refDoc.data().name : 'พนักงาน';
+    const rals = ralsSnap.docs.map(d=>d.data()).filter(r=>r.refId===ref);
+    const st = setDoc.exists ? setDoc.data() : {};
+    const rate = Number(st.refRate||3);
+    const refUrl = st.refUrl||'';
+    const pay = paySnap.exists ? paySnap.data() : {};
+    const paidCount = pay.paidCount||0, paidAmount = pay.paidAmount||0;
+
+    const total = rals.length;
+    const td = now(), m = ym();
+    const todayN = rals.filter(r=>r.date===td).length;
+    const monthN = rals.filter(r=>r.ym===m).length;
+    const earned = Math.round(total*rate);
+    const owedCount = Math.max(0, total - paidCount);
+    const owed = Math.round(owedCount*rate);
+    const shareLink = refUrl ? (refUrl + (refUrl.includes('?')?'&':'?') + 'ref=' + ref) : '';
+
+    const sorted = rals.slice().sort((a,b)=>{ const x=whenOf(a),y=whenOf(b); return (y?y.getTime():0)-(x?x.getTime():0); });
+    const listMax = 50;
+    const listHtml = sorted.slice(0,listMax).map((r,i)=>'<div class="ci"><span class="n">'+(i+1)+'</span><div style="flex:1;min-width:0"><div class="nm">'+esc(r.custName||'ลูกค้า LINE')+'</div><div class="dt">'+fmtDate(whenOf(r))+'</div></div></div>').join('');
+    const moreNote = total>listMax ? '<div class="muted">แสดง '+listMax+' จาก '+total+' คน</div>' : '';
+
+    const color = SHOP_COLOR[shop]||'#12B3B3';
+    const qrHtml = shareLink ? (
+      '<div class="card"><div class="pad">'
+      + '<div class="sec-title">QR / ลิงก์ชวนลูกค้า</div>'
+      + '<div class="qrbox"><img src="https://api.qrserver.com/v1/create-qr-code/?size=400x400&qzone=2&ecc=M&data='+encodeURIComponent(shareLink)+'" alt="QR"/></div>'
+      + '<div class="link">'+esc(shareLink)+'</div>'
+      + '<button class="btn" id="copyBtn">คัดลอกลิงก์</button>'
+      + '<div class="muted">ให้ลูกค้าสแกน QR นี้ แล้วเพิ่มเพื่อน LINE ร้าน · ระบบจะนับให้คุณอัตโนมัติ (เฉพาะลูกค้าใหม่)</div>'
+      + '</div></div>'
+    ) : '<div class="card"><div class="pad"><div class="muted">ยังไม่มีลิงก์ชวนลูกค้า · แจ้งเจ้าของร้านให้ตั้งลิงก์ก่อน</div></div></div>';
+
+    app.innerHTML =
+      '<div class="card">'
+      + '<div class="hd" style="background:'+color+'">'
+      +   '<div class="ic"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3"/><path d="M3.5 20a5.5 5.5 0 0 1 11 0"/><path d="M16 5.2a3 3 0 0 1 0 5.6M17.5 14.4A5.5 5.5 0 0 1 20.5 20"/></svg></div>'
+      +   '<h1>'+esc(refName)+'</h1>'
+      +   '<p>เช็คยอดแนะนำเพื่อน · '+esc(SHOP_NAME[shop])+'</p>'
+      + '</div>'
+      + '<div class="pad">'
+      +   '<div class="owed"><div class="lbl">ยอดค้างรับ</div><div class="amt">'+baht(owed)+'</div><div class="note">'+owedCount+' คนที่ยังไม่ได้จ่าย × '+baht(rate)+'</div></div>'
+      +   '<div class="stats">'
+      +     '<div class="stat"><b>'+todayN+'</b><span>วันนี้</span></div>'
+      +     '<div class="stat"><b>'+monthN+'</b><span>เดือนนี้</span></div>'
+      +     '<div class="stat"><b>'+total+'</b><span>ทั้งหมด</span></div>'
+      +   '</div>'
+      + '</div>'
+      + '</div>'
+
+      + '<div class="card"><div class="pad">'
+      +   '<div class="sec-title">สรุปค่าตอบแทน</div>'
+      +   '<div class="row"><span class="k">ค่าตอบแทนต่อคน</span><span class="v">'+baht(rate)+'</span></div>'
+      +   '<div class="row"><span class="k">พามาแอดทั้งหมด</span><span class="v">'+total+' คน</span></div>'
+      +   '<div class="row"><span class="k">รายได้รวม (ที่ควรได้)</span><span class="v">'+baht(earned)+'</span></div>'
+      +   '<div class="row"><span class="k">จ่ายแล้ว</span><span class="v" style="color:#16A34A">'+baht(paidAmount)+'</span></div>'
+      +   '<div class="row"><span class="k">ค้างรับ</span><span class="v" style="color:#DC2626">'+baht(owed)+'</span></div>'
+      + '</div></div>'
+
+      + qrHtml
+
+      + '<div class="card"><div class="pad">'
+      +   '<div class="sec-title">ลูกค้าที่คุณพามา ('+total+')</div>'
+      +   '<div class="clist">'+(listHtml||'<div class="muted">ยังไม่มีลูกค้าแอดผ่านลิงก์ของคุณ</div>')+'</div>'
+      +   moreNote
+      + '</div></div>'
+
+      + '<button class="btn ghost" onclick="location.reload()" style="margin-bottom:20px">รีเฟรชยอด</button>';
+
+    const cb = document.getElementById('copyBtn');
+    if(cb) cb.onclick = ()=>{ navigator.clipboard.writeText(shareLink).then(()=>{ cb.textContent='คัดลอกแล้ว ✓'; setTimeout(()=>cb.textContent='คัดลอกลิงก์',1500); }).catch(()=>{ window.prompt('คัดลอกลิงก์นี้', shareLink); }); };
+
+  }catch(e){
+    console.error(e);
+    showErr('โหลดยอดไม่สำเร็จ<br>เช็คอินเทอร์เน็ตแล้วลองรีเฟรชใหม่');
+  }
+}
+load();
+</script>
+</body>
+</html>
