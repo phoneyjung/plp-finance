@@ -72,9 +72,24 @@ const firebaseConfig = {
 };
 /* ========================================================= */
 
-const qs = new URLSearchParams(location.search);
-const shop = (qs.get('shop')||'').trim();
-const ref  = (qs.get('ref')||'').trim();
+function readParams(){
+  let qs = new URLSearchParams(location.search);
+  let sh = qs.get('shop'), rf = qs.get('ref');
+  // LIFF มักห่อ query เดิมไว้ใน liff.state
+  if(!sh || !rf){
+    const st = qs.get('liff.state');
+    if(st){ const q2 = new URLSearchParams(st.charAt(0)==='?'?st:('?'+st)); sh = sh || q2.get('shop'); rf = rf || q2.get('ref'); }
+  }
+  // เผื่อกรณีอยู่ใน hash
+  if((!sh || !rf) && location.hash && location.hash.indexOf('=')>-1){
+    const q3 = new URLSearchParams(location.hash.replace(/^#/,'')); sh = sh || q3.get('shop'); rf = rf || q3.get('ref');
+  }
+  return { sh:(sh||'').trim(), rf:(rf||'').trim() };
+}
+const _p = readParams();
+const shop = _p.sh;
+const ref  = _p.rf;
+const _dbg = 'search=' + (location.search||'(ว่าง)') + ' | state=' + (new URLSearchParams(location.search).get('liff.state')||'(ไม่มี)') + ' | hash=' + (location.hash||'(ว่าง)');
 
 const hd=document.getElementById('hd'), hdname=document.getElementById('hdname'), hdsub=document.getElementById('hdsub'), bd=document.getElementById('bd');
 const pad=n=>String(n).padStart(2,'0');
@@ -87,9 +102,10 @@ function theme(){ const c=SHOP_COLOR[shop]||'#0B7AAB'; hd.style.background=c; }
 function setHead(sub){ hdname.textContent=nm(); hdsub.textContent=sub||''; }
 
 function screenLoading(t){ bd.innerHTML='<div class="spin"></div><div class="sub">'+t+'</div>'; }
-function screenError(title, sub, withOA){
+function screenError(title, sub, withOA, dbg){
   bd.innerHTML='<div class="warn"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#DC2626" stroke-width="2.2" stroke-linecap="round"><path d="M12 8v5M12 17h.01"/><circle cx="12" cy="12" r="9"/></svg></div>'
     +'<div class="big">'+title+'</div><div class="sub">'+sub+'</div>'
+    +(dbg?'<div style="font-size:10px;color:#94a3b8;word-break:break-all;margin-top:12px;text-align:left;background:#f1f5f9;padding:8px 10px;border-radius:8px;line-height:1.5">'+dbg+'</div>':'')
     +(withOA&&oa()?'<a class="btn" href="'+oa()+'">เปิด LINE ร้าน</a>':'');
 }
 function screenAddFriend(){
@@ -110,8 +126,8 @@ function screenDone(dup, dispName){
 (async function(){
   theme(); setHead('กำลังเชื่อมต่อ…');
 
-  if(!shop || !SHOP_NAME[shop]){ screenError('ลิงก์ไม่ถูกต้อง','ไม่พบข้อมูลร้าน กรุณาสแกน QR ใหม่อีกครั้ง',false); return; }
-  if(!ref){ screenError('ลิงก์ไม่ถูกต้อง','ไม่พบรหัสผู้แนะนำ กรุณาสแกน QR ใหม่อีกครั้ง',false); return; }
+  if(!shop || !SHOP_NAME[shop]){ screenError('ลิงก์ไม่ถูกต้อง','ไม่พบข้อมูลร้าน กรุณาสแกน QR ใหม่อีกครั้ง',false,_dbg); return; }
+  if(!ref){ screenError('ลิงก์ไม่ถูกต้อง','ไม่พบรหัสผู้แนะนำ กรุณาสแกน QR ใหม่อีกครั้ง',false,_dbg); return; }
 
   const liffId = LIFF_BY_SHOP[shop];
   if(!liffId || liffId.indexOf('PASTE')===0){
