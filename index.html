@@ -335,6 +335,7 @@ function CatBadge({shopId,name,size}){ size=size||42; const m=catMetaOf(shopId,n
 }
 
 /* ---------- small ui ---------- */
+function Portal({children}){ return ReactDOM.createPortal(children, document.body); }
 function Spinner({c='var(--primary)'}){
   return <svg className="spin" viewBox="0 0 24 24" width="26" height="26" fill="none" stroke={c} strokeWidth="2.4" strokeLinecap="round"><path d="M12 3a9 9 0 1 0 9 9" opacity=".9"/></svg>;
 }
@@ -778,7 +779,7 @@ function CategoryPicker({shopId,cats,current,onPick,onAdd,onClose}){
   const PreviewIcon=CAT_ICONS[nicon];
   const submit=()=>{ if(nc.trim()){ onAdd(nc.trim(), ncolor, nicon); setNc(''); setNcolor(CAT_PALETTE[0]); setNicon('tag'); setAdding(false); } };
   return (
-    <div onClick={onClose} style={{position:'fixed',inset:0,zIndex:95,background:'rgba(0,0,0,.4)',display:'flex',flexDirection:'column',maxWidth:480,margin:'0 auto'}}>
+    <Portal><div onClick={onClose} style={{position:'fixed',inset:0,zIndex:95,background:'rgba(0,0,0,.4)',display:'flex',flexDirection:'column',maxWidth:480,margin:'0 auto'}}>
       <div onClick={e=>e.stopPropagation()} style={{marginTop:'auto',background:'#fff',borderRadius:'20px 20px 0 0',maxHeight:'88vh',display:'flex',flexDirection:'column'}}>
         {!adding ? (<>
           <div style={{display:'flex',alignItems:'center',gap:10,padding:'15px 16px 8px'}}>
@@ -832,7 +833,7 @@ function CategoryPicker({shopId,cats,current,onPick,onAdd,onClose}){
           </div>
         </>)}
       </div>
-    </div>
+    </div></Portal>
   );
 }
 
@@ -881,7 +882,7 @@ function EntrySheet({shop,user,initMode,initDate,onClose,onSaved,toast}){
   const kbtn=(key,label,o)=>{ o=o||{}; return <button key={key} onClick={o.onClick||(()=>press(key))} className="press" style={{gridColumn:o.span?('span '+o.span):undefined,border:'none',background:o.bg||'#EDF0F2',color:o.fg||'var(--ink)',borderRadius:14,height:56,fontSize:o.fs||23,fontWeight:600,display:'grid',placeItems:'center'}}>{label}</button>; };
 
   return (
-    <div style={{position:'fixed',inset:0,zIndex:90,background:'#fff',display:'flex',flexDirection:'column',maxWidth:480,margin:'0 auto'}}>
+    <Portal><div style={{position:'fixed',inset:0,zIndex:90,background:'#fff',display:'flex',flexDirection:'column',maxWidth:480,margin:'0 auto'}}>
       <div style={{background:'var(--primary)',color:'#fff',paddingTop:'env(safe-area-inset-top)'}}>
         <div style={{display:'flex',alignItems:'center',padding:'8px 6px 0'}}>
           <button onClick={onClose} className="press" style={{border:'none',background:'none',color:'#fff',padding:8}}><I.back/></button>
@@ -940,7 +941,7 @@ function EntrySheet({shop,user,initMode,initDate,onClose,onSaved,toast}){
       </div>
 
       {showCat && <CategoryPicker shopId={shop.id} cats={cats} current={cat} onPick={(c)=>{ setCat(c); setShowCat(false); }} onAdd={addCatLocal} onClose={()=>setShowCat(false)}/>}
-    </div>
+    </div></Portal>
   );
 }
 
@@ -1163,7 +1164,7 @@ function Settings({shop,user,logout,toast}){
 
 function Sheet({title,onClose,z=50,children}){
   return (
-    <div style={{position:'fixed',inset:0,zIndex:z,maxWidth:480,margin:'0 auto'}}>
+    <Portal><div style={{position:'fixed',inset:0,zIndex:z,maxWidth:480,margin:'0 auto'}}>
       <div onClick={onClose} style={{position:'absolute',inset:0,background:'rgba(0,0,0,.4)'}}/>
       <div className="fade" style={{position:'absolute',bottom:0,left:0,right:0,background:'var(--bg)',borderRadius:'22px 22px 0 0',maxHeight:'90vh',overflowY:'auto',paddingBottom:24}}>
         <div style={{position:'sticky',top:0,background:'var(--bg)',padding:'14px 16px',display:'flex',alignItems:'center',gap:12,borderBottom:'1px solid var(--line)',zIndex:2}}>
@@ -1172,7 +1173,7 @@ function Sheet({title,onClose,z=50,children}){
         </div>
         <div style={{padding:16}}>{children}</div>
       </div>
-    </div>
+    </div></Portal>
   );
 }
 
