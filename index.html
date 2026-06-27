@@ -105,11 +105,12 @@ const SHOPS = [
   { id:'owlcha', name:'Owl Cha', brand:'อาวน์ชา · OWL', sub:'ร้านชานมไข่มุก', type:'drink', emoji:'🧋', logo:OWL_LOGO, lineUrl:'https://lin.ee/yT6VSaT', lineQr:QR_OWLCHA,
     theme:{ primary:'#6E5A47', accent:'#C19A6B', tint:'#F5F0E7', soft:'#ECE4D7' } },
 ];
+const COMMON_EXPENSE = ['ค่าเดินทาง','ค่าแรงช่าง','ค่าดำเนินการ','ค่าซ่อมบำรุง','ค่าก่อสร้าง/ต่อเติม','ต้นทุนสินค้า','ของใช้ต่างๆ','ค่าเนต/โทร','ค่าน้ำ','ค่าไฟ','ค่าเช่าที่'];
 const DEFAULT_CATS = {
   laundry:{ income:['เครื่องซัก','เครื่องอบ','บริการ ซัก-อบ-พับ','Delivery','ขายสินค้า'],
-            expense:['ค่าเช่าที่','ค่าน้ำ-ค่าไฟ','เงินเดือนพนักงาน','วัตถุดิบ/ของใช้','ซ่อมบำรุงเครื่อง','การตลาด','อื่นๆ'] },
+            expense:COMMON_EXPENSE },
   drink:{ income:['ขายหน้าร้าน','เดลิเวอรี','Referral','อื่นๆ'],
-          expense:['ค่าเช่าที่','ค่าน้ำ-ค่าไฟ','เงินเดือนพนักงาน','วัตถุดิบ (นม/ชา)','แก้ว/อุปกรณ์','การตลาด','อื่นๆ'] },
+          expense:COMMON_EXPENSE },
 };
 const ROLES = {
   admin:{ label:'Admin', desc:'เข้าถึงทุกฟังก์ชัน ทุกร้าน', color:'#13294B' },
@@ -124,6 +125,22 @@ const ymOf=(ds)=>ds.slice(0,7);
 const baht=(n)=> (n<0?'-':'')+'฿'+Math.abs(Math.round(n||0)).toLocaleString('en-US');
 const hhmm=(ts)=>{ try{ const d=ts.toDate(); return pad(d.getHours())+':'+pad(d.getMinutes()); }catch(e){ return '—'; } };
 const sumBy=(arr,fn)=>arr.reduce((s,x)=>s+(fn(x)?Number(x.amount)||0:0),0);
+function evalExpr(s){
+  if(!s) return 0;
+  const toks=[]; let num='';
+  for(const ch of s){ if((ch>='0'&&ch<='9')||ch==='.') num+=ch; else if('+-*/'.includes(ch)){ if(num!==''){toks.push(parseFloat(num));num='';} toks.push(ch); } }
+  if(num!=='') toks.push(parseFloat(num));
+  if(typeof toks[toks.length-1]==='string') toks.pop();
+  if(!toks.length) return 0;
+  const p=[toks[0]];
+  for(let i=1;i<toks.length;i+=2){ const op=toks[i], n=toks[i+1]; if(n===undefined) break;
+    if(op==='*') p[p.length-1]=p[p.length-1]*n; else if(op==='/') p[p.length-1]= (n===0?0:p[p.length-1]/n); else p.push(op,n); }
+  let r=p[0]||0; for(let i=1;i<p.length;i+=2){ if(p[i]==='+') r+=p[i+1]; else if(p[i]==='-') r-=p[i+1]; }
+  return r;
+}
+const CAT_PALETTE=['#0B7AAB','#16A34A','#DC2626','#F59E0B','#7C3AED','#0891B2','#DB2777','#235A88','#B45309','#0E7C66','#9333EA','#EA580C','#0284C7','#65A30D'];
+const catColor=(name)=>{ name=name||''; let h=0; for(let i=0;i<name.length;i++) h=(h*31+name.charCodeAt(i))>>>0; return CAT_PALETTE[h%CAT_PALETTE.length]; };
+const THAI_MON=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
 
 /* ---------- firestore ops ---------- */
 async function findUserByPin(pin){
@@ -136,29 +153,42 @@ async function createAdmin(pin){
   const ref=await db.collection('users').add(data); return {id:ref.id, ...data};
 }
 async function allUsers(){ const s=await db.collection('users').get(); return s.docs.map(d=>({id:d.id,...d.data()})); }
-async function addUser({name,role,pin,shopIds}){
+async function addUser({name,role,pin,shopIds},actor){
   if(await findUserByPin(pin)) throw new Error('PIN นี้ถูกใช้แล้ว เลือกเลขอื่น');
   await db.collection('users').add({name,role,pin,shopIds,active:true,createdAt:FieldValue.serverTimestamp()});
+  await writeLog('all', actor, 'user.add', `เพิ่มผู้ใช้ ${name} (${(ROLES[role]&&ROLES[role].label)||role})`, []);
 }
-async function setUserActive(id,active){ await db.collection('users').doc(id).update({active}); }
-async function updateUser(id,data){ await db.collection('users').doc(id).update(data); }
-async function deleteUser(id){ await db.collection('users').doc(id).delete(); }
+async function setUserActive(id,active,actor){ await db.collection('users').doc(id).update({active}); await writeLog('all', actor, 'user.active', active?'เปิดใช้งานผู้ใช้':'ปิดใช้งานผู้ใช้', []); }
+async function updateUser(id,data,actor){ await db.collection('users').doc(id).update(data); if(actor) await writeLog('all', actor, 'user.edit', (('pin' in data)&&Object.keys(data).length===1)?'เปลี่ยน PIN ผู้ใช้':'แก้ไขข้อมูลผู้ใช้', []); }
+async function deleteUser(id,actor){ await db.collection('users').doc(id).delete(); await writeLog('all', actor, 'user.delete', 'ลบผู้ใช้', []); }
 async function pinTakenByOther(pin,exceptId){
   const s=await db.collection('users').where('pin','==',pin).limit(1).get();
   return !s.empty && s.docs[0].id!==exceptId;
 }
 
-async function addTxn({shopId,kind,category,amount,method,note,by,photo}){
-  const date=today(), ym=ymOf(date);
+async function addTxn({shopId,kind,category,amount,method,note,by,photo,date}){
+  const ds=date||today(), ym=ymOf(ds);
   const ref=await db.collection('transactions').add({
     shopId, kind, category, amount:Number(amount), method, note:note||'',
-    date, ym, skey:`${shopId}_${ym}`, by, source:'manual', hasPhoto:!!photo, ts:FieldValue.serverTimestamp()
+    date:ds, ym, skey:`${shopId}_${ym}`, by, source:'manual', hasPhoto:!!photo, ts:FieldValue.serverTimestamp()
   });
   if(photo){ await db.collection('transactions').doc('rcpt_'+ref.id).set({ skey:`${shopId}_RCPT`, txnRef:ref.id, photo, ts:FieldValue.serverTimestamp() }); }
+  await writeLog(shopId, by, 'txn.add', `เพิ่ม${kind==='income'?'รายรับ':'รายจ่าย'} ${category} ${baht(Number(amount))}`, [{id:ref.id, before:null, after:{kind,category,amount:Number(amount),method,note:note||'',date:ds,hasPhoto:!!photo}}]);
   return ref.id;
 }
 async function getReceipt(txnId){ const d=await db.collection('transactions').doc('rcpt_'+txnId).get(); return d.exists?d.data().photo:null; }
-async function delTxn(id){ await db.collection('transactions').doc(id).delete(); try{ await db.collection('transactions').doc('rcpt_'+id).delete(); }catch(e){} }
+async function delTxn(id, actor){
+  let before=null;
+  try{ const d=await db.collection('transactions').doc(id).get(); if(d.exists) before={...d.data()}; }catch(e){}
+  await db.collection('transactions').doc(id).delete();
+  try{ await db.collection('transactions').doc('rcpt_'+id).delete(); }catch(e){}
+  if(before){
+    const cap=before.source==='capital';
+    const lbl=cap ? `ลบ${before.kind==='withdraw'?'ถอนทุน':before.kind==='dividend'?'ปันผล':'เพิ่มทุน'} ${before.category||''} ${baht(before.amount||0)}`
+                  : `ลบ${before.kind==='income'?'รายรับ':'รายจ่าย'} ${before.category||''} ${baht(before.amount||0)}`;
+    await writeLog(before.shopId||'', actor, cap?'capital.delete':'txn.delete', lbl, [{id, before, after:null}]);
+  }
+}
 function resizePhoto(file, maxW=600, q=0.6, mime='image/jpeg'){
   return new Promise((res,rej)=>{
     const img=new Image();
@@ -175,17 +205,20 @@ async function monthTxns(shopId, ym){
 
 async function customCats(shopId,kind){
   const s=await db.collection('customCategories').where('ckey','==',`${shopId}_${kind}`).get();
-  return s.docs.map(d=>d.data().name);
+  return s.docs.map(d=>{ const x=d.data(); return {name:x.name, color:x.color||null, icon:x.icon||null}; });
 }
-async function addCat(shopId,kind,name){
-  await db.collection('customCategories').add({shopId,kind,name,ckey:`${shopId}_${kind}`,createdAt:FieldValue.serverTimestamp()});
+async function addCat(shopId,kind,name,color,icon){
+  await db.collection('customCategories').add({shopId,kind,name,color:color||null,icon:icon||null,ckey:`${shopId}_${kind}`,createdAt:FieldValue.serverTimestamp()});
 }
 
 async function getSettings(shopId){
   const d=await db.collection('settings').doc(shopId).get();
   return d.exists? {openingFloat:0,bankBalance:0,...d.data()} : {openingFloat:0,bankBalance:0};
 }
-async function saveSettings(shopId,data){ await db.collection('settings').doc(shopId).set(data,{merge:true}); }
+async function saveSettings(shopId,data,actor){
+  await db.collection('settings').doc(shopId).set(data,{merge:true});
+  if(actor){ const isLine=('lineUrl' in data)||('lineQr' in data); await writeLog(shopId, actor, 'settings.save', isLine?'แก้ไข LINE ของร้าน':'แก้ไขตั้งค่าการเงิน', []); }
+}
 
 async function getCashCount(shopId,date){
   const d=await db.collection('cashCounts').doc(`${shopId}_${date}`).get();
@@ -193,7 +226,43 @@ async function getCashCount(shopId,date){
 }
 async function saveCashCount(shopId,date,amount,by){
   await db.collection('cashCounts').doc(`${shopId}_${date}`).set({shopId,date,amount:Number(amount),by,ts:FieldValue.serverTimestamp()});
+  await writeLog(shopId, by, 'cashcount.save', `นับเงินสด ${date} = ${baht(Number(amount))}`, []);
 }
+
+/* ---------- AUDIT LOG ---------- */
+async function writeLog(shopId, actor, type, label, ops){
+  try{
+    await db.collection('transactions').add({
+      _log:true, skey:`${shopId}_LOG`, shopId,
+      type, label:label||'',
+      actor: actor? {id:(actor.id||''), name:(actor.name||'')} : null,
+      ops:(ops||[]).map(o=>({id:o.id, before:(o.before==null?null:o.before), after:(o.after==null?null:o.after)})),
+      reverted:false, ts:FieldValue.serverTimestamp()
+    });
+  }catch(e){ console.error('writeLog',e); }
+}
+async function logsForShop(shopId){
+  const [a,b]=await Promise.all([
+    db.collection('transactions').where('skey','==',`${shopId}_LOG`).get(),
+    db.collection('transactions').where('skey','==','all_LOG').get()
+  ]);
+  const arr=[...a.docs,...b.docs].map(d=>({id:d.id,...d.data()}));
+  return arr.sort((x,y)=>(((y.ts&&y.ts.seconds)||0)-((x.ts&&x.ts.seconds)||0)));
+}
+async function revertLog(log, actor){
+  const ops=log.ops||[];
+  for(let i=ops.length-1;i>=0;i--){
+    const op=ops[i]; if(!op||!op.id) continue;
+    if(op.before==null){
+      await db.collection('transactions').doc(op.id).delete();
+      try{ await db.collection('transactions').doc('rcpt_'+op.id).delete(); }catch(e){}
+    } else {
+      await db.collection('transactions').doc(op.id).set(op.before);
+    }
+  }
+  await db.collection('transactions').doc(log.id).update({ reverted:true, revertedAt:FieldValue.serverTimestamp(), revertedBy: actor?{id:(actor.id||''),name:(actor.name||'')}:null });
+}
+function fmtLogTime(ts){ if(!ts||!ts.seconds) return '—'; const d=new Date(ts.seconds*1000); const p=n=>String(n).padStart(2,'0'); return `${p(d.getDate())}/${p(d.getMonth()+1)} ${p(d.getHours())}:${p(d.getMinutes())}`; }
 
 /* ---------- icons ---------- */
 const I={
@@ -218,6 +287,51 @@ const I={
   table:(p)=><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"{...p}><rect x="3.5" y="4.5" width="17" height="15" rx="2"/><path d="M3.5 9.5h17M9.5 9.5v10M15 9.5v10"/></svg>,
   spark:(p)=><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"{...p}><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M18 6l-2.5 2.5M8.5 15.5 6 18"/></svg>,
 };
+
+/* ---------- category icons (20) ---------- */
+const CAT_ICONS={
+  water:(p)=><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"{...p}><path d="M12 3c0 0 6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11Z"/></svg>,
+  bolt:(p)=><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"{...p}><path d="m13 2-9 12h6l-1 8 9-12h-6z"/></svg>,
+  car:(p)=><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"{...p}><path d="M4 14l1.6-5A2 2 0 0 1 7.5 7.5h9a2 2 0 0 1 1.9 1.5L20 14M4 14h16v3H4zM7 17v1.5M17 17v1.5"/></svg>,
+  wrench:(p)=><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"{...p}><path d="M21 4a4 4 0 0 1-5.3 5.3L6 19a2.1 2.1 0 0 1-3-3l9.7-9.7A4 4 0 0 1 18 1l-2.5 2.5L17 6l1.5 1.5L21 4Z"/></svg>,
+  hammer:(p)=><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"{...p}><path d="M14 3.5l6.5 6.5-2.5 2.5L11.5 6 14 3.5Z"/><path d="M12.5 6.5 4 15v4.5h4.5l8.5-8.5"/></svg>,
+  box:(p)=><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"{...p}><path d="m12 2.5 8.5 4.5v9L12 20.5 3.5 16V7L12 2.5Z"/><path d="M3.5 7 12 11.5 20.5 7M12 11.5V20.5"/></svg>,
+  bag:(p)=><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"{...p}><path d="M6 7.5h12l-1 12.5H7L6 7.5Z"/><path d="M9 7.5V6a3 3 0 0 1 6 0v1.5"/></svg>,
+  wifi:(p)=><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"{...p}><path d="M3 8.5a14 14 0 0 1 18 0M6 12a9 9 0 0 1 12 0M9 15.3a4 4 0 0 1 6 0"/><circle cx="12" cy="18.6" r="1.05"/></svg>,
+  phone:(p)=><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"{...p}><rect x="6.5" y="2.5" width="11" height="19" rx="2.5"/><path d="M10.5 18.5h3"/></svg>,
+  home:(p)=><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"{...p}><path d="M3.5 11 12 4l8.5 7M5.5 9.7V20h13V9.7M10 20v-5.5h4V20"/></svg>,
+  coins:(p)=><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"{...p}><ellipse cx="12" cy="6.3" rx="6.3" ry="2.8"/><path d="M5.7 6.3v5c0 1.5 2.8 2.8 6.3 2.8s6.3-1.3 6.3-2.8v-5M5.7 11.3v5c0 1.5 2.8 2.8 6.3 2.8s6.3-1.3 6.3-2.8v-5"/></svg>,
+  hardhat:(p)=><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"{...p}><path d="M3.5 17a8.5 8.5 0 0 1 17 0M2.5 17h19M9.5 9V6a2.5 2.5 0 0 1 5 0v3M8.5 9h7"/></svg>,
+  shirt:(p)=><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"{...p}><path d="M8.5 3 4.5 6 6 9l2-1.2V21h8V7.8L18 9l1.5-3-4-3-2 2h-3l-2-2Z"/></svg>,
+  bottle:(p)=><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"{...p}><path d="M10 2.5h4v2.5l1 2.2V20a1.5 1.5 0 0 1-1.5 1.5h-3A1.5 1.5 0 0 1 9 20V7.2l1-2.2V2.5ZM9 11.5h6"/></svg>,
+  cup:(p)=><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"{...p}><path d="M5 7.5h12v6a4 4 0 0 1-4 4H9a4 4 0 0 1-4-4V7.5ZM17 9h2a2.2 2.2 0 0 1 0 4.4h-2M9 3.5v1.6M12.5 3v2"/></svg>,
+  washer:(p)=><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"{...p}><rect x="5" y="2.5" width="14" height="19" rx="2"/><circle cx="12" cy="13" r="4.2"/><path d="M7.6 6h.4M10 6h.4"/></svg>,
+  cart:(p)=><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"{...p}><path d="M3 4h2l1.6 10.5A1.5 1.5 0 0 0 8.1 16H17M6.2 6H20l-1.3 6.5A1.5 1.5 0 0 1 17.2 14H7.4"/><circle cx="9" cy="19.5" r="1.4"/><circle cx="16.5" cy="19.5" r="1.4"/></svg>,
+  gift:(p)=><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"{...p}><path d="M4 11.5h16V14H4zM5 14v6.5h14V14M12 11.5v9M12 11.5S10.5 7 8 7a2 2 0 0 0 0 4.5M12 11.5S13.5 7 16 7a2 2 0 0 1 0 4.5"/></svg>,
+  tag:(p)=><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"{...p}><path d="M3.5 12.5V5a1.5 1.5 0 0 1 1.5-1.5h7.5l8 8a1.5 1.5 0 0 1 0 2.1l-5.4 5.4a1.5 1.5 0 0 1-2.1 0l-8-8Z"/><circle cx="8" cy="8" r="1.25"/></svg>,
+  star:(p)=><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"{...p}><path d="m12 3.5 2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 17l-5.2 2.6 1-5.8L3.5 9.7l5.9-.9L12 3.5Z"/></svg>,
+};
+const CAT_ICON_KEYS=['water','bolt','car','wrench','hammer','box','bag','wifi','phone','home','coins','hardhat','shirt','bottle','cup','washer','cart','gift','tag','star'];
+const DEFAULT_CAT_META={
+  'ค่าเดินทาง':{icon:'car',color:'#0E7C66'}, 'ค่าแรงช่าง':{icon:'hardhat',color:'#B45309'}, 'ค่าดำเนินการ':{icon:'coins',color:'#0891B2'},
+  'ค่าซ่อมบำรุง':{icon:'wrench',color:'#64748B'}, 'ค่าก่อสร้าง/ต่อเติม':{icon:'hammer',color:'#9333EA'}, 'ต้นทุนสินค้า':{icon:'box',color:'#DC2626'},
+  'ของใช้ต่างๆ':{icon:'bag',color:'#EA580C'}, 'ค่าเนต/โทร':{icon:'wifi',color:'#0284C7'}, 'ค่าน้ำ':{icon:'water',color:'#0EA5E9'},
+  'ค่าไฟ':{icon:'bolt',color:'#F59E0B'}, 'ค่าเช่าที่':{icon:'home',color:'#235A88'},
+  'เครื่องซัก':{icon:'washer',color:'#0B7AAB'}, 'เครื่องอบ':{icon:'washer',color:'#7C3AED'}, 'บริการ ซัก-อบ-พับ':{icon:'shirt',color:'#16A34A'},
+  'Delivery':{icon:'cart',color:'#DB2777'}, 'ขายสินค้า':{icon:'tag',color:'#65A30D'},
+  'ขายหน้าร้าน':{icon:'cup',color:'#6E5A47'}, 'เดลิเวอรี':{icon:'cart',color:'#DB2777'}, 'Referral':{icon:'star',color:'#F59E0B'}, 'อื่นๆ':{icon:'tag',color:'#64748B'},
+};
+const CATMETA={};
+function catMetaOf(shopId,name){ const c=CATMETA[shopId+'|'+name]; if(c) return c; const d=DEFAULT_CAT_META[name]; if(d) return d; return {color:catColor(name), icon:null}; }
+async function loadCatMeta(shopId){
+  try{
+    const arrs=await Promise.all(['income','expense'].map(k=>db.collection('customCategories').where('ckey','==',`${shopId}_${k}`).get()));
+    arrs.forEach(s=>s.docs.forEach(d=>{ const x=d.data(); CATMETA[shopId+'|'+x.name]={color:x.color||catColor(x.name), icon:x.icon||null}; }));
+  }catch(e){ console.error('loadCatMeta',e); }
+}
+function CatBadge({shopId,name,size}){ size=size||42; const m=catMetaOf(shopId,name); const Ic=m.icon&&CAT_ICONS[m.icon]; const isz=Math.round(size*0.52);
+  return <span style={{width:size,height:size,borderRadius:99,flexShrink:0,background:m.color||catColor(name),color:'#fff',display:'grid',placeItems:'center'}}>{Ic? <Ic width={isz} height={isz}/> : <span style={{fontWeight:700,fontSize:Math.round(size*0.4)}}>{(name||'?').trim()[0]}</span>}</span>;
+}
 
 /* ---------- small ui ---------- */
 function Spinner({c='var(--primary)'}){
@@ -426,7 +540,7 @@ function Home({shop,user,setTab}){
   const refresh=async()=>{
     setLoad(true);
     try{
-      const [t,s,c]=await Promise.all([ monthTxns(shop.id, ymOf(td)), getSettings(shop.id), getCashCount(shop.id,td) ]);
+      const [t,s,c]=await Promise.all([ monthTxns(shop.id, ymOf(td)), getSettings(shop.id), getCashCount(shop.id,td), loadCatMeta(shop.id) ]);
       setTxns(t); setCfg(s); setCounted(c); if(c!=null) setCountInput(String(c));
     }catch(e){ console.error(e); }
     setLoad(false);
@@ -548,11 +662,11 @@ function PL({label,v,c,big}){
 function TxnRow({r,onDel,onView}){
   const inc=r.kind==='income';
   return <div style={{display:'flex', alignItems:'center', gap:12, padding:'10px 16px'}}>
-    <span style={{width:40,height:40,borderRadius:12, flexShrink:0, background:inc?'#ECFDF3':'#FEF3F2', color:inc?'#16A34A':'#DC2626', display:'grid', placeItems:'center'}}>{inc?<I.up/>:<I.down/>}</span>
+    <CatBadge shopId={r.shopId} name={r.category}/>
     <div style={{flex:1, minWidth:0}}>
-      <div style={{fontSize:14.5, fontWeight:500}}>{r.category}</div>
+      <div style={{fontSize:14.5, fontWeight:500, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis'}}>{r.category}</div>
       <div style={{fontSize:11.5, color:'var(--muted)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis'}}>
-        {r.by?.name||'—'} · {hhmm(r.ts)} · {r.method==='cash'?'เงินสด':'โอน'}</div>
+        {r.note? r.note+' · ' : ''}{hhmm(r.ts)} · {r.method==='cash'?'เงินสด':'โอน'}</div>
     </div>
     {r.hasPhoto && <button onClick={()=>onView&&onView(r)} className="press" title="ดูใบเสร็จ" style={{border:'none',background:'var(--soft)',color:'var(--primary)',borderRadius:9,width:30,height:30,display:'grid',placeItems:'center',flexShrink:0}}><I.receipt/></button>}
     <div className="num" style={{fontSize:15, fontWeight:600, color:inc?'#16A34A':'#DC2626'}}>{inc?'+':'-'}{baht(r.amount).replace('฿','')}</div>
@@ -578,159 +692,252 @@ function ReceiptViewer({txn,onClose}){
 
 /* ---------- RECORD ---------- */
 function Record({shop,user,readOnly,toast}){
-  const [mode,setMode]=useState('inc');
-  const kind = mode==='inc'?'income':'expense';
-  const [cats,setCats]=useState([]);
-  const [cat,setCat]=useState('');
-  const [amt,setAmt]=useState('');
-  const [pay,setPay]=useState('cash');
-  const [note,setNote]=useState('');
+  const [selDate,setSelDate]=useState(today());
   const [list,setList]=useState([]);
   const [load,setLoad]=useState(true);
-  const [saving,setSaving]=useState(false);
-  const [addingCat,setAddingCat]=useState(false);
-  const [newCat,setNewCat]=useState('');
   const [showImport,setShowImport]=useState(false);
-  const [photo,setPhoto]=useState(null);
-  const [photoBusy,setPhotoBusy]=useState(false);
+  const [showEntry,setShowEntry]=useState(false);
+  const [entryMode,setEntryMode]=useState('exp');
   const [viewRcpt,setViewRcpt]=useState(null);
-  const photoRef=useRef();
-  const onPhoto=async(e)=>{ const f=e.target.files[0]; if(!f) return; setPhotoBusy(true);
-    try{ const b=await resizePhoto(f,600,0.6); setPhoto(b); }catch(err){ toast('ย่อรูปไม่สำเร็จ','err'); }
-    setPhotoBusy(false); e.target.value=''; };
-  const td=today();
 
-  const loadCats=async()=>{
-    const custom=await customCats(shop.id,kind);
-    const base=DEFAULT_CATS[shop.type][kind];
-    const merged=[...base,...custom.filter(c=>!base.includes(c))];
-    setCats(merged); setCat(merged[0]||'');
-  };
   const loadList=async()=>{
     setLoad(true);
-    try{ const t=await monthTxns(shop.id, ymOf(td)); setList(t.filter(x=>x.date===td && x.kind===kind).sort((a,b)=>(b.ts?.seconds||0)-(a.ts?.seconds||0))); }
+    try{ await loadCatMeta(shop.id); const t=await monthTxns(shop.id, ymOf(selDate)); setList(t.filter(x=>x.date===selDate).sort((a,b)=>(((b.ts&&b.ts.seconds)||0)-((a.ts&&a.ts.seconds)||0)))); }
     catch(e){ console.error(e); }
     setLoad(false);
   };
-  useEffect(()=>{ loadCats(); loadList(); },[shop.id,mode]);
+  useEffect(()=>{ loadList(); },[shop.id,selDate]);
 
-  const total=list.reduce((s,r)=>s+(Number(r.amount)||0),0);
-  const save=async()=>{
-    if(!amt||!cat) return;
-    setSaving(true);
-    try{
-      await addTxn({shopId:shop.id,kind,category:cat,amount:Number(amt),method:pay,note,by:{id:user.id,name:user.name},photo});
-      setAmt(''); setNote(''); setPhoto(null); await loadList();
-      toast(`บันทึก${mode==='inc'?'รายรับ':'รายจ่าย'} ${baht(Number(amt))} แล้ว`);
-    }catch(e){ toast('บันทึกไม่สำเร็จ','err'); }
-    setSaving(false);
-  };
-  const saveCat=async()=>{
-    if(!newCat.trim()) return;
-    try{ await addCat(shop.id,kind,newCat.trim()); setNewCat(''); setAddingCat(false); await loadCats(); toast('เพิ่มหมวดแล้ว'); }
-    catch(e){ toast('เพิ่มไม่สำเร็จ','err'); }
-  };
-  const onDel=async(r)=>{
-    try{ await delTxn(r.id); await loadList(); toast('ลบรายการแล้ว'); }catch(e){ toast('ลบไม่สำเร็จ','err'); }
-  };
+  const inc=sumBy(list,r=>r.kind==='income');
+  const exp=sumBy(list,r=>r.kind==='expense');
+  const net=inc-exp;
+  const onDel=async(r)=>{ try{ await delTxn(r.id, {id:user.id,name:user.name}); await loadList(); toast('ลบรายการแล้ว'); }catch(e){ toast('ลบไม่สำเร็จ','err'); } };
+  const shiftDay=(n)=>{ const d=new Date(selDate+'T00:00:00'); d.setDate(d.getDate()+n); const ds=`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; if(ds<=today()) setSelDate(ds); };
+  const atToday=selDate>=today();
+  const dLabel=(()=>{ if(selDate===today()) return 'วันนี้'; const a=selDate.split('-'); return `${parseInt(a[2])} ${THAI_MON[parseInt(a[1])-1]} ${a[0]}`; })();
 
   return (
-    <div style={{padding:'14px 16px 8px'}}>
-      <div style={{display:'flex', background:'var(--soft)', borderRadius:14, padding:4, marginBottom:14}}>
-        {[['inc','รายรับ','#16A34A'],['exp','รายจ่าย','#DC2626']].map(([k,l,c])=>(
-          <button key={k} onClick={()=>setMode(k)} className="press kanit" style={{flex:1, padding:'10px', borderRadius:11, border:'none', fontWeight:600, fontSize:15, background:mode===k?'#fff':'transparent', color:mode===k?c:'var(--muted)', boxShadow:mode===k?'0 1px 3px rgba(0,0,0,.08)':'none'}}>{l}</button>
-        ))}
+    <div style={{padding:'14px 16px 96px', minHeight:'72vh'}}>
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12}}>
+        <button onClick={()=>shiftDay(-1)} className="press" style={{border:'1px solid var(--line)',background:'#fff',borderRadius:10,width:38,height:38,display:'grid',placeItems:'center'}}><I.back/></button>
+        <div className="kanit" style={{fontWeight:600,fontSize:16}}>{dLabel}</div>
+        <button onClick={()=>shiftDay(1)} disabled={atToday} className="press" style={{border:'1px solid var(--line)',background:'#fff',borderRadius:10,width:38,height:38,display:'grid',placeItems:'center',opacity:atToday?0.3:1,transform:'rotate(180deg)'}}><I.back/></button>
       </div>
 
-      {mode==='inc' && shop.type==='laundry' && !readOnly && (
-        <button onClick={()=>setShowImport(true)} className="press" style={{width:'100%', border:'1.5px dashed var(--accent)', background:'var(--tint)', borderRadius:16, padding:'13px 15px', marginBottom:14, display:'flex', alignItems:'center', gap:12, textAlign:'left'}}>
-          <span style={{width:42,height:42,borderRadius:12, background:'#fff', color:'var(--accent)', display:'grid', placeItems:'center', flexShrink:0}}><I.table/></span>
-          <div style={{flex:1}}>
-            <div className="kanit" style={{fontWeight:600, fontSize:14.5, color:'var(--primary)'}}>นำเข้ารายรับจาก Excel</div>
-            <div style={{fontSize:11.5, color:'var(--muted)'}}>อัปไฟล์ยอดเครื่องซัก/อบ แล้วจับคู่คอลัมน์เอง</div>
-          </div>
+      <div className="card" style={{padding:'14px 16px',marginBottom:14}}>
+        <div style={{display:'flex',justifyContent:'space-between',marginBottom:9}}><span style={{color:'var(--muted)',fontSize:13.5}}>รายรับ</span><span className="num" style={{color:'#16A34A',fontWeight:600,fontSize:15}}>{baht(inc)}</span></div>
+        <div style={{display:'flex',justifyContent:'space-between',marginBottom:9}}><span style={{color:'var(--muted)',fontSize:13.5}}>รายจ่าย</span><span className="num" style={{color:'#DC2626',fontWeight:600,fontSize:15}}>{baht(exp)}</span></div>
+        <div style={{height:1,background:'var(--line)',margin:'9px 0'}}/>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}><span className="kanit" style={{fontWeight:600,fontSize:14.5}}>คงเหลือ</span><span className="num" style={{fontWeight:700,fontSize:19,color:net>=0?'#16A34A':'#DC2626'}}>{net>=0?'+':''}{baht(net)}</span></div>
+      </div>
+
+      {shop.type==='laundry' && !readOnly && (
+        <button onClick={()=>setShowImport(true)} className="press" style={{width:'100%',border:'1.5px dashed var(--accent)',background:'var(--tint)',borderRadius:14,padding:'11px 14px',marginBottom:14,display:'flex',alignItems:'center',gap:11,textAlign:'left'}}>
+          <span style={{width:36,height:36,borderRadius:10,background:'#fff',color:'var(--accent)',display:'grid',placeItems:'center',flexShrink:0}}><I.table/></span>
+          <div style={{flex:1}}><div className="kanit" style={{fontWeight:600,fontSize:13.5,color:'var(--primary)'}}>นำเข้ารายรับจาก Excel</div><div style={{fontSize:11,color:'var(--muted)'}}>อัปไฟล์ยอดเครื่องซัก/อบ</div></div>
           <I.chevron/>
         </button>
       )}
 
-      {showImport && <Import shop={shop} user={user} toast={toast} onClose={()=>setShowImport(false)} onDone={()=>{ setShowImport(false); loadList(); }}/>}
-
-      {readOnly ? (
-        <div className="card" style={{padding:16, marginBottom:14, display:'flex', gap:10, alignItems:'center', color:'var(--muted)', fontSize:13.5}}>
-          <I.eye/> โหมดหุ้นส่วน — ดูได้อย่างเดียว เพิ่ม/แก้รายการไม่ได้</div>
-      ) : (
-        <div className="card" style={{padding:16, marginBottom:14}}>
-          <div className="kanit" style={{fontWeight:600, fontSize:15, marginBottom:12}}>
-            {mode==='inc' && shop.type==='laundry' ? 'เพิ่มรายรับอื่นๆ (กรอกเอง)' : `เพิ่ม${mode==='inc'?'รายรับ':'รายจ่าย'}`}</div>
-
-          <label style={lbl}>หมวดรายการ</label>
-          <div style={{display:'flex', gap:8, overflowX:'auto', paddingBottom:6, marginBottom:12}} className="hide-scroll">
-            {cats.map(c=>(
-              <button key={c} onClick={()=>setCat(c)} className="press kanit" style={{whiteSpace:'nowrap', padding:'8px 13px', borderRadius:11, fontSize:13, fontWeight:500, border:`1.5px solid ${cat===c?'var(--primary)':'var(--line)'}`, background:cat===c?'var(--primary)':'#fff', color:cat===c?'#fff':'var(--ink)'}}>{c}</button>
-            ))}
-            <button onClick={()=>setAddingCat(v=>!v)} className="press" style={{whiteSpace:'nowrap', padding:'8px 12px', borderRadius:11, border:'1.5px dashed var(--line)', background:'#fff', color:'var(--muted)', fontSize:13, display:'flex', alignItems:'center', gap:3}}><I.plus/> เพิ่มหมวด</button>
-          </div>
-          {addingCat && (
-            <div style={{display:'flex',gap:8,marginBottom:12}}>
-              <input value={newCat} onChange={e=>setNewCat(e.target.value)} placeholder="ชื่อหมวดใหม่"
-                style={{flex:1,padding:'10px 13px',border:'1.5px solid var(--line)',borderRadius:11,outline:'none',fontSize:14}}/>
-              <button onClick={saveCat} className="press kanit" style={{padding:'0 16px',border:'none',borderRadius:11,background:'var(--primary)',color:'#fff',fontSize:14,fontWeight:600}}>เพิ่ม</button>
-            </div>
-          )}
-
-          <label style={lbl}>จำนวนเงิน (บาท)</label>
-          <input value={amt} onChange={e=>setAmt(e.target.value.replace(/[^0-9]/g,''))} inputMode="numeric" placeholder="0" className="num"
-            style={{width:'100%', padding:'14px 16px', fontSize:26, fontWeight:700, border:'1.5px solid var(--line)', borderRadius:14, outline:'none', marginBottom:12, color:'var(--ink)'}}/>
-
-          <label style={lbl}>ช่องทาง</label>
-          <div style={{display:'flex', gap:8, marginBottom:12}}>
-            {[['cash','เงินสด',I.cash],['bank','เงินโอน',I.bank]].map(([k,l,Ic])=>(
-              <button key={k} onClick={()=>setPay(k)} className="press" style={{flex:1, padding:'11px', borderRadius:12, fontSize:14, fontWeight:500, display:'flex', justifyContent:'center', alignItems:'center', gap:7, border:`1.5px solid ${pay===k?'var(--primary)':'var(--line)'}`, background:pay===k?'var(--soft)':'#fff', color:pay===k?'var(--primary)':'var(--ink)'}}><Ic/>{l}</button>
-            ))}
-          </div>
-
-          <label style={lbl}>หมายเหตุ (ถ้ามี)</label>
-          <input value={note} onChange={e=>setNote(e.target.value)} placeholder="เช่น โอนผ่านพร้อมเพย์"
-            style={{width:'100%',padding:'11px 14px',border:'1.5px solid var(--line)',borderRadius:12,outline:'none',fontSize:14,marginBottom:14}}/>
-
-          {mode==='exp' && (<>
-            <label style={lbl}>รูปใบเสร็จ (ถ้ามี)</label>
-            <input ref={photoRef} type="file" accept="image/*" onChange={onPhoto} style={{display:'none'}}/>
-            {photo ? (
-              <div style={{display:'flex',gap:11,alignItems:'center',marginBottom:14}}>
-                <img src={photo} alt="ใบเสร็จ" style={{width:60,height:60,borderRadius:12,objectFit:'cover',border:'1px solid var(--line)'}}/>
-                <div style={{flex:1,fontSize:12.5,color:'var(--muted)'}}>แนบรูปแล้ว · กดบันทึกเพื่อจัดเก็บ</div>
-                <button onClick={()=>setPhoto(null)} className="press kanit" style={{border:'1px solid var(--line)',background:'#fff',color:'#DC2626',borderRadius:10,padding:'8px 12px',fontSize:13,fontWeight:600}}>ลบรูป</button>
-              </div>
-            ) : (
-              <button onClick={()=>photoRef.current.click()} disabled={photoBusy} className="press" style={{width:'100%',padding:'12px',border:'1.5px dashed var(--line)',borderRadius:12,background:'#fff',color:'var(--muted)',fontSize:14,display:'flex',justifyContent:'center',alignItems:'center',gap:8,marginBottom:14}}>
-                {photoBusy? 'กำลังย่อรูป...' : <><I.receipt/> ถ่าย / เลือกรูปใบเสร็จ</>}
-              </button>
-            )}
-          </>)}
-
-          <button onClick={save} disabled={saving} className="press kanit" style={{width:'100%', padding:'15px', borderRadius:14, border:'none', background:'var(--primary)', color:'#fff', fontSize:16, fontWeight:600, opacity:(amt&&!saving)?1:.5}}>
-            {saving?'กำลังบันทึก...':`บันทึก${mode==='inc'?'รายรับ':'รายจ่าย'}${amt?` · ${baht(Number(amt))}`:''}`}</button>
-        </div>
-      )}
-
-      <div className="card" style={{padding:'14px 0 6px'}}>
-        <div style={{display:'flex', justifyContent:'space-between', padding:'0 16px 8px', alignItems:'center'}}>
-          <div className="kanit" style={{fontWeight:600, fontSize:15}}>{mode==='inc'?'รายรับ':'รายจ่าย'}วันนี้</div>
-          <div className="num" style={{fontWeight:700, fontSize:16, color:mode==='inc'?'#16A34A':'#DC2626'}}>{mode==='inc'?'+':'-'}{baht(total).replace('฿','')}</div>
-        </div>
-        {load? <Loading label="กำลังโหลดรายการ..."/> :
+      <div className="card" style={{padding:'6px 0'}}>
+        {load? <Loading label="กำลังโหลด..."/> :
           list.length? list.map(r=><TxnRow key={r.id} r={r} onDel={readOnly?null:onDel} onView={(row)=>setViewRcpt(row)}/>) :
-          <div style={{padding:'24px 16px',textAlign:'center',color:'var(--muted)',fontSize:13.5}}>ยังไม่มีรายการวันนี้</div>}
+          <div style={{padding:'34px 16px',textAlign:'center',color:'var(--muted)',fontSize:13.5,lineHeight:1.7}}>ยังไม่มีรายการ<br/><span style={{fontSize:12}}>กดปุ่ม “เพิ่มรายการ” มุมล่างขวา</span></div>}
       </div>
 
+      {readOnly && <div style={{marginTop:14,padding:14,textAlign:'center',color:'var(--muted)',fontSize:13,display:'flex',justifyContent:'center',alignItems:'center',gap:7}}><I.eye/> โหมดหุ้นส่วน · ดูได้อย่างเดียว</div>}
+
+      {!readOnly && (
+        <button onClick={()=>{ setEntryMode('exp'); setShowEntry(true); }} className="press kanit"
+          style={{position:'fixed',right:'max(18px, calc((100vw - 480px)/2 + 18px))',bottom:'calc(74px + env(safe-area-inset-bottom))',zIndex:35,display:'flex',alignItems:'center',gap:8,border:'none',borderRadius:99,background:'var(--primary)',color:'#fff',padding:'14px 20px',fontSize:15,fontWeight:700,boxShadow:'0 6px 20px rgba(0,0,0,.25)'}}>
+          <I.plus/> เพิ่มรายการ</button>
+      )}
+
+      {showEntry && <EntrySheet shop={shop} user={user} initMode={entryMode} initDate={selDate} onClose={()=>setShowEntry(false)} onSaved={()=>{ setShowEntry(false); loadList(); }} toast={toast}/>}
+      {showImport && <Import shop={shop} user={user} toast={toast} onClose={()=>setShowImport(false)} onDone={()=>{ setShowImport(false); loadList(); }}/>}
       {viewRcpt && <ReceiptViewer txn={viewRcpt} onClose={()=>setViewRcpt(null)}/>}
     </div>
   );
 }
 const lbl={display:'block', fontSize:12, color:'var(--muted)', marginBottom:6, fontWeight:500};
 
-function LineSheet({shop,cfg,onClose,onSaved,toast}){
+function CategoryPicker({shopId,cats,current,onPick,onAdd,onClose}){
+  const [q,setQ]=useState('');
+  const [adding,setAdding]=useState(false);
+  const [nc,setNc]=useState('');
+  const [ncolor,setNcolor]=useState(CAT_PALETTE[0]);
+  const [nicon,setNicon]=useState('tag');
+  const fil=cats.filter(c=>c.toLowerCase().includes(q.toLowerCase()));
+  const PreviewIcon=CAT_ICONS[nicon];
+  const submit=()=>{ if(nc.trim()){ onAdd(nc.trim(), ncolor, nicon); setNc(''); setNcolor(CAT_PALETTE[0]); setNicon('tag'); setAdding(false); } };
+  return (
+    <div onClick={onClose} style={{position:'fixed',inset:0,zIndex:95,background:'rgba(0,0,0,.4)',display:'flex',flexDirection:'column',maxWidth:480,margin:'0 auto'}}>
+      <div onClick={e=>e.stopPropagation()} style={{marginTop:'auto',background:'#fff',borderRadius:'20px 20px 0 0',maxHeight:'88vh',display:'flex',flexDirection:'column'}}>
+        {!adding ? (<>
+          <div style={{display:'flex',alignItems:'center',gap:10,padding:'15px 16px 8px'}}>
+            <button onClick={onClose} className="press" style={{border:'none',background:'none',padding:4}}><I.back/></button>
+            <div className="kanit" style={{flex:1,textAlign:'center',fontWeight:600,fontSize:16}}>หมวดหมู่</div>
+            <span style={{width:28}}/>
+          </div>
+          <div style={{padding:'0 16px 8px'}}>
+            <input value={q} onChange={e=>setQ(e.target.value)} placeholder="ค้นหา" style={{width:'100%',padding:'12px 14px',border:'none',background:'var(--soft)',borderRadius:12,outline:'none',fontSize:14.5}}/>
+          </div>
+          <div style={{overflowY:'auto',padding:'2px 0',flex:1}}>
+            {fil.map(c=>(
+              <button key={c} onClick={()=>onPick(c)} className="press kanit" style={{width:'100%',border:'none',background:current===c?'var(--soft)':'none',display:'flex',alignItems:'center',gap:14,padding:'11px 18px',textAlign:'left'}}>
+                <CatBadge shopId={shopId} name={c}/>
+                <span style={{flex:1,fontSize:15.5,fontWeight:500}}>{c}</span>
+                {current===c && <I.check style={{color:'var(--primary)'}}/>}
+              </button>
+            ))}
+            {fil.length===0 && <div style={{padding:'26px',textAlign:'center',color:'var(--muted)',fontSize:14}}>ไม่พบหมวด</div>}
+          </div>
+          <div style={{padding:'10px 16px calc(14px + env(safe-area-inset-bottom))',borderTop:'1px solid var(--line)'}}>
+            <button onClick={()=>{ setNc(q); setAdding(true); }} className="press kanit" style={{width:'100%',padding:'14px',border:'none',borderRadius:13,background:'var(--primary)',color:'#fff',fontWeight:600,fontSize:15}}>+ เพิ่มหมวดหมู่</button>
+          </div>
+        </>) : (<>
+          <div style={{display:'flex',alignItems:'center',gap:10,padding:'15px 16px 6px'}}>
+            <button onClick={()=>setAdding(false)} className="press" style={{border:'none',background:'none',padding:4}}><I.back/></button>
+            <div className="kanit" style={{flex:1,textAlign:'center',fontWeight:600,fontSize:16}}>เพิ่มหมวดหมู่</div>
+            <span style={{width:28}}/>
+          </div>
+          <div style={{overflowY:'auto',flex:1,padding:'4px 18px 10px'}}>
+            <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:8,padding:'6px 0 14px'}}>
+              <span style={{width:64,height:64,borderRadius:99,background:ncolor,color:'#fff',display:'grid',placeItems:'center'}}>{PreviewIcon&&<PreviewIcon width={30} height={30}/>}</span>
+              <div className="kanit" style={{fontSize:15,fontWeight:600,color:'var(--ink)'}}>{nc.trim()||'หมวดใหม่'}</div>
+            </div>
+            <input value={nc} onChange={e=>setNc(e.target.value)} placeholder="ชื่อหมวดหมู่" autoFocus style={{width:'100%',padding:'12px 14px',border:'1.5px solid var(--line)',borderRadius:12,outline:'none',fontSize:15,marginBottom:16}}/>
+            <div style={lbl}>เลือกสี</div>
+            <div style={{display:'flex',flexWrap:'wrap',gap:10,marginBottom:18}}>
+              {CAT_PALETTE.map(col=>(
+                <button key={col} onClick={()=>setNcolor(col)} className="press" style={{width:34,height:34,borderRadius:99,background:col,border:ncolor===col?'3px solid var(--ink)':'3px solid transparent'}}/>
+              ))}
+            </div>
+            <div style={lbl}>เลือกไอคอน</div>
+            <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:10}}>
+              {CAT_ICON_KEYS.map(k=>{ const Ic=CAT_ICONS[k]; const sel=nicon===k; return (
+                <button key={k} onClick={()=>setNicon(k)} className="press" style={{aspectRatio:'1',borderRadius:13,border:sel?'2px solid '+ncolor:'1.5px solid var(--line)',background:sel?ncolor:'#fff',color:sel?'#fff':'var(--muted)',display:'grid',placeItems:'center'}}><Ic width={24} height={24}/></button>
+              ); })}
+            </div>
+          </div>
+          <div style={{padding:'10px 16px calc(14px + env(safe-area-inset-bottom))',borderTop:'1px solid var(--line)'}}>
+            <button onClick={submit} disabled={!nc.trim()} className="press kanit" style={{width:'100%',padding:'14px',border:'none',borderRadius:13,background:'var(--primary)',color:'#fff',fontWeight:600,fontSize:15,opacity:nc.trim()?1:0.5}}>เพิ่มหมวดนี้</button>
+          </div>
+        </>)}
+      </div>
+    </div>
+  );
+}
+
+function EntrySheet({shop,user,initMode,initDate,onClose,onSaved,toast}){
+  const [mode,setMode]=useState(initMode||'exp');
+  const kind=mode==='inc'?'income':'expense';
+  const [expr,setExpr]=useState('');
+  const [cats,setCats]=useState([]);
+  const [cat,setCat]=useState('');
+  const [pay,setPay]=useState('cash');
+  const [date,setDate]=useState(initDate||today());
+  const [note,setNote]=useState('');
+  const [showNote,setShowNote]=useState(false);
+  const [photo,setPhoto]=useState(null);
+  const [photoBusy,setPhotoBusy]=useState(false);
+  const [saving,setSaving]=useState(false);
+  const [showCat,setShowCat]=useState(false);
+  const photoRef=useRef();
+
+  const loadCats=async()=>{ const custom=await customCats(shop.id,kind); const base=DEFAULT_CATS[shop.type][kind]; custom.forEach(c=>{ CATMETA[shop.id+'|'+c.name]={color:c.color||catColor(c.name), icon:c.icon||null}; }); const names=[...base,...custom.map(c=>c.name).filter(n=>!base.includes(n))]; setCats(names); setCat(p=> names.includes(p)?p:(names[0]||'')); };
+  useEffect(()=>{ loadCats(); },[shop.id,mode]);
+
+  const val=Math.round(evalExpr(expr));
+  const hasOp = expr.length>0 && /[-+*/]/.test(expr);
+  const exprPretty = expr.replace(/\*/g,' × ').replace(/\//g,' ÷ ').replace(/-/g,' − ').replace(/\+/g,' + ');
+
+  const press=(t)=>{ setExpr(e=>{
+    if(t==='C') return '';
+    if(t==='back') return e.slice(0,-1);
+    if('+-*/'.includes(t)){ if(e==='') return ''; if('+-*/'.includes(e.slice(-1))) return e.slice(0,-1)+t; return e+t; }
+    if(t==='00'){ if(e===''||'+-*/'.includes(e.slice(-1))) return e; return e+'00'; }
+    return e+t;
+  }); };
+  const onPhoto=async(ev)=>{ const f=ev.target.files[0]; if(!f) return; setPhotoBusy(true); try{ const b=await resizePhoto(f,600,0.6); setPhoto(b);}catch(e){toast('ย่อรูปไม่สำเร็จ','err');} setPhotoBusy(false); ev.target.value=''; };
+  const addCatLocal=async(name,color,icon)=>{ try{ await addCat(shop.id,kind,name,color,icon); await loadCats(); setCat(name); setShowCat(false); toast('เพิ่มหมวดแล้ว'); }catch(e){ toast('เพิ่มไม่สำเร็จ','err'); } };
+  const save=async()=>{
+    const amount=Math.round(evalExpr(expr));
+    if(!amount||amount<=0){ toast('ใส่จำนวนเงินก่อน','err'); return; }
+    if(!cat){ toast('เลือกหมวดก่อน','err'); return; }
+    setSaving(true);
+    try{ await addTxn({shopId:shop.id,kind,category:cat,amount,method:pay,note,by:{id:user.id,name:user.name},photo,date});
+      toast(`บันทึก${mode==='inc'?'รายรับ':'รายจ่าย'} ${baht(amount)} แล้ว`); onSaved&&onSaved();
+    }catch(e){ toast('บันทึกไม่สำเร็จ','err'); setSaving(false); }
+  };
+  const dStr = date===today()? 'วันนี้' : (()=>{ const a=date.split('-'); return `${parseInt(a[2])} ${THAI_MON[parseInt(a[1])-1]}`; })();
+  const kbtn=(key,label,o)=>{ o=o||{}; return <button key={key} onClick={o.onClick||(()=>press(key))} className="press" style={{gridColumn:o.span?('span '+o.span):undefined,border:'none',background:o.bg||'#EDF0F2',color:o.fg||'var(--ink)',borderRadius:14,height:56,fontSize:o.fs||23,fontWeight:600,display:'grid',placeItems:'center'}}>{label}</button>; };
+
+  return (
+    <div style={{position:'fixed',inset:0,zIndex:90,background:'#fff',display:'flex',flexDirection:'column',maxWidth:480,margin:'0 auto'}}>
+      <div style={{background:'var(--primary)',color:'#fff',paddingTop:'env(safe-area-inset-top)'}}>
+        <div style={{display:'flex',alignItems:'center',padding:'8px 6px 0'}}>
+          <button onClick={onClose} className="press" style={{border:'none',background:'none',color:'#fff',padding:8}}><I.back/></button>
+          <div style={{flex:1,textAlign:'center',fontSize:13,opacity:.9}} className="kanit">{shop.name}</div>
+          <div style={{width:40,textAlign:'right'}}>
+            {mode==='exp' && (<>
+              <input ref={photoRef} type="file" accept="image/*" onChange={onPhoto} style={{display:'none'}}/>
+              <button onClick={()=>photoRef.current.click()} className="press" style={{border:'none',background:'none',color:'#fff',padding:8,position:'relative'}}>{photoBusy?'…':<I.receipt/>}{photo&&<span style={{position:'absolute',top:5,right:5,width:8,height:8,borderRadius:99,background:'#FACC15'}}/>}</button>
+            </>)}
+          </div>
+        </div>
+        <div style={{display:'flex',padding:'2px 14px 0'}}>
+          {[['inc','รายรับ'],['exp','รายจ่าย']].map(([k,l])=>(
+            <button key={k} onClick={()=>setMode(k)} className="press kanit" style={{flex:1,padding:'11px 0 13px',border:'none',background:'none',color:'#fff',fontSize:16,fontWeight:600,opacity:mode===k?1:0.5,borderBottom:'3px solid '+(mode===k?'#fff':'transparent')}}>{l}</button>
+          ))}
+        </div>
+      </div>
+
+      <div style={{flex:1,overflowY:'auto',padding:'16px 18px 6px'}}>
+        <div style={{textAlign:'right'}}>
+          {hasOp && <div className="num" style={{fontSize:15,color:'var(--muted)',minHeight:18}}>{exprPretty}</div>}
+          <div className="num" style={{fontSize:46,fontWeight:700,lineHeight:1.12,color:mode==='inc'?'#16A34A':'#DC2626'}}>{val? val.toLocaleString('en-US'):'0'}</div>
+        </div>
+        <div style={{height:1,background:'var(--line)',margin:'10px 0 12px'}}/>
+
+        <button onClick={()=>setShowCat(true)} className="press" style={{width:'100%',display:'flex',alignItems:'center',gap:13,padding:'8px 0',border:'none',background:'none',textAlign:'left'}}>
+          {cat? <CatBadge shopId={shop.id} name={cat}/> : <span style={{width:42,height:42,borderRadius:99,flexShrink:0,background:'var(--soft)',color:'var(--muted)',display:'grid',placeItems:'center',fontWeight:700,fontSize:17}}>?</span>}
+          <div style={{flex:1,minWidth:0}}><div style={{fontSize:11.5,color:'var(--muted)'}}>หมวดหมู่</div><div className="kanit" style={{fontSize:15.5,fontWeight:600,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{cat||'เลือกหมวด'}</div></div>
+          <I.chevron style={{color:'#C0C4CC'}}/>
+        </button>
+
+        <div style={{display:'flex',gap:10,marginTop:10}}>
+          <label className="press" style={{flex:1,position:'relative',display:'flex',alignItems:'center',justifyContent:'center',gap:6,padding:'12px',border:'1.5px solid var(--line)',borderRadius:12,background:'#fff',fontSize:13.5,fontWeight:500}}>
+            <span style={{fontSize:15}}>📅</span> {dStr}
+            <input type="date" value={date} max={today()} onChange={e=>setDate(e.target.value||today())} style={{position:'absolute',inset:0,opacity:0,width:'100%'}}/>
+          </label>
+          {[['cash','เงินสด',I.cash],['bank','โอน',I.bank]].map(([k,l,Ic])=>(
+            <button key={k} onClick={()=>setPay(k)} className="press" style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',gap:6,padding:'12px',border:'1.5px solid '+(pay===k?'var(--primary)':'var(--line)'),borderRadius:12,background:pay===k?'var(--soft)':'#fff',color:pay===k?'var(--primary)':'var(--ink)',fontSize:13.5,fontWeight:500}}><Ic/>{l}</button>
+          ))}
+        </div>
+
+        <button onClick={()=>setShowNote(v=>!v)} className="press kanit" style={{marginTop:10,width:'100%',display:'flex',alignItems:'center',gap:8,padding:'11px 0',border:'none',background:'none',color:note?'var(--ink)':'var(--muted)',fontSize:14,textAlign:'left'}}><span style={{fontSize:15}}>📝</span> <span style={{flex:1,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{note||'เพิ่มหมายเหตุ'}</span></button>
+        {showNote && <input value={note} onChange={e=>setNote(e.target.value)} placeholder="หมายเหตุ" autoFocus style={{width:'100%',padding:'11px 14px',border:'1.5px solid var(--line)',borderRadius:12,outline:'none',fontSize:14}}/>}
+        {mode==='exp' && photo && <div style={{display:'flex',gap:10,alignItems:'center',marginTop:10}}><img src={photo} alt="" style={{width:46,height:46,borderRadius:10,objectFit:'cover',border:'1px solid var(--line)'}}/><span style={{fontSize:12.5,color:'var(--muted)',flex:1}}>แนบรูปใบเสร็จแล้ว</span><button onClick={()=>setPhoto(null)} className="press kanit" style={{border:'1px solid var(--line)',background:'#fff',color:'#DC2626',borderRadius:9,padding:'6px 11px',fontSize:12.5,fontWeight:600}}>ลบ</button></div>}
+      </div>
+
+      <div style={{padding:'8px 10px calc(10px + env(safe-area-inset-bottom))',background:'var(--soft)',borderTop:'1px solid var(--line)'}}>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:8}}>
+          {kbtn('7','7')}{kbtn('8','8')}{kbtn('9','9')}{kbtn('/','÷',{bg:'#DDE3E7',fg:'var(--primary)'})}
+          {kbtn('4','4')}{kbtn('5','5')}{kbtn('6','6')}{kbtn('*','×',{bg:'#DDE3E7',fg:'var(--primary)'})}
+          {kbtn('1','1')}{kbtn('2','2')}{kbtn('3','3')}{kbtn('-','−',{bg:'#DDE3E7',fg:'var(--primary)'})}
+          {kbtn('0','0')}{kbtn('00','00')}{kbtn('back','⌫',{bg:'#DDE3E7'})}{kbtn('+','+',{bg:'#DDE3E7',fg:'var(--primary)'})}
+          {kbtn('C','ล้าง',{bg:'#FEE4E2',fg:'#DC2626',fs:16})}
+          <button onClick={save} disabled={saving} className="press kanit" style={{gridColumn:'span 3',border:'none',background:'var(--primary)',color:'#fff',borderRadius:14,height:56,fontSize:17,fontWeight:700,opacity:saving?0.6:1}}>{saving?'กำลังบันทึก…':`บันทึก${val?' · '+baht(val):''}`}</button>
+        </div>
+      </div>
+
+      {showCat && <CategoryPicker shopId={shop.id} cats={cats} current={cat} onPick={(c)=>{ setCat(c); setShowCat(false); }} onAdd={addCatLocal} onClose={()=>setShowCat(false)}/>}
+    </div>
+  );
+}
+
+function LineSheet({shop,user,cfg,onClose,onSaved,toast}){
   const [url,setUrl]=useState(cfg.lineUrl || shop.lineUrl || '');
   const [qr,setQr]=useState(cfg.lineQr || shop.lineQr || null);
   const [qrBusy,setQrBusy]=useState(false); const [busy,setBusy]=useState(false);
@@ -739,7 +946,7 @@ function LineSheet({shop,cfg,onClose,onSaved,toast}){
     try{ const b=await resizePhoto(f,460,1,'image/png'); setQr(b); }catch(err){ toast('ประมวลผลรูปไม่สำเร็จ','err'); }
     setQrBusy(false); e.target.value=''; };
   const save=async()=>{ setBusy(true);
-    try{ await saveSettings(shop.id,{lineUrl:url.trim(), lineQr:qr||''}); toast('บันทึก LINE แล้ว'); onSaved(); }
+    try{ await saveSettings(shop.id,{lineUrl:url.trim(), lineQr:qr||''},{id:user.id,name:user.name}); toast('บันทึก LINE แล้ว'); onSaved(); }
     catch(e){ toast('บันทึกไม่สำเร็จ','err'); setBusy(false); }
   };
   return (
@@ -764,6 +971,65 @@ function LineSheet({shop,cfg,onClose,onSaved,toast}){
   );
 }
 
+const LOG_META={
+  'txn.add':{ic:'up',c:'#16A34A'}, 'txn.delete':{ic:'trash',c:'#DC2626'},
+  'capital.add':{ic:'wallet',c:'#16A34A'}, 'capital.dividend':{ic:'wallet',c:'#0891B2'}, 'capital.delete':{ic:'trash',c:'#DC2626'},
+  'import':{ic:'table',c:'#7C3AED'}, 'settings.save':{ic:'gear',c:'#64748B'},
+  'user.add':{ic:'users',c:'#16A34A'}, 'user.edit':{ic:'users',c:'#64748B'}, 'user.delete':{ic:'users',c:'#DC2626'}, 'user.active':{ic:'users',c:'#64748B'},
+  'cashcount.save':{ic:'cash',c:'#64748B'}
+};
+function LogSheet({shop,user,onClose,toast}){
+  const [load,setLoad]=useState(true);
+  const [logs,setLogs]=useState([]);
+  const [filter,setFilter]=useState('all');
+  const [limit,setLimit]=useState(40);
+  const [busy,setBusy]=useState(null);
+  const reload=async()=>{ setLoad(true); try{ setLogs(await logsForShop(shop.id)); }catch(e){ console.error(e); } setLoad(false); };
+  useEffect(()=>{ reload(); },[shop.id]);
+
+  const actors=[...new Set(logs.map(l=>l.actor&&l.actor.name).filter(Boolean))];
+  const fil=logs.filter(l=> filter==='all' || (l.actor&&l.actor.name)===filter);
+  const shown=fil.slice(0,limit);
+
+  const revert=async(l)=>{
+    if(!window.confirm('ย้อนกลับการกระทำนี้?\nข้อมูลจะกลับไปเป็นก่อนหน้า')) return;
+    setBusy(l.id);
+    try{ await revertLog(l, {id:user.id,name:user.name}); toast('ย้อนกลับแล้ว'); await reload(); }
+    catch(e){ console.error(e); toast('ย้อนกลับไม่สำเร็จ','err'); }
+    setBusy(null);
+  };
+
+  return (
+    <Sheet title="ประวัติการใช้งาน" onClose={onClose} z={70}>
+      {actors.length>1 && (
+        <div style={{display:'flex',gap:7,overflowX:'auto',paddingBottom:12}}>
+          {['all',...actors].map(a=>(
+            <button key={a} onClick={()=>setFilter(a)} className="press kanit" style={{flexShrink:0,border:'1px solid '+(filter===a?'var(--primary)':'var(--line)'),background:filter===a?'var(--primary)':'#fff',color:filter===a?'#fff':'var(--ink)',borderRadius:99,padding:'6px 13px',fontSize:13,fontWeight:600}}>{a==='all'?'ทั้งหมด':a}</button>
+          ))}
+        </div>
+      )}
+      {load? <div style={{padding:'34px 0'}}><Loading/></div> :
+        shown.length===0? <div style={{padding:'34px 0',textAlign:'center',color:'var(--muted)',fontSize:14}}>ยังไม่มีประวัติการใช้งาน</div> :
+        <div>
+          {shown.map(l=>{ const m=LOG_META[l.type]||{ic:'gear',c:'#64748B'}; const Ic=I[m.ic]||I.gear; const canRevert=l.ops&&l.ops.length>0&&!l.reverted;
+            return (
+              <div key={l.id} style={{display:'flex',gap:11,alignItems:'flex-start',padding:'11px 0',borderBottom:'1px solid var(--line)',opacity:l.reverted?0.5:1}}>
+                <span style={{width:34,height:34,borderRadius:9,flexShrink:0,background:'var(--soft)',color:m.c,display:'grid',placeItems:'center',marginTop:1}}><Ic/></span>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontSize:13.8,fontWeight:500,lineHeight:1.35}}>{l.label||l.type}{l.reverted&&<span style={{fontSize:11,color:'#DC2626',marginLeft:6,fontWeight:600}}>· ย้อนกลับแล้ว</span>}</div>
+                  <div style={{fontSize:11.5,color:'var(--muted)',marginTop:2}}>{(l.actor&&l.actor.name)||'—'} · {fmtLogTime(l.ts)}</div>
+                </div>
+                {canRevert && <button onClick={()=>revert(l)} disabled={busy===l.id} className="press kanit" style={{flexShrink:0,border:'1px solid var(--line)',background:'#fff',color:'#DC2626',borderRadius:9,padding:'6px 11px',fontSize:12.5,fontWeight:600,marginTop:1}}>{busy===l.id?'...':'ย้อนกลับ'}</button>}
+              </div>
+            );
+          })}
+          {fil.length>limit && <button onClick={()=>setLimit(limit+40)} className="press kanit" style={{display:'block',margin:'16px auto 4px',border:'1px solid var(--line)',background:'#fff',color:'var(--primary)',borderRadius:10,padding:'9px 20px',fontSize:13.5,fontWeight:600}}>โหลดเพิ่ม ({fil.length-limit})</button>}
+        </div>}
+      <div style={{height:8}}/>
+    </Sheet>
+  );
+}
+
 /* ---------- SETTINGS ---------- */
 function Settings({shop,user,logout,toast}){
   const isAdmin = user.role==='admin';
@@ -775,6 +1041,7 @@ function Settings({shop,user,logout,toast}){
   const [editUser,setEditUser]=useState(null);
   const [showPin,setShowPin]=useState(false);
   const [showLine,setShowLine]=useState(false);
+  const [showLog,setShowLog]=useState(false);
 
   useEffect(()=>{ (async()=>{
     const s=await getSettings(shop.id); setCfg(s); setBank(String(s.bankBalance||0)); setFloatv(String(s.openingFloat||0));
@@ -783,7 +1050,7 @@ function Settings({shop,user,logout,toast}){
 
   const saveCfg=async()=>{
     setSavingCfg(true);
-    try{ await saveSettings(shop.id,{bankBalance:Number(bank||0),openingFloat:Number(floatv||0)}); toast('บันทึกการตั้งค่าแล้ว'); }
+    try{ await saveSettings(shop.id,{bankBalance:Number(bank||0),openingFloat:Number(floatv||0)},{id:user.id,name:user.name}); toast('บันทึกการตั้งค่าแล้ว'); }
     catch(e){ toast('บันทึกไม่สำเร็จ','err'); }
     setSavingCfg(false);
   };
@@ -854,7 +1121,7 @@ function Settings({shop,user,logout,toast}){
                 <div style={{fontSize:12,color:'var(--muted)'}}>{ROLES[u.role]?.label} · {u.shopIds==='all'?'ทุกร้าน':(u.shopIds||[]).map(id=>SHOPS.find(s=>s.id===id)?.name).join(', ')}</div>
               </div>
               {u.id!==user.id && (
-                <span onClick={async(e)=>{ e.stopPropagation(); await setUserActive(u.id, u.active===false); reloadUsers(); }} className="press"
+                <span onClick={async(e)=>{ e.stopPropagation(); await setUserActive(u.id, u.active===false, {id:user.id,name:user.name}); reloadUsers(); }} className="press"
                   style={{fontSize:12.5,color:u.active===false?'#16A34A':'#DC2626',fontWeight:600,padding:'4px 8px',borderRadius:8}}>
                   {u.active===false?'เปิด':'ปิด'}</span>
               )}
@@ -864,13 +1131,25 @@ function Settings({shop,user,logout,toast}){
         </div>
       )}
 
+      {isAdmin && (
+        <button onClick={()=>setShowLog(true)} className="press kanit" style={{width:'100%',padding:'14px 16px',marginBottom:14,border:'1px solid var(--line)',borderRadius:14,background:'#fff',display:'flex',alignItems:'center',gap:11}}>
+          <span style={{width:34,height:34,borderRadius:9,background:'var(--soft)',color:'var(--primary)',display:'grid',placeItems:'center',flexShrink:0}}><I.chart/></span>
+          <div style={{flex:1,textAlign:'left'}}>
+            <div style={{fontWeight:600,fontSize:14.5}}>ประวัติการใช้งาน</div>
+            <div style={{fontSize:11.5,color:'var(--muted)',fontWeight:400}}>ดูว่าใครแก้ข้อมูลอะไร · ย้อนกลับได้</div>
+          </div>
+          <I.chevron style={{color:'#C0C4CC'}}/>
+        </button>
+      )}
+
       <button onClick={logout} className="press kanit" style={{width:'100%',padding:'14px',border:'1.5px solid var(--line)',borderRadius:14,background:'#fff',color:'#DC2626',fontWeight:600,fontSize:15,display:'flex',justifyContent:'center',alignItems:'center',gap:8}}>
         <I.logout/> ออกจากระบบ</button>
 
-      {showAdd && <UserSheet editUser={null} currentUserId={user.id} onClose={()=>setShowAdd(false)} onSaved={()=>{ setShowAdd(false); reloadUsers(); }} toast={toast}/>}
-      {editUser && <UserSheet editUser={editUser} currentUserId={user.id} onClose={()=>setEditUser(null)} onSaved={()=>{ setEditUser(null); reloadUsers(); }} onDeleted={()=>{ setEditUser(null); reloadUsers(); }} toast={toast}/>}
+      {showAdd && <UserSheet editUser={null} currentUserId={user.id} actor={{id:user.id,name:user.name}} onClose={()=>setShowAdd(false)} onSaved={()=>{ setShowAdd(false); reloadUsers(); }} toast={toast}/>}
+      {editUser && <UserSheet editUser={editUser} currentUserId={user.id} actor={{id:user.id,name:user.name}} onClose={()=>setEditUser(null)} onSaved={()=>{ setEditUser(null); reloadUsers(); }} onDeleted={()=>{ setEditUser(null); reloadUsers(); }} toast={toast}/>}
       {showPin && <ChangePinSheet user={user} onClose={()=>setShowPin(false)} toast={toast}/>}
-      {showLine && <LineSheet shop={shop} cfg={cfg||{}} onClose={()=>setShowLine(false)} onSaved={async()=>{ setShowLine(false); setCfg(await getSettings(shop.id)); }} toast={toast}/>}
+      {showLine && <LineSheet shop={shop} user={user} cfg={cfg||{}} onClose={()=>setShowLine(false)} onSaved={async()=>{ setShowLine(false); setCfg(await getSettings(shop.id)); }} toast={toast}/>}
+      {showLog && <LogSheet shop={shop} user={user} onClose={()=>setShowLog(false)} toast={toast}/>}
     </div>
   );
 }
@@ -890,7 +1169,7 @@ function Sheet({title,onClose,z=50,children}){
   );
 }
 
-function UserSheet({editUser, currentUserId, onClose, onSaved, onDeleted, toast}){
+function UserSheet({editUser, currentUserId, actor, onClose, onSaved, onDeleted, toast}){
   const isEdit=!!editUser;
   const isSelf=isEdit && editUser.id===currentUserId;
   const [name,setName]=useState(editUser?.name||'');
@@ -908,15 +1187,15 @@ function UserSheet({editUser, currentUserId, onClose, onSaved, onDeleted, toast}
       const data={name:name.trim(),role,pin,shopIds: role==='admin'?'all':shopIds};
       if(isEdit){
         if(await pinTakenByOther(pin, editUser.id)){ toast('PIN นี้ถูกใช้แล้ว เลือกเลขอื่น','err'); setBusy(false); return; }
-        await updateUser(editUser.id,data);
-      } else { await addUser(data); }
+        await updateUser(editUser.id,data,actor);
+      } else { await addUser(data,actor); }
       toast(isEdit?'บันทึกการแก้ไขแล้ว':'เพิ่มผู้ใช้แล้ว'); onSaved();
     }catch(e){ toast(e.message||'บันทึกไม่สำเร็จ','err'); setBusy(false); }
   };
   const del=async()=>{
     if(!window.confirm(`ลบผู้ใช้ "${editUser.name}" ออกจากระบบ?`)) return;
     setBusy(true);
-    try{ await deleteUser(editUser.id); toast('ลบผู้ใช้แล้ว'); onDeleted(); }
+    try{ await deleteUser(editUser.id,actor); toast('ลบผู้ใช้แล้ว'); onDeleted(); }
     catch(e){ toast('ลบไม่สำเร็จ','err'); setBusy(false); }
   };
 
@@ -970,7 +1249,7 @@ function ChangePinSheet({user,onClose,toast}){
     setBusy(true);
     try{
       if(await pinTakenByOther(p1,user.id)){ toast('PIN นี้ถูกใช้แล้ว เลือกเลขอื่น','err'); setBusy(false); return; }
-      await updateUser(user.id,{pin:p1});
+      await updateUser(user.id,{pin:p1},{id:user.id,name:user.name});
       toast('เปลี่ยน PIN เรียบร้อย ใช้ PIN ใหม่ครั้งถัดไป'); onClose();
     }catch(e){ toast('เปลี่ยนไม่สำเร็จ','err'); setBusy(false); }
   };
@@ -1061,13 +1340,14 @@ function Import({shop,user,toast,onClose,onDone}){
     if(!parsed.valid.length){ toast('ไม่มีแถวที่นำเข้าได้','err'); return; }
     setImporting(true); setProg(0);
     try{
-      const v=parsed.valid, chunk=400;
+      const v=parsed.valid, chunk=400; const ids=[];
       for(let i=0;i<v.length;i+=chunk){
         const batch=db.batch();
-        v.slice(i,i+chunk).forEach(r=>{ const ref=db.collection('transactions').doc(); const ym=ymOf(r.date);
+        v.slice(i,i+chunk).forEach(r=>{ const ref=db.collection('transactions').doc(); const ym=ymOf(r.date); ids.push(ref.id);
           batch.set(ref,{shopId:shop.id,kind,category:r.category,amount:r.amount,method,note:'นำเข้า Excel',date:r.date,ym,skey:`${shop.id}_${ym}`,by:{id:user.id,name:user.name},source:'import',ts:FieldValue.serverTimestamp()}); });
         await batch.commit(); setProg(Math.min(v.length,i+chunk));
       }
+      await writeLog(shop.id, {id:user.id,name:user.name}, 'import', `นำเข้า Excel ${v.length} รายการ`, ids.map(id=>({id, before:null, after:null})));
       toast(`นำเข้า ${v.length} รายการแล้ว`); onDone();
     }catch(e){ console.error(e); toast('นำเข้าไม่สำเร็จ: '+(e.message||''),'err'); setImporting(false); }
   };
@@ -1151,11 +1431,15 @@ async function capitalEntries(shopId){
   const s=await db.collection('transactions').where('skey','==',`${shopId}_CAP`).get();
   return s.docs.map(d=>({id:d.id,...d.data()}));
 }
-async function addCapital({shopId,shareholder,type,amount,note,by}){
-  await db.collection('transactions').add({
+async function addCapital({shopId,shareholder,type,amount,note,by,actor}){
+  const ref=await db.collection('transactions').add({
     shopId, kind:type, category:shareholder, amount:Number(amount), method:'-', note:note||'',
     date:today(), ym:ymOf(today()), skey:`${shopId}_CAP`, by:by||'', source:'capital', ts:FieldValue.serverTimestamp()
   });
+  await writeLog(shopId, actor||(by?{id:'',name:by}:null), type==='dividend'?'capital.dividend':'capital.add',
+    `${type==='withdraw'?'ถอนทุน':type==='dividend'?'ปันผล':'เพิ่มทุน'} ${shareholder} ${baht(Number(amount))}`,
+    [{id:ref.id, before:null, after:{shareholder,type,amount:Number(amount),note:note||'',date:today()}}]);
+  return ref.id;
 }
 
 function Capital({shop,user,toast}){
@@ -1227,7 +1511,7 @@ function Capital({shop,user,toast}){
                   <div style={{fontSize:11.5,color:'var(--muted)'}}>{r.date}{r.note?' · '+r.note:''}</div>
                 </div>
                 <span className="num" style={{fontWeight:600,fontSize:14,color:col,flexShrink:0}}>{sign}{baht(r.amount)}</span>
-                {isAdmin && <button onClick={async()=>{ if(window.confirm('ลบรายการนี้?')){ await delTxn(r.id); reload(); } }} className="press" style={{border:'none',background:'none',color:'#C0C4CC',padding:4,flexShrink:0}}><I.trash/></button>}
+                {isAdmin && <button onClick={async()=>{ if(window.confirm('ลบรายการนี้?')){ await delTxn(r.id, {id:user.id,name:user.name}); reload(); } }} className="press" style={{border:'none',background:'none',color:'#C0C4CC',padding:4,flexShrink:0}}><I.trash/></button>}
               </div>
             );
           })}
@@ -1249,7 +1533,7 @@ function CapitalSheet({shop,user,names,onClose,onSaved,toast}){
   const save=async()=>{
     if(!sh.trim()||!amount||Number(amount)<=0){ toast('กรอกชื่อหุ้นส่วน และจำนวนเงิน','err'); return; }
     setBusy(true);
-    try{ await addCapital({shopId:shop.id,shareholder:sh.trim(),type,amount:Number(amount),note,by:user.name}); toast('บันทึกแล้ว'); onSaved(); }
+    try{ await addCapital({shopId:shop.id,shareholder:sh.trim(),type,amount:Number(amount),note,by:user.name,actor:{id:user.id,name:user.name}}); toast('บันทึกแล้ว'); onSaved(); }
     catch(e){ toast('บันทึกไม่สำเร็จ','err'); setBusy(false); }
   };
   return (
@@ -1282,7 +1566,7 @@ function DividendSheet({shop,user,holders,onClose,onSaved,toast}){
   const save=async()=>{
     if(p<=0){ toast('กรอกยอดปันผลรวม','err'); return; }
     setBusy(true);
-    try{ for(const s of split){ if(s.share>0) await addCapital({shopId:shop.id,shareholder:s.name,type:'dividend',amount:s.share,note:'ปันผลรวม '+p.toLocaleString('en-US'),by:user.name}); }
+    try{ for(const s of split){ if(s.share>0) await addCapital({shopId:shop.id,shareholder:s.name,type:'dividend',amount:s.share,note:'ปันผลรวม '+p.toLocaleString('en-US'),by:user.name,actor:{id:user.id,name:user.name}}); }
       toast('บันทึกปันผลแล้ว'); onSaved();
     }catch(e){ toast('บันทึกไม่สำเร็จ','err'); setBusy(false); }
   };
