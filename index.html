@@ -387,10 +387,11 @@ function App(){
     }
   },[shopId]);
 
-  const onLogin=async(pin)=>{
+  const onLogin=async(pin, expectId)=>{
     let u=await findUserByPin(pin);
     if(!u){ if((await usersEmpty()) && pin===SETUP_ADMIN_PIN) u=await createAdmin(pin); }
     if(!u || u.active===false) return false;
+    if(expectId && u.id!==expectId) return false;
     setUser(u);
     const ms = u.shopIds==='all' ? SHOPS : SHOPS.filter(s=>(u.shopIds||[]).includes(s.id));
     if(ms.length===1) setShopId(ms[0].id);
@@ -418,9 +419,20 @@ function ConfigError(){
 
 /* ---------- LOGIN ---------- */
 function Login({onLogin}){
+  const [users,setUsers]=useState(null);
+  const [loadErr,setLoadErr]=useState(false);
+  const [sel,setSel]=useState(null);
   const [pin,setPin]=useState('');
   const [busy,setBusy]=useState(false);
   const [err,setErr]=useState(false);
+
+  useEffect(()=>{ (async()=>{
+    try{ const all=await allUsers(); setUsers(all.filter(u=>u.active!==false)); }
+    catch(e){ console.error(e); setLoadErr(true); setUsers([]); }
+  })(); },[]);
+
+  const choose=(u)=>{ setSel(u); setPin(''); setErr(false); };
+  const back=()=>{ setSel(null); setPin(''); setErr(false); };
   const press=async(k)=>{
     if(busy) return;
     if(k==='del'){ setPin(p=>p.slice(0,-1)); setErr(false); return; }
@@ -428,34 +440,71 @@ function Login({onLogin}){
     const np=pin+k; setPin(np); setErr(false);
     if(np.length===6){
       setBusy(true);
-      const ok=await onLogin(np).catch(()=>false);
+      const expectId = (sel && sel!=='direct') ? sel.id : null;
+      const ok=await onLogin(np, expectId).catch(()=>false);
       if(!ok){ setErr(true); setPin(''); setBusy(false); }
     }
   };
+  const Head=(sub)=> <div className="scrim" style={{padding:'58px 24px 36px', color:'#fff'}}>
+    <div className="kanit" style={{fontSize:13, letterSpacing:3, opacity:.7}}>PLP GROUP</div>
+    <div className="kanit" style={{fontSize:30, fontWeight:700, marginTop:6}}>ระบบบัญชี & บริหาร</div>
+    <div style={{opacity:.8, marginTop:4, fontSize:14}}>{sub}</div>
+  </div>;
+
+  if(sel){
+    const isDirect = sel==='direct';
+    return (
+      <div className="fade" style={{minHeight:'100vh'}}>
+        {Head('ซักผ้า 3 สาขา · น้ำชา 1 ร้าน')}
+        <div style={{padding:'20px 24px'}}>
+          <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:16}}>
+            <button onClick={back} className="press" style={{border:'none',background:'var(--soft)',color:'var(--ink)',borderRadius:11,width:40,height:40,display:'grid',placeItems:'center',flexShrink:0}}><I.back/></button>
+            {!isDirect ? (<>
+              <span style={{width:42,height:42,borderRadius:99,background:catColor(sel.name),color:'#fff',display:'grid',placeItems:'center',fontWeight:700,fontSize:17,flexShrink:0}}>{(sel.name||'?').trim()[0]}</span>
+              <div style={{flex:1,minWidth:0}}><div className="kanit" style={{fontWeight:700,fontSize:16,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{sel.name}</div><div style={{fontSize:12,color:'var(--muted)'}}>{(ROLES[sel.role]&&ROLES[sel.role].label)||sel.role}</div></div>
+            </>) : <div className="kanit" style={{fontWeight:700,fontSize:16}}>ใส่รหัส PIN โดยตรง</div>}
+          </div>
+          <div style={{textAlign:'center', color: err?'#B42318':'var(--muted)', marginBottom:14, fontSize:14}}>
+            {busy? 'กำลังเข้าสู่ระบบ...' : err? 'PIN ไม่ถูกต้อง ลองใหม่' : 'ใส่รหัส PIN เพื่อเข้าใช้งาน'}</div>
+          <div style={{display:'flex', justifyContent:'center', gap:12, marginBottom:26}}>
+            {[0,1,2,3,4,5].map(i=>(<div key={i} style={{width:15,height:15,borderRadius:99,background:i<pin.length?'var(--primary)':'var(--line)', transition:'background .15s'}}/>))}
+          </div>
+          <div style={{display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:14, maxWidth:280, margin:'0 auto', opacity:busy?.5:1}}>
+            {['1','2','3','4','5','6','7','8','9','','0','del'].map((k,i)=> k==='' ? <div key={i}/> :
+              <button key={i} onClick={()=>press(k)} className="press kanit" style={{height:66, borderRadius:18, border:'none', background:k==='del'?'transparent':'var(--card)', fontSize:24, fontWeight:500, color:'var(--ink)', boxShadow:k==='del'?'none':'0 1px 3px rgba(0,0,0,.06)'}}>{k==='del'?'⌫':k}</button>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="fade" style={{minHeight:'100vh'}}>
-      <div className="scrim" style={{padding:'64px 24px 40px', color:'#fff'}}>
-        <div className="kanit" style={{fontSize:13, letterSpacing:3, opacity:.7}}>PLP GROUP</div>
-        <div className="kanit" style={{fontSize:30, fontWeight:700, marginTop:6}}>ระบบบัญชี & บริหาร</div>
-        <div style={{opacity:.8, marginTop:4, fontSize:14}}>ซักผ้า 3 สาขา · น้ำชา 1 ร้าน</div>
-      </div>
-      <div style={{padding:'28px 24px'}}>
-        <div style={{textAlign:'center', color: err?'#B42318':'var(--muted)', marginBottom:14, fontSize:14}}>
-          {busy? 'กำลังเข้าสู่ระบบ...' : err? 'PIN ไม่ถูกต้อง ลองใหม่' : 'ใส่รหัส PIN เพื่อเข้าใช้งาน'}</div>
-        <div style={{display:'flex', justifyContent:'center', gap:12, marginBottom:30}}>
-          {[0,1,2,3,4,5].map(i=>(
-            <div key={i} style={{width:15,height:15,borderRadius:99,
-              background:i<pin.length?'var(--primary)':'var(--line)', transition:'background .15s'}}/>
-          ))}
-        </div>
-        <div style={{display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:14, maxWidth:280, margin:'0 auto', opacity:busy?.5:1}}>
-          {['1','2','3','4','5','6','7','8','9','','0','del'].map((k,i)=> k==='' ? <div key={i}/> :
-            <button key={i} onClick={()=>press(k)} className="press kanit"
-              style={{height:66, borderRadius:18, border:'none', background:k==='del'?'transparent':'var(--card)',
-                fontSize:24, fontWeight:500, color:'var(--ink)', boxShadow:k==='del'?'none':'0 1px 3px rgba(0,0,0,.06)'}}>
-              {k==='del'?'⌫':k}</button>
+      {Head('เลือกผู้ใช้เพื่อเข้าระบบ')}
+      <div style={{padding:'22px 20px'}}>
+        {users===null ? <div style={{padding:'40px 0'}}><Loading label="กำลังโหลดรายชื่อ"/></div> : (<>
+          {users.length>0 ? (
+            <div style={{display:'flex',flexDirection:'column',gap:10}}>
+              {users.map(u=>(
+                <button key={u.id} onClick={()=>choose(u)} className="press" style={{display:'flex',alignItems:'center',gap:13,padding:'13px 15px',border:'1px solid var(--line)',borderRadius:15,background:'#fff',textAlign:'left'}}>
+                  <span style={{width:46,height:46,borderRadius:99,background:catColor(u.name),color:'#fff',display:'grid',placeItems:'center',fontWeight:700,fontSize:18,flexShrink:0}}>{(u.name||'?').trim()[0]}</span>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div className="kanit" style={{fontWeight:600,fontSize:16,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{u.name}</div>
+                    <div style={{fontSize:12.5,color:'var(--muted)'}}>{(ROLES[u.role]&&ROLES[u.role].label)||u.role}</div>
+                  </div>
+                  <I.chevron style={{color:'#C0C4CC'}}/>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div style={{textAlign:'center',padding:'30px 10px'}}>
+              <div className="kanit" style={{fontWeight:600,fontSize:16,marginBottom:6}}>{loadErr?'โหลดรายชื่อไม่ได้':'ยังไม่มีผู้ใช้'}</div>
+              <div style={{fontSize:13.5,color:'var(--muted)',lineHeight:1.5}}>{loadErr?'ลองใหม่ หรือใส่รหัส PIN โดยตรงด้านล่าง':'ตั้งค่าครั้งแรก — กด "ใส่รหัส PIN โดยตรง" แล้วใส่รหัสตั้งค่าระบบ'}</div>
+            </div>
           )}
-        </div>
+          <button onClick={()=>{ setSel('direct'); setPin(''); setErr(false); }} className="press kanit" style={{display:'block',margin:'22px auto 0',border:'none',background:'none',color:'var(--muted)',fontSize:13.5,textDecoration:'underline',padding:8}}>ใส่รหัส PIN โดยตรง</button>
+        </>)}
       </div>
     </div>
   );
