@@ -264,6 +264,20 @@ async function revertLog(log, actor){
 }
 function fmtLogTime(ts){ if(!ts||!ts.seconds) return '—'; const d=new Date(ts.seconds*1000); const p=n=>String(n).padStart(2,'0'); return `${p(d.getDate())}/${p(d.getMonth()+1)} ${p(d.getHours())}:${p(d.getMinutes())}`; }
 
+/* ---------- REFERRAL ---------- */
+async function listReferrers(){
+  const s=await db.collection('transactions').where('skey','==','all_REFR').get();
+  return s.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(((a.createdAt&&a.createdAt.seconds)||0)-((b.createdAt&&b.createdAt.seconds)||0)));
+}
+async function addReferrer(name){ const ref=await db.collection('transactions').add({_refr:true, skey:'all_REFR', name, active:true, createdAt:FieldValue.serverTimestamp()}); return ref.id; }
+async function updateReferrer(id,data){ await db.collection('transactions').doc(id).update(data); }
+async function removeReferrer(id){ await db.collection('transactions').doc(id).delete(); }
+async function referralsForShop(shopId){
+  const s=await db.collection('transactions').where('skey','==',`${shopId}_REFC`).get();
+  return s.docs.map(d=>d.data());
+}
+function loadQR(){ return new Promise((res,rej)=>{ if(window.QRCode&&window.QRCode.toDataURL) return res(window.QRCode); const s=document.createElement('script'); s.src='https://cdnjs.cloudflare.com/ajax/libs/qrcode/1.5.3/qrcode.min.js'; s.onload=()=>res(window.QRCode); s.onerror=rej; document.head.appendChild(s); }); }
+
 /* ---------- icons ---------- */
 const I={
   home:(p)=><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"{...p}><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M9.5 21v-6h5v6"/></svg>,
@@ -1038,6 +1052,148 @@ function LogSheet({shop,user,onClose,toast}){
   );
 }
 
+function QrModal({shop,referrer,baseUrl,onClose,toast}){
+  const [dataUrl,setDataUrl]=useState('');
+  const [err,setErr]=useState(false);
+  const link = baseUrl ? (baseUrl + (baseUrl.includes('?')?'&':'?') + 'ref=' + referrer.id) : '';
+  useEffect(()=>{ let ok=true; setErr(false); setDataUrl('');
+    (async()=>{ if(!link){ setErr(true); return; }
+      try{ const QR=await loadQR(); const d=await new Promise((resolve,reject)=>{ QR.toDataURL(link,{width:640,margin:2,color:{dark:'#0B1B33',light:'#ffffff'}},(e,u)=>{ e?reject(e):resolve(u); }); }); if(ok) setDataUrl(d); }
+      catch(e){ console.error(e); if(ok) setErr(true); }
+    })(); return ()=>{ok=false;};
+  },[link]);
+  const download=()=>{ if(!dataUrl) return; const a=document.createElement('a'); a.href=dataUrl; a.download=`QR_${shop.id}_${referrer.name}.png`; document.body.appendChild(a); a.click(); a.remove(); };
+  const copyLink=()=>{ if(link) navigator.clipboard.writeText(link).then(()=>toast('คัดลอกลิงก์แล้ว')); };
+  return (
+    <Sheet title={`QR · ${referrer.name}`} onClose={onClose} z={80}>
+      {!baseUrl ? (
+        <div style={{padding:'14px 4px',textAlign:'center'}}>
+          <div style={{fontSize:14,color:'#DC2626',fontWeight:600,marginBottom:8}}>ยังไม่ได้ตั้งลิงก์หน้าแอดไลน์</div>
+          <div style={{fontSize:13,color:'var(--muted)',lineHeight:1.5}}>ปิดหน้านี้ แล้วแตะการ์ด "ค่าตอบแทน/ลิงก์" ด้านบน ใส่ลิงก์หน้าสแกนของร้าน {shop.name} ก่อน จึงจะสร้าง QR ได้</div>
+        </div>
+      ) : (<>
+        <div style={{textAlign:'center'}}>
+          <div className="kanit" style={{fontSize:13,color:'var(--muted)',marginBottom:10}}>ร้าน {shop.name} · {referrer.name}</div>
+          <div style={{background:'#fff',border:'1px solid var(--line)',borderRadius:18,padding:16,display:'inline-block'}}>
+            {dataUrl? <img src={dataUrl} alt="QR" style={{width:240,height:240,display:'block'}}/> : err? <div style={{width:240,height:240,display:'grid',placeItems:'center',color:'#DC2626',fontSize:13}}>สร้าง QR ไม่สำเร็จ</div> : <div style={{width:240,height:240,display:'grid',placeItems:'center'}}><Loading label="กำลังสร้าง QR"/></div>}
+          </div>
+          <div style={{fontSize:10.5,color:'var(--muted)',wordBreak:'break-all',margin:'12px 8px 0'}}>{link}</div>
+        </div>
+        <div style={{display:'flex',gap:10,marginTop:16}}>
+          <button onClick={copyLink} className="press kanit" style={{flex:1,padding:'13px',border:'1.5px solid var(--line)',background:'#fff',borderRadius:12,fontWeight:600,fontSize:14}}>คัดลอกลิงก์</button>
+          <button onClick={download} disabled={!dataUrl} className="press kanit" style={{flex:1,padding:'13px',border:'none',background:'var(--primary)',color:'#fff',borderRadius:12,fontWeight:600,fontSize:14,opacity:dataUrl?1:0.5}}>บันทึกรูป QR</button>
+        </div>
+        <div style={{fontSize:11.5,color:'var(--muted)',textAlign:'center',marginTop:12}}>กดค้างที่รูปเพื่อบันทึกก็ได้ · เอา QR นี้ไปแปะ/แชร์ให้ลูกค้าสแกน</div>
+      </>)}
+    </Sheet>
+  );
+}
+
+function ReferralSheet({shop,user,onClose,toast}){
+  const [load,setLoad]=useState(true);
+  const [refs,setRefs]=useState([]);
+  const [rals,setRals]=useState([]);
+  const [rate,setRate]=useState(3);
+  const [url,setUrl]=useState('');
+  const [editCfg,setEditCfg]=useState(false);
+  const [cfgRate,setCfgRate]=useState('3');
+  const [cfgUrl,setCfgUrl]=useState('');
+  const [qrFor,setQrFor]=useState(null);
+  const [adding,setAdding]=useState(false);
+  const [newName,setNewName]=useState('');
+  const [busy,setBusy]=useState(false);
+  const [menuFor,setMenuFor]=useState(null);
+
+  const reload=async()=>{ setLoad(true);
+    try{ const [rs,ra,st]=await Promise.all([listReferrers(), referralsForShop(shop.id), getSettings(shop.id)]);
+      setRefs(rs); setRals(ra); setRate(Number(st.refRate)||3); setUrl(st.refUrl||'');
+    }catch(e){ console.error(e); } setLoad(false);
+  };
+  useEffect(()=>{ reload(); },[shop.id]);
+
+  const td=today();
+  const countOf=(id)=>{ const a=rals.filter(r=>r.refId===id); return {today:a.filter(r=>r.date===td).length, total:a.length}; };
+  const totToday=rals.filter(r=>r.date===td).length, totAll=rals.length;
+
+  const openCfg=()=>{ setCfgRate(String(rate)); setCfgUrl(url); setEditCfg(true); };
+  const saveCfg=async()=>{ try{ await saveSettings(shop.id,{refRate:Number(cfgRate)||0, refUrl:cfgUrl.trim()},{id:user.id,name:user.name}); setEditCfg(false); await reload(); toast('บันทึกแล้ว'); }catch(e){ toast('บันทึกไม่สำเร็จ','err'); } };
+  const addNew=async()=>{ if(!newName.trim())return; setBusy(true); try{ await addReferrer(newName.trim()); setNewName(''); setAdding(false); await reload(); toast('เพิ่มคนแล้ว'); }catch(e){ toast('เพิ่มไม่สำเร็จ','err'); } setBusy(false); };
+  const rename=async(r)=>{ setMenuFor(null); const n=window.prompt('แก้ชื่อ', r.name); if(n&&n.trim()&&n.trim()!==r.name){ await updateReferrer(r.id,{name:n.trim()}); await reload(); } };
+  const remove=async(r)=>{ setMenuFor(null); if(window.confirm(`ลบ ${r.name}? (ยอดที่นับไว้ยังอยู่)`)){ await removeReferrer(r.id); await reload(); } };
+
+  return (
+    <Sheet title="ระบบแนะนำเพื่อน" onClose={onClose} z={70}>
+      {load? <div style={{padding:'30px 0'}}><Loading/></div> : (<>
+        {!editCfg ? (
+          <button onClick={openCfg} className="press" style={{width:'100%',display:'flex',alignItems:'center',gap:10,padding:'12px 14px',border:'1px solid var(--line)',borderRadius:13,background:'var(--soft)',marginBottom:14,textAlign:'left'}}>
+            <span style={{width:34,height:34,borderRadius:9,background:'#fff',color:'var(--primary)',display:'grid',placeItems:'center',flexShrink:0}}><I.gear/></span>
+            <div style={{flex:1,minWidth:0}}>
+              <div className="kanit" style={{fontWeight:600,fontSize:14}}>ค่าตอบแทน {baht(rate)} / คน{!url&&<span style={{color:'#DC2626'}}> · ยังไม่ตั้งลิงก์</span>}</div>
+              <div style={{fontSize:11,color:'var(--muted)',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{url||'แตะเพื่อตั้งลิงก์หน้าแอดไลน์'}</div>
+            </div>
+            <I.chevron style={{color:'#C0C4CC'}}/>
+          </button>
+        ) : (
+          <div style={{border:'1px solid var(--line)',borderRadius:13,padding:14,marginBottom:14,background:'#fff'}}>
+            <div style={lbl}>ค่าตอบแทนต่อ 1 คนที่แอด (บาท)</div>
+            <input value={cfgRate} onChange={e=>setCfgRate(e.target.value.replace(/[^0-9.]/g,''))} inputMode="decimal" style={{width:'100%',padding:'11px 13px',border:'1.5px solid var(--line)',borderRadius:11,fontSize:15,marginBottom:12,outline:'none'}}/>
+            <div style={lbl}>ลิงก์หน้าแอดไลน์ของร้าน {shop.name}</div>
+            <input value={cfgUrl} onChange={e=>setCfgUrl(e.target.value)} placeholder="https://.../add.html?shop=..." style={{width:'100%',padding:'11px 13px',border:'1.5px solid var(--line)',borderRadius:11,fontSize:13,marginBottom:6,outline:'none'}}/>
+            <div style={{fontSize:11,color:'var(--muted)',marginBottom:12}}>ลิงก์นี้ได้จากการตั้งหน้าสแกน (ขั้นถัดไป) — ใส่ทีหลังได้</div>
+            <div style={{display:'flex',gap:10}}>
+              <button onClick={()=>setEditCfg(false)} className="press kanit" style={{flex:1,padding:'11px',border:'1.5px solid var(--line)',background:'#fff',borderRadius:11,fontWeight:600,fontSize:14}}>ยกเลิก</button>
+              <button onClick={saveCfg} className="press kanit" style={{flex:1,padding:'11px',border:'none',background:'var(--primary)',color:'#fff',borderRadius:11,fontWeight:600,fontSize:14}}>บันทึก</button>
+            </div>
+          </div>
+        )}
+
+        <div style={{display:'flex',gap:10,marginBottom:14}}>
+          <div style={{flex:1,background:'var(--soft)',borderRadius:13,padding:'12px 4px',textAlign:'center'}}><div className="num" style={{fontSize:21,fontWeight:700,color:'var(--primary)'}}>{totToday}</div><div style={{fontSize:11,color:'var(--muted)'}}>แอดวันนี้</div></div>
+          <div style={{flex:1,background:'var(--soft)',borderRadius:13,padding:'12px 4px',textAlign:'center'}}><div className="num" style={{fontSize:21,fontWeight:700}}>{totAll}</div><div style={{fontSize:11,color:'var(--muted)'}}>แอดทั้งหมด</div></div>
+          <div style={{flex:1,background:'var(--soft)',borderRadius:13,padding:'12px 4px',textAlign:'center'}}><div className="num" style={{fontSize:18,fontWeight:700,color:'#16A34A'}}>{baht(totAll*rate)}</div><div style={{fontSize:11,color:'var(--muted)'}}>ค่าตอบแทนรวม</div></div>
+        </div>
+
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8}}>
+          <div className="kanit" style={{fontWeight:600,fontSize:14.5}}>คนแชร์ ({refs.length})</div>
+          <button onClick={()=>{ setAdding(true); setNewName(''); }} className="press kanit" style={{border:'none',background:'var(--soft)',color:'var(--primary)',borderRadius:9,padding:'7px 13px',fontSize:13,fontWeight:600}}>+ เพิ่มคน</button>
+        </div>
+
+        {adding && (
+          <div style={{display:'flex',gap:8,marginBottom:10}}>
+            <input value={newName} onChange={e=>setNewName(e.target.value)} placeholder="ชื่อคนแชร์" autoFocus style={{flex:1,padding:'11px 13px',border:'1.5px solid var(--line)',borderRadius:11,fontSize:14,outline:'none'}}/>
+            <button onClick={addNew} disabled={busy||!newName.trim()} className="press kanit" style={{padding:'0 16px',border:'none',background:'var(--primary)',color:'#fff',borderRadius:11,fontWeight:600,fontSize:14,opacity:newName.trim()?1:0.5}}>เพิ่ม</button>
+          </div>
+        )}
+
+        {refs.length===0 && !adding && <div style={{padding:'24px 0',textAlign:'center',color:'var(--muted)',fontSize:14}}>ยังไม่มีคนแชร์ — กด "เพิ่มคน"</div>}
+
+        <div>
+          {refs.map(r=>{ const c=countOf(r.id); return (
+            <div key={r.id} style={{display:'flex',alignItems:'center',gap:11,padding:'11px 0',borderBottom:'1px solid var(--line)'}}>
+              <span style={{width:40,height:40,borderRadius:99,flexShrink:0,background:catColor(r.name),color:'#fff',display:'grid',placeItems:'center',fontWeight:700,fontSize:16}}>{(r.name||'?').trim()[0]}</span>
+              <div style={{flex:1,minWidth:0}}>
+                <div className="kanit" style={{fontSize:14.5,fontWeight:600,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{r.name}</div>
+                <div style={{fontSize:11.5,color:'var(--muted)'}}>วันนี้ <b style={{color:'var(--primary)'}}>{c.today}</b> · รวม {c.total} · {baht(c.total*rate)}</div>
+              </div>
+              <button onClick={()=>setQrFor(r)} className="press kanit" style={{flexShrink:0,border:'1px solid var(--primary)',background:'#fff',color:'var(--primary)',borderRadius:9,padding:'7px 12px',fontSize:12.5,fontWeight:600}}>QR</button>
+              <div style={{position:'relative',flexShrink:0}}>
+                <button onClick={()=>setMenuFor(menuFor===r.id?null:r.id)} className="press" style={{border:'none',background:'none',color:'#C0C4CC',padding:'4px 6px',fontSize:18,lineHeight:1}}>⋮</button>
+                {menuFor===r.id && <div style={{position:'absolute',right:0,top:'100%',background:'#fff',border:'1px solid var(--line)',borderRadius:10,boxShadow:'0 6px 20px rgba(0,0,0,.12)',zIndex:5,overflow:'hidden',minWidth:108}}>
+                  <button onClick={()=>rename(r)} className="kanit" style={{display:'block',width:'100%',textAlign:'left',border:'none',background:'#fff',padding:'10px 14px',fontSize:13.5,borderBottom:'1px solid var(--line)'}}>แก้ชื่อ</button>
+                  <button onClick={()=>remove(r)} className="kanit" style={{display:'block',width:'100%',textAlign:'left',border:'none',background:'#fff',padding:'10px 14px',fontSize:13.5,color:'#DC2626'}}>ลบ</button>
+                </div>}
+              </div>
+            </div>
+          ); })}
+        </div>
+
+        <div style={{fontSize:11.5,color:'var(--muted)',marginTop:16,lineHeight:1.5}}>QR ของแต่ละคนต่างกัน · ลูกค้าสแกนแล้วแอดไลน์ร้าน {shop.name} · ระบบนับให้ว่าใครพามา (กันแอดซ้ำด้วย LINE ID อัตโนมัติ)</div>
+      </>)}
+      {qrFor && <QrModal shop={shop} referrer={qrFor} baseUrl={url} onClose={()=>setQrFor(null)} toast={toast}/>}
+    </Sheet>
+  );
+}
+
 /* ---------- SETTINGS ---------- */
 function Settings({shop,user,logout,toast}){
   const isAdmin = user.role==='admin';
@@ -1050,6 +1206,7 @@ function Settings({shop,user,logout,toast}){
   const [showPin,setShowPin]=useState(false);
   const [showLine,setShowLine]=useState(false);
   const [showLog,setShowLog]=useState(false);
+  const [showRef,setShowRef]=useState(false);
 
   useEffect(()=>{ (async()=>{
     const s=await getSettings(shop.id); setCfg(s); setBank(String(s.bankBalance||0)); setFloatv(String(s.openingFloat||0));
@@ -1140,6 +1297,17 @@ function Settings({shop,user,logout,toast}){
       )}
 
       {isAdmin && (
+        <button onClick={()=>setShowRef(true)} className="press kanit" style={{width:'100%',padding:'14px 16px',marginBottom:12,border:'1px solid var(--line)',borderRadius:14,background:'#fff',display:'flex',alignItems:'center',gap:11}}>
+          <span style={{width:34,height:34,borderRadius:9,background:'var(--soft)',color:'var(--primary)',display:'grid',placeItems:'center',flexShrink:0}}><I.users/></span>
+          <div style={{flex:1,textAlign:'left'}}>
+            <div style={{fontWeight:600,fontSize:14.5}}>ระบบแนะนำเพื่อน (Referral)</div>
+            <div style={{fontSize:11.5,color:'var(--muted)',fontWeight:400}}>QR ให้ลูกน้องแชร์ · นับคนแอดไลน์ · จ่ายค่าตอบแทน</div>
+          </div>
+          <I.chevron style={{color:'#C0C4CC'}}/>
+        </button>
+      )}
+
+      {isAdmin && (
         <button onClick={()=>setShowLog(true)} className="press kanit" style={{width:'100%',padding:'14px 16px',marginBottom:14,border:'1px solid var(--line)',borderRadius:14,background:'#fff',display:'flex',alignItems:'center',gap:11}}>
           <span style={{width:34,height:34,borderRadius:9,background:'var(--soft)',color:'var(--primary)',display:'grid',placeItems:'center',flexShrink:0}}><I.chart/></span>
           <div style={{flex:1,textAlign:'left'}}>
@@ -1158,6 +1326,7 @@ function Settings({shop,user,logout,toast}){
       {showPin && <ChangePinSheet user={user} onClose={()=>setShowPin(false)} toast={toast}/>}
       {showLine && <LineSheet shop={shop} user={user} cfg={cfg||{}} onClose={()=>setShowLine(false)} onSaved={async()=>{ setShowLine(false); setCfg(await getSettings(shop.id)); }} toast={toast}/>}
       {showLog && <LogSheet shop={shop} user={user} onClose={()=>setShowLog(false)} toast={toast}/>}
+      {showRef && <ReferralSheet shop={shop} user={user} onClose={()=>setShowRef(false)} toast={toast}/>}
     </div>
   );
 }
