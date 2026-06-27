@@ -1107,7 +1107,7 @@ const POSTER_BY_SHOP = {
   teddy1: { url:'poster-teddy.jpg', cx:0.761, cy:0.822, w:0.30 },
   teddy2: { url:'poster-teddy.jpg', cx:0.761, cy:0.822, w:0.30 },
   otteri: null,
-  owl: null
+  owlcha: null
 };
 function loadImgEl(src, cors){ return new Promise((res,rej)=>{ const i=new Image(); if(cors) i.crossOrigin='anonymous'; i.onload=()=>res(i); i.onerror=()=>rej(new Error('img')); i.src=src; }); }
 function roundRectPath(ctx,x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
