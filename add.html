@@ -177,7 +177,9 @@ function screenDone(dup, dispName){
     await docRef.set({
       _refc:true, skey: shop+'_REFC',
       refId: ref, shopId: shop, custUserId: userId,
+      custName: (profile.displayName||''),
       date: now(), ym: nowYm(),
+      clientTs: new Date().toISOString(),
       ts: firebase.firestore.FieldValue.serverTimestamp()
     });
     screenDone(false, profile.displayName);
