@@ -183,42 +183,47 @@ function screenCounted(dispName){
     screenError('ยังไม่ได้ตั้งค่า','ร้านนี้ยังไม่ได้ใส่ LIFF ID (เจ้าของร้านต้องตั้งค่าก่อน)',true); return;
   }
 
-  // Firebase
+  const withTimeout=(p,ms,label)=>Promise.race([ Promise.resolve(p), new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout: '+label)),ms)) ]);
+
+  // 1) Firebase
   let db;
   try{
+    screenLoading('เชื่อมต่อฐานข้อมูล…');
     firebase.initializeApp(firebaseConfig);
     db = firebase.firestore();
-    await firebase.auth().signInAnonymously();
-  }catch(e){ console.error('fb',e); screenError('เชื่อมต่อไม่สำเร็จ','ลองสแกนใหม่อีกครั้ง หรือเปิดผ่าน LINE',true); return; }
+    await withTimeout(firebase.auth().signInAnonymously(), 12000, 'firebase-auth');
+  }catch(e){ console.error('fb',e); screenError('เชื่อมต่อฐานข้อมูลไม่สำเร็จ','('+(e&&e.message||e)+') ลองสแกนใหม่ หรือเช็คเน็ต',true,_dbg); return; }
 
-  // LIFF
+  // 2) LIFF init
   try{
-    await liff.init({ liffId });
-  }catch(e){ console.error('liff init',e); screenError('เปิดผ่าน LINE ไม่สำเร็จ','กรุณาเปิดลิงก์นี้ในแอป LINE',true); return; }
+    screenLoading('เปิดผ่าน LINE…');
+    await withTimeout(liff.init({ liffId }), 12000, 'liff-init');
+  }catch(e){ console.error('liff init',e); screenError('เปิดผ่าน LINE ไม่สำเร็จ','('+(e&&e.message||e)+') · เปิดในแอป LINE และเช็กว่า channel = Published',true,_dbg); return; }
 
   if(!liff.isLoggedIn()){
-    screenLoading('กำลังเข้าสู่ระบบ LINE…');
+    screenLoading('เข้าสู่ระบบ LINE…');
     liff.login({ redirectUri: location.href });
     return;
   }
 
-  screenLoading('กำลังบันทึก…');
-
   let profile;
-  try{ profile = await liff.getProfile(); }
-  catch(e){ console.error('profile',e); screenError('อ่านข้อมูลไม่สำเร็จ','กรุณาเปิดในแอป LINE แล้วลองใหม่',true); return; }
+  try{
+    screenLoading('อ่านโปรไฟล์…');
+    profile = await withTimeout(liff.getProfile(), 12000, 'getProfile');
+  }catch(e){ console.error('profile',e); screenError('อ่านข้อมูลไม่สำเร็จ','('+(e&&e.message||e)+') เปิดในแอป LINE แล้วลองใหม่',true,_dbg); return; }
 
   const userId = profile.userId;
 
-  // ตรวจว่าเป็นเพื่อนกับ OA หรือยัง (default = ยังไม่เป็นเพื่อน → ถือเป็นลูกค้าใหม่)
+  screenLoading('กำลังบันทึก…');
+  // ตรวจว่าเป็นเพื่อนกับ OA หรือยัง (timeout → ถือว่ายังไม่เป็นเพื่อน)
   let isFriend = false;
-  try{ const f = await liff.getFriendship(); isFriend = !!f.friendFlag; }
-  catch(e){ isFriend = false; }
+  try{ const f = await withTimeout(liff.getFriendship(), 7000, 'friendship'); isFriend = !!(f && f.friendFlag); }
+  catch(e){ console.warn('friendship',e); isFriend = false; }
 
   const id = shop + '_' + userId;
   const docRef = db.collection('transactions').doc(id);
   let snap;
-  try{ snap = await docRef.get(); }catch(e){ snap = {exists:false}; }
+  try{ snap = await withTimeout(docRef.get(), 12000, 'firestore-get'); }catch(e){ console.warn('get',e); snap = {exists:false}; }
 
   if(snap.exists){
     // เคยลงทะเบียนแล้ว (กันนับซ้ำ) — ถ้ายังไม่เป็นเพื่อน โชว์ปุ่มเพิ่มเพื่อนด้วย
@@ -232,16 +237,16 @@ function screenCounted(dispName){
   }
   // ลูกค้าใหม่ (ยังไม่เป็นเพื่อน + ยังไม่เคยลงทะเบียน) → นับให้ผู้แนะนำ
   try{
-    await docRef.set({
+    await withTimeout(docRef.set({
       _refc:true, skey: shop+'_REFC',
       refId: ref, shopId: shop, custUserId: userId,
       custName: (profile.displayName||''),
       date: now(), ym: nowYm(),
       clientTs: new Date().toISOString(),
       ts: firebase.firestore.FieldValue.serverTimestamp()
-    });
+    }), 12000, 'firestore-set');
     screenCounted(profile.displayName);
-  }catch(e){ console.error('write',e); screenError('บันทึกไม่สำเร็จ','ลองสแกนใหม่อีกครั้ง',true); }
+  }catch(e){ console.error('write',e); screenError('บันทึกไม่สำเร็จ','('+(e&&e.message||e)+') ลองสแกนใหม่อีกครั้ง',true,_dbg); return; }
 })();
 </script>
 </body>
