@@ -1104,10 +1104,10 @@ function LogSheet({shop,user,onClose,toast}){
 }
 
 const POSTER_BY_SHOP = {
-  teddy1: { url:'poster-teddy.jpg', cx:0.761, cy:0.822, w:0.30 },
-  teddy2: { url:'poster-teddy.jpg', cx:0.761, cy:0.822, w:0.30 },
+  teddy1: { url:'poster-teddy.jpg', cx:0.761, cy:0.822, w:0.30, namePos:'bl' },
+  teddy2: { url:'poster-teddy.jpg', cx:0.761, cy:0.822, w:0.30, namePos:'bl' },
   otteri: null,
-  owlcha: null
+  owlcha: { url:'poster-owl.jpg', cx:0.783, cy:0.389, w:0.332, namePos:'tl' }
 };
 function loadImgEl(src, cors){ return new Promise((res,rej)=>{ const i=new Image(); if(cors) i.crossOrigin='anonymous'; i.onload=()=>res(i); i.onerror=()=>rej(new Error('img')); i.src=src; }); }
 function roundRectPath(ctx,x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
@@ -1148,16 +1148,18 @@ function QrModal({shop,referrer,baseUrl,onClose,toast}){
       const pad=qs*0.07;
       roundRectPath(ctx, qx-pad, qy-pad, qs+pad*2, qs+pad*2, qs*0.10); ctx.fillStyle='#fff'; ctx.fill();
       ctx.drawImage(qr, qx, qy, qs, qs);
+      const np = poster.namePos || 'bl';
       const label='ผู้แนะนำ: '+(referrer.name||'');
-      const fs=Math.round(ch*0.026);
+      const fs=Math.round(ch*(np==='tl'?0.022:0.026));
       ctx.font='700 '+fs+'px Kanit, "Noto Sans Thai", sans-serif';
       ctx.textBaseline='middle';
       const tw=ctx.measureText(label).width;
-      const tx=Math.round(cw*0.045), ty=Math.round(ch*0.955);
+      const tx=Math.round(cw*(np==='tl'?0.04:0.045));
+      const ty=Math.round(np==='tl' ? (ch*0.042 + fs*0.6) : ch*0.955);
       const padX=fs*0.55, padY=fs*0.42;
       roundRectPath(ctx, tx-padX, ty-fs/2-padY, tw+padX*2, fs+padY*2, (fs+padY*2)/2);
-      ctx.fillStyle='rgba(255,255,255,0.86)'; ctx.fill();
-      ctx.fillStyle='#1f2937'; ctx.fillText(label, tx, ty);
+      ctx.fillStyle='rgba(255,255,255,0.9)'; ctx.fill();
+      ctx.fillStyle='#2b2118'; ctx.fillText(label, tx, ty);
       if(qrObj) setTimeout(()=>URL.revokeObjectURL(qrObj),2000);
       const blob=await new Promise((res,rej)=>cv.toBlob(b=>b?res(b):rej(new Error('blob')),'image/jpeg',0.92));
       const url=URL.createObjectURL(blob);
