@@ -274,7 +274,7 @@ async function updateReferrer(id,data){ await db.collection('transactions').doc(
 async function removeReferrer(id){ await db.collection('transactions').doc(id).delete(); }
 async function referralsForShop(shopId){
   const s=await db.collection('transactions').where('skey','==',`${shopId}_REFC`).get();
-  return s.docs.map(d=>({id:d.id,...d.data()}));
+  return s.docs.map(d=>({id:d.id,...d.data()})).filter(r=>r.counted!==false);
 }
 async function removeReferral(id){ await db.collection('transactions').doc(id).delete(); }
 async function payoutsForShop(shopId){

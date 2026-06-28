@@ -158,18 +158,27 @@ function screenAlreadyFriend(dispName){
     +'<div class="muted">ปิดหน้านี้ได้เลย</div>';
 }
 function screenCounted(dispName){
-  setHead('สมัครสมาชิกสำเร็จ');
-  bd.innerHTML='<div class="big">ยินดีต้อนรับ! 🎉</div>'
-    +'<div class="sub">'+(dispName?('คุณ '+esc(dispName)):'สมาชิกใหม่')+' · '+nm()+'</div>'
+  setHead('รับสิทธิ์สำเร็จ');
+  bd.innerHTML='<div class="ok"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div>'
+    +'<div class="big">รับสิทธิ์สำเร็จ! 🎉</div>'
+    +'<div class="sub">'+(dispName?('คุณ '+esc(dispName)+' · '):'')+nm()+'<br>ขอบคุณที่เพิ่มเพื่อนนะคะ 😊</div>'
+    +'<div class="reward"><div class="rlbl">สิทธิ์ที่คุณได้รับ</div><div class="rval" style="color:'+C+'">'+REWARD+'</div></div>'
+    +'<div class="trust"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#98A2B3" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>ระบบสมาชิกอย่างเป็นทางการของร้าน</div>'
+    +'<div class="muted">แสดงหน้านี้ให้พนักงานเพื่อรับสิทธิ์ได้เลย</div>';
+}
+function screenAddPending(dispName, retry){
+  setHead(retry?'ยืนยันการเพิ่มเพื่อน':'อีกขั้นเดียว!');
+  bd.innerHTML='<div class="big">'+(retry?'ยังไม่พบการเพิ่มเพื่อน 🤔':'เกือบเสร็จแล้ว! 🎉')+'</div>'
+    +'<div class="sub">'+(dispName?('คุณ '+esc(dispName)+' · '):'')+nm()+'<br>'+(retry?'กรุณากด “เพิ่มเพื่อน LINE” ด้านล่างก่อน แล้วค่อยกดยืนยัน':'เพิ่มเพื่อน LINE ร้านเพื่อรับสิทธิ์')+'</div>'
     +'<div class="reward"><div class="rlbl">สิทธิ์ที่คุณจะได้รับ</div><div class="rval" style="color:'+C+'">'+REWARD+'</div></div>'
     +'<div class="benefits">'
       +'<div class="bi"><span class="bc" style="color:'+C+'">✓</span>โปรโมชั่น & ส่วนลดเฉพาะสมาชิก</div>'
       +'<div class="bi"><span class="bc" style="color:'+C+'">✓</span>สะสมแต้ม แลกของรางวัล</div>'
       +'<div class="bi"><span class="bc" style="color:'+C+'">✓</span>รู้ข่าวเมนู/โปรใหม่ก่อนใคร</div>'
     +'</div>'
-    +(oa()?'<a class="btn" href="'+oa()+'">➕ เพิ่มเพื่อน LINE เพื่อรับสิทธิ์</a>':'')
-    +'<div class="trust"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#98A2B3" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>ระบบสมาชิกอย่างเป็นทางการของร้าน</div>'
-    +'<div class="muted">เพิ่มเพื่อนแล้ว แสดงหน้านี้ให้พนักงานได้เลย</div>';
+    +(oa()?'<a class="btn" href="'+oa()+'">➕ เพิ่มเพื่อน LINE ร้าน</a>':'')
+    +'<button class="btn ghost" onclick="window.__confirmAdd&&window.__confirmAdd()">เพิ่มเพื่อนแล้ว · กดรับสิทธิ์</button>'
+    +'<div class="muted">① กดเพิ่มเพื่อน → ② กลับมากดปุ่ม “กดรับสิทธิ์” เพื่อยืนยัน</div>';
 }
 
 (async function(){
@@ -213,40 +222,52 @@ function screenCounted(dispName){
   }catch(e){ console.error('profile',e); screenError('อ่านข้อมูลไม่สำเร็จ','('+(e&&e.message||e)+') เปิดในแอป LINE แล้วลองใหม่',true,_dbg); return; }
 
   const userId = profile.userId;
-
-  screenLoading('กำลังบันทึก…');
-  // ตรวจว่าเป็นเพื่อนกับ OA หรือยัง (timeout → ถือว่ายังไม่เป็นเพื่อน)
-  let isFriend = false;
-  try{ const f = await withTimeout(liff.getFriendship(), 7000, 'friendship'); isFriend = !!(f && f.friendFlag); }
-  catch(e){ console.warn('friendship',e); isFriend = false; }
-
+  const dispName = profile.displayName || '';
   const id = shop + '_' + userId;
   const docRef = db.collection('transactions').doc(id);
+  let pendingActive = false;
+
+  async function getFriend(){
+    try{ const f = await withTimeout(liff.getFriendship(), 7000, 'friendship'); return !!(f && f.friendFlag); }
+    catch(e){ console.warn('friendship',e); return false; }
+  }
+  async function countNow(){
+    try{
+      await withTimeout(docRef.set({ counted:true, date:now(), ym:nowYm(), ts: firebase.firestore.FieldValue.serverTimestamp() }, {merge:true}), 12000, 'count');
+      screenCounted(dispName);
+    }catch(e){ console.error('count',e); screenError('บันทึกไม่สำเร็จ','('+(e&&e.message||e)+') ลองใหม่อีกครั้ง',true,_dbg); }
+  }
+  async function recheck(silent){
+    if(!silent) screenLoading('กำลังตรวจสอบการเพิ่มเพื่อน…');
+    const isF = await getFriend();
+    if(isF){ pendingActive=false; await countNow(); }
+    else if(!silent){ screenAddPending(dispName, true); }
+  }
+  window.__confirmAdd = function(){ recheck(false); };
+  document.addEventListener('visibilitychange', function(){ if(!document.hidden && pendingActive) recheck(true); });
+
+  screenLoading('กำลังตรวจสอบ…');
+  const isFriend = await getFriend();
   let snap;
   try{ snap = await withTimeout(docRef.get(), 12000, 'firestore-get'); }catch(e){ console.warn('get',e); snap = {exists:false}; }
+  const rec = snap.exists ? snap.data() : null;
 
-  if(snap.exists){
-    // เคยลงทะเบียนแล้ว (กันนับซ้ำ) — ถ้ายังไม่เป็นเพื่อน โชว์ปุ่มเพิ่มเพื่อนด้วย
-    screenDone(true, profile.displayName, !isFriend);
-    return;
-  }
   if(isFriend){
-    // เป็นเพื่อนกับร้านอยู่แล้วก่อนหน้านี้ = ลูกค้าเดิม → ไม่นับ
-    screenAlreadyFriend(profile.displayName);
-    return;
+    if(rec && rec.counted===true){ screenDone(true, dispName, false); return; }   // นับไปแล้ว
+    if(rec){ await countNow(); return; }                                          // เคยสแกนตอนยังไม่เป็นเพื่อน + ตอนนี้แอดแล้ว → นับ
+    screenAlreadyFriend(dispName); return;                                        // เป็นเพื่อนเดิม ไม่เคยสแกน → ไม่นับ
   }
-  // ลูกค้าใหม่ (ยังไม่เป็นเพื่อน + ยังไม่เคยลงทะเบียน) → นับให้ผู้แนะนำ
+  // ยังไม่เป็นเพื่อน
+  if(rec && rec.counted===true){ screenDone(true, dispName, true); return; }
   try{
     await withTimeout(docRef.set({
-      _refc:true, skey: shop+'_REFC',
-      refId: ref, shopId: shop, custUserId: userId,
-      custName: (profile.displayName||''),
-      date: now(), ym: nowYm(),
-      clientTs: new Date().toISOString(),
-      ts: firebase.firestore.FieldValue.serverTimestamp()
-    }), 12000, 'firestore-set');
-    screenCounted(profile.displayName);
-  }catch(e){ console.error('write',e); screenError('บันทึกไม่สำเร็จ','('+(e&&e.message||e)+') ลองสแกนใหม่อีกครั้ง',true,_dbg); return; }
+      _refc:true, skey: shop+'_REFC', refId: ref, shopId: shop, custUserId: userId,
+      custName: dispName, counted:false,
+      clientTs: new Date().toISOString(), pendingTs: firebase.firestore.FieldValue.serverTimestamp()
+    }, {merge:true}), 12000, 'pending');
+  }catch(e){ console.warn('pending',e); }
+  pendingActive = true;
+  screenAddPending(dispName, false);
 })();
 </script>
 </body>

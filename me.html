@@ -92,7 +92,7 @@ async function load(){
     ]);
 
     const refName = (refDoc.exists && refDoc.data().name) ? refDoc.data().name : 'พนักงาน';
-    const rals = ralsSnap.docs.map(d=>d.data()).filter(r=>r.refId===ref);
+    const rals = ralsSnap.docs.map(d=>d.data()).filter(r=>r.refId===ref && r.counted!==false);
     const st = setDoc.exists ? setDoc.data() : {};
     const rate = Number(st.refRate||3);
     const refUrl = st.refUrl||'';
