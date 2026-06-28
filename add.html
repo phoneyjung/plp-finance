@@ -166,10 +166,10 @@ function screenCounted(dispName){
     +'<div class="trust"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#98A2B3" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>ระบบสมาชิกอย่างเป็นทางการของร้าน</div>'
     +'<div class="muted">แสดงหน้านี้ให้พนักงานเพื่อรับสิทธิ์ได้เลย</div>';
 }
-function screenAddPending(dispName, retry){
-  setHead(retry?'ยืนยันการเพิ่มเพื่อน':'อีกขั้นเดียว!');
-  bd.innerHTML='<div class="big">'+(retry?'ยังไม่พบการเพิ่มเพื่อน 🤔':'เกือบเสร็จแล้ว! 🎉')+'</div>'
-    +'<div class="sub">'+(dispName?('คุณ '+esc(dispName)+' · '):'')+nm()+'<br>'+(retry?'กรุณากด “เพิ่มเพื่อน LINE” ด้านล่างก่อน แล้วค่อยกดยืนยัน':'เพิ่มเพื่อน LINE ร้านเพื่อรับสิทธิ์')+'</div>'
+function screenAddPending(dispName){
+  setHead('อีกขั้นเดียว!');
+  bd.innerHTML='<div class="big">เกือบเสร็จแล้ว! 🎉</div>'
+    +'<div class="sub">'+(dispName?('คุณ '+esc(dispName)+' · '):'')+nm()+'<br>กดปุ่มด้านล่างเพื่อเพิ่มเพื่อน LINE ร้าน รับสิทธิ์ทันที</div>'
     +'<div class="reward"><div class="rlbl">สิทธิ์ที่คุณจะได้รับ</div><div class="rval" style="color:'+C+'">'+REWARD+'</div></div>'
     +'<div class="benefits">'
       +'<div class="bi"><span class="bc" style="color:'+C+'">✓</span>โปรโมชั่น & ส่วนลดเฉพาะสมาชิก</div>'
@@ -177,8 +177,7 @@ function screenAddPending(dispName, retry){
       +'<div class="bi"><span class="bc" style="color:'+C+'">✓</span>รู้ข่าวเมนู/โปรใหม่ก่อนใคร</div>'
     +'</div>'
     +(oa()?'<a class="btn" href="'+oa()+'">➕ เพิ่มเพื่อน LINE ร้าน</a>':'')
-    +'<button class="btn ghost" onclick="window.__confirmAdd&&window.__confirmAdd()">เพิ่มเพื่อนแล้ว · กดรับสิทธิ์</button>'
-    +'<div class="muted">① กดเพิ่มเพื่อน → ② กลับมากดปุ่ม “กดรับสิทธิ์” เพื่อยืนยัน</div>';
+    +'<div class="muted">เพิ่มเพื่อนแล้วระบบจะบันทึกสิทธิ์ให้อัตโนมัติ</div>';
 }
 
 (async function(){
@@ -237,14 +236,13 @@ function screenAddPending(dispName, retry){
       screenCounted(dispName);
     }catch(e){ console.error('count',e); screenError('บันทึกไม่สำเร็จ','('+(e&&e.message||e)+') ลองใหม่อีกครั้ง',true,_dbg); }
   }
-  async function recheck(silent){
-    if(!silent) screenLoading('กำลังตรวจสอบการเพิ่มเพื่อน…');
+  async function recheckSilent(){
+    if(!pendingActive) return;
     const isF = await getFriend();
     if(isF){ pendingActive=false; await countNow(); }
-    else if(!silent){ screenAddPending(dispName, true); }
   }
-  window.__confirmAdd = function(){ recheck(false); };
-  document.addEventListener('visibilitychange', function(){ if(!document.hidden && pendingActive) recheck(true); });
+  document.addEventListener('visibilitychange', function(){ if(!document.hidden) recheckSilent(); });
+  window.addEventListener('focus', recheckSilent);
 
   screenLoading('กำลังตรวจสอบ…');
   const isFriend = await getFriend();
@@ -267,7 +265,7 @@ function screenAddPending(dispName, retry){
     }, {merge:true}), 12000, 'pending');
   }catch(e){ console.warn('pending',e); }
   pendingActive = true;
-  screenAddPending(dispName, false);
+  screenAddPending(dispName);
 })();
 </script>
 </body>
