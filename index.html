@@ -229,6 +229,22 @@ async function saveCashCount(shopId,date,amount,by){
   await writeLog(shopId, by, 'cashcount.save', `นับเงินสด ${date} = ${baht(Number(amount))}`, []);
 }
 
+/* ---------- STAMP (Owl Cha reward) ---------- */
+const STAMP_QR_BASE='https://phoneyjung.github.io/REPO/reward-qr/';   // โฟลเดอร์ QR: pts-1.png ... pts-10.png  (ใส่ REPO ให้ถูก, ลงท้าย /)
+const STAMP_MAX=10;
+function stampHms(d){ return pad(d.getHours())+':'+pad(d.getMinutes())+':'+pad(d.getSeconds()); }
+async function addStampLog(shopId, points, by, mode){
+  await db.collection('stampLog').add({
+    shopId, points:Number(points), by:by||'', mode:mode||'manual',
+    ymd: today(), hms: stampHms(new Date()), tsMs: Date.now(), ts: FieldValue.serverTimestamp()
+  });
+}
+async function stampLogByDay(shopId, ymd){
+  const s=await db.collection('stampLog').where('ymd','==',ymd).get();
+  const out=[]; s.forEach(d=>out.push(d.data()));
+  return out.filter(x=>x.shopId===shopId).sort((a,b)=>(b.tsMs||0)-(a.tsMs||0));
+}
+
 /* ---------- AUDIT LOG ---------- */
 async function writeLog(shopId, actor, type, label, ops){
   try{
@@ -317,6 +333,7 @@ const I={
   table:(p)=><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"{...p}><rect x="3.5" y="4.5" width="17" height="15" rx="2"/><path d="M3.5 9.5h17M9.5 9.5v10M15 9.5v10"/></svg>,
   spark:(p)=><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"{...p}><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M18 6l-2.5 2.5M8.5 15.5 6 18"/></svg>,
   calendar:(p)=><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"{...p}><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 9.5h17M8 3v4M16 3v4"/></svg>,
+  stamp:(p)=><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"{...p}><path d="M4 9.4a2 2 0 0 0 0 5.2V18a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3.4a2 2 0 0 0 0-5.2V6a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v3.4Z"/><path d="m12 8.6 1.1 2.2 2.4.35-1.75 1.7.42 2.4L12 16.2l-2.19 1.05.42-2.4L8.48 13.15l2.4-.35z"/></svg>,
 };
 
 /* ---------- category icons (20) ---------- */
@@ -545,6 +562,143 @@ function Picker({shops,onPick,user,logout}){
   );
 }
 
+/* ---------- STAMP PANEL (owlcha only) ---------- */
+function StampQrSheet({n, staff, onCancel, onSaved}){
+  const TOTAL=60;
+  const [left,setLeft]=useState(TOTAL);
+  const [saving,setSaving]=useState(false);
+  const [imgErr,setImgErr]=useState(false);
+  const url=STAMP_QR_BASE+'pts-'+n+'.png';
+  const save=React.useCallback(function(mode){
+    setSaving(true);
+    addStampLog('owlcha', n, staff, mode)
+      .then(function(){ onSaved(n,mode); })
+      .catch(function(e){ alert('บันทึกไม่สำเร็จ: '+(e&&e.message?e.message:e)); setSaving(false); });
+  },[n,staff,onSaved]);
+  useEffect(function(){
+    if(saving) return;
+    if(left<=0){ save('auto'); return; }
+    const id=setTimeout(function(){ setLeft(left-1); },1000);
+    return function(){ clearTimeout(id); };
+  },[left,saving,save]);
+  const pct=Math.max(0,Math.round(left/TOTAL*100));
+  return (
+    <Sheet title={'ให้แต้ม · '+n+' ดวง'} onClose={onCancel}>
+      <div style={{textAlign:'center', color:'var(--muted)', fontSize:13, marginBottom:8}}>ให้ลูกค้าสแกนเพื่อรับ <b style={{color:'var(--primary)'}}>{n} ดวง</b></div>
+      <div className="card" style={{padding:14, display:'grid', placeItems:'center', minHeight:240, marginBottom:14}}>
+        {!imgErr
+          ? <img src={url} alt={'QR '+n} style={{width:'100%', maxWidth:240}} onError={function(){ setImgErr(true); }}/>
+          : <div style={{textAlign:'center', color:'#C0392B', fontSize:13, padding:'0 16px'}}>ไม่พบไฟล์ <b>pts-{n}.png</b><br/>อัป QR ดวงนี้ขึ้นโฟลเดอร์ <b>reward-qr/</b> ก่อน</div>}
+      </div>
+      <div style={{display:'flex', justifyContent:'space-between', fontSize:12, color:'var(--muted)', marginBottom:5}}>
+        <span>บันทึกอัตโนมัติใน</span><span style={{fontWeight:700, color:'var(--primary)'}}>{left} วิ</span>
+      </div>
+      <div style={{height:8, borderRadius:99, background:'var(--soft)', overflow:'hidden', marginBottom:16}}>
+        <div style={{height:'100%', width:pct+'%', background:'var(--primary)', transition:'width 1s linear'}}/>
+      </div>
+      <button onClick={function(){ if(!saving) save('manual'); }} disabled={saving} className="press"
+        style={{width:'100%', border:'none', borderRadius:14, padding:'15px', background:'#3FA66A', color:'#fff', fontWeight:700, fontSize:16, opacity:saving?.6:1, marginBottom:10}}>
+        {saving?'กำลังบันทึก…':'✓ ยืนยันเลย'}
+      </button>
+      <button onClick={onCancel} disabled={saving} className="press"
+        style={{width:'100%', border:'none', borderRadius:14, padding:'12px', background:'var(--soft)', color:'var(--muted)', fontWeight:600, fontSize:14, opacity:saving?.4:1}}>
+        ยกเลิก (กดผิด)
+      </button>
+    </Sheet>
+  );
+}
+
+function StampPanel({shop,user,toast}){
+  const [sel,setSel]=useState(null);
+  const [avail,setAvail]=useState({});
+  const [view,setView]=useState('give');
+  const [rows,setRows]=useState(null);
+  const [dayOff,setDayOff]=useState(0);
+
+  useEffect(function(){
+    let live=true;
+    for(let i=1;i<=STAMP_MAX;i++){ (function(num){
+      const img=new Image();
+      img.onload=function(){ if(live) setAvail(function(a){ const c=Object.assign({},a); c[num]=true; return c; }); };
+      img.onerror=function(){ if(live) setAvail(function(a){ const c=Object.assign({},a); c[num]=false; return c; }); };
+      img.src=STAMP_QR_BASE+'pts-'+num+'.png';
+    })(i); }
+    return function(){ live=false; };
+  },[]);
+
+  const loadHist=React.useCallback(function(off){
+    setRows(null);
+    const d=new Date(); d.setDate(d.getDate()+off);
+    const ymd=d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
+    stampLogByDay('owlcha', ymd).then(setRows).catch(function(){ setRows([]); });
+  },[]);
+  useEffect(function(){ if(view==='hist') loadHist(dayOff); },[view,dayOff,loadHist]);
+
+  function onSaved(n,mode){ setSel(null); toast('บันทึกแล้ว +'+n+' ดวง'+(mode==='auto'?' (อัตโนมัติ)':'')); if(view==='hist') loadHist(dayOff); }
+  function dayName(o){ if(o===0)return 'วันนี้'; if(o===-1)return 'เมื่อวาน'; const d=new Date(); d.setDate(d.getDate()+o); return d.getDate()+'/'+(d.getMonth()+1); }
+
+  const nums=[]; for(let i=1;i<=STAMP_MAX;i++) nums.push(i);
+  const total=(rows||[]).reduce(function(s,r){ return s+(r.points||0); },0);
+
+  return (
+    <div style={{padding:'14px 16px 22px'}}>
+      <div style={{background:'var(--soft)', borderRadius:14, padding:4, display:'flex', marginBottom:16}}>
+        {[['give','ให้แต้ม'],['hist','ประวัติ']].map(function(t){ const on=view===t[0]; return (
+          <button key={t[0]} onClick={function(){ setView(t[0]); }} className="press"
+            style={{flex:1, border:'none', borderRadius:11, padding:'9px', fontWeight:700, fontSize:14, background:on?'#fff':'transparent', color:on?'var(--primary)':'var(--muted)', boxShadow:on?'0 1px 3px rgba(0,0,0,.08)':'none'}}>{t[1]}</button>
+        );})}
+      </div>
+
+      {view==='give' ? (
+        <div>
+          <div style={{textAlign:'center', color:'var(--muted)', fontSize:13, marginBottom:14}}>เลือกจำนวนแก้ว / แต้มที่จะให้ลูกค้า</div>
+          <div style={{display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:11}}>
+            {nums.map(function(num){ const ok=avail[num]; return (
+              <button key={num} disabled={!ok} onClick={function(){ setSel(num); }} className={ok?'card press':''}
+                style={{border:ok?'none':'1px dashed var(--line)', background:ok?'var(--card)':'transparent', borderRadius:16, padding:'18px 6px', display:'flex', flexDirection:'column', alignItems:'center', gap:3, opacity:ok?1:.5}}>
+                <span className="kanit" style={{fontSize:30, fontWeight:700, color:ok?'var(--primary)':'#B9BEC6'}}>{num}</span>
+                <span style={{fontSize:11, color:'var(--muted)'}}>{ok?'ดวง':'ไม่มี QR'}</span>
+              </button>
+            );})}
+          </div>
+          <div style={{marginTop:16, fontSize:11.5, color:'var(--muted)', background:'var(--tint)', borderRadius:12, padding:'10px 12px', lineHeight:1.5}}>
+            กด = โชว์ QR ให้ลูกค้าสแกน · ครบ 60 วิ บันทึกเอง (หรือกดยืนยัน) · log เก็บชื่อ <b>{user.name}</b> + เวลา
+          </div>
+        </div>
+      ) : (
+        <div>
+          <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12}}>
+            <button onClick={function(){ setDayOff(dayOff-1); }} className="press" style={{width:38, height:38, borderRadius:99, border:'none', background:'var(--card)', boxShadow:'0 1px 3px rgba(0,0,0,.06)', color:'var(--ink)', transform:'scaleX(-1)'}}><I.chevron/></button>
+            <div className="kanit" style={{fontWeight:600, fontSize:15}}>{dayName(dayOff)}</div>
+            <button onClick={function(){ if(dayOff<0) setDayOff(dayOff+1); }} disabled={dayOff>=0} className="press" style={{width:38, height:38, borderRadius:99, border:'none', background:'var(--card)', boxShadow:'0 1px 3px rgba(0,0,0,.06)', color:dayOff>=0?'#CBD0D6':'var(--ink)'}}><I.chevron/></button>
+          </div>
+          <div className="scrim" style={{color:'#fff', borderRadius:16, padding:'14px 18px', display:'flex', justifyContent:'space-between', marginBottom:14}}>
+            <div><div style={{fontSize:12, opacity:.85}}>รวมแต้มที่ให้</div><div className="kanit" style={{fontSize:28, fontWeight:700, lineHeight:1.1}}>{total} <span style={{fontSize:14, fontWeight:400}}>ดวง</span></div></div>
+            <div style={{textAlign:'right'}}><div style={{fontSize:12, opacity:.85}}>จำนวนรายการ</div><div className="kanit" style={{fontSize:28, fontWeight:700, lineHeight:1.1}}>{(rows||[]).length}</div></div>
+          </div>
+          {rows===null && <div style={{textAlign:'center', color:'var(--muted)', padding:'30px 0'}}>กำลังโหลด…</div>}
+          {rows && rows.length===0 && <div style={{textAlign:'center', color:'#B9BEC6', padding:'30px 0'}}>ยังไม่มีรายการ</div>}
+          {rows && rows.length>0 && (
+            <div style={{display:'flex', flexDirection:'column', gap:8}}>
+              {rows.map(function(r,i){ return (
+                <div key={i} className="card" style={{padding:'11px 14px', display:'flex', alignItems:'center', justifyContent:'space-between'}}>
+                  <div>
+                    <div className="kanit" style={{fontWeight:600, fontSize:16}}>{(r.hms||'').slice(0,5)} น.</div>
+                    <div style={{fontSize:11.5, color:'var(--muted)'}}>{r.by||'—'}{r.mode==='auto'?' · ⏱ อัตโนมัติ':''}</div>
+                  </div>
+                  <div style={{fontWeight:800, fontSize:18, color:'#3FA66A'}}>+{r.points}</div>
+                </div>
+              );})}
+            </div>
+          )}
+        </div>
+      )}
+
+      {sel!=null && <StampQrSheet n={sel} staff={user.name} onCancel={function(){ setSel(null); }} onSaved={onSaved}/>}
+    </div>
+  );
+}
+
 /* ---------- MAIN SHELL ---------- */
 function Main({shop,user,canSwitch,onSwitch,logout}){
   const [tab,setTab]=useState('home');
@@ -557,6 +711,7 @@ function Main({shop,user,canSwitch,onSwitch,logout}){
     {k:'analyze',label:'วิเคราะห์',icon:I.chart},
     {k:'referral',label:'แนะนำ',icon:I.users},
     {k:'capital',label:'ทุน',icon:I.wallet},
+    ...(shop.id==='owlcha' ? [{k:'stamp',label:'แต้ม',icon:I.stamp}] : []),
     {k:'settings',label:'ตั้งค่า',icon:I.gear},
   ].filter(x=> !(user.role==='staff' && (x.k==='capital'||x.k==='analyze'||x.k==='referral')));
 
@@ -579,6 +734,7 @@ function Main({shop,user,canSwitch,onSwitch,logout}){
         {tab==='analyze' && <Analyze shop={shop} user={user} toast={toast}/>}
         {tab==='referral' && <Referral shop={shop} user={user} toast={toast}/>}
         {tab==='capital' && <Capital shop={shop} user={user} toast={toast}/>}
+        {tab==='stamp' && <StampPanel shop={shop} user={user} toast={toast}/>}
         {tab==='settings' && <Settings shop={shop} user={user} logout={logout} toast={toast}/>}
       </div>
 
