@@ -434,6 +434,7 @@ function App(){
       if(!u || u.active===false) return false;
     }
     setUser(u);
+    try{ localStorage.setItem('plp_last_user', u.id); }catch(e){}
     const ms = u.shopIds==='all' ? SHOPS : SHOPS.filter(s=>(u.shopIds||[]).includes(s.id));
     if(ms.length===1) setShopId(ms[0].id);
     return true;
@@ -469,7 +470,12 @@ function Login({onLogin}){
   const [err,setErr]=useState(false);
 
   useEffect(()=>{ (async()=>{
-    try{ const all=await allUsers(); setUsers(all.filter(u=>u.active!==false)); }
+    try{
+      const all=await allUsers();
+      const act=all.filter(u=>u.active!==false);
+      setUsers(act);
+      try{ const last=localStorage.getItem('plp_last_user'); if(last && act.some(u=>u.id===last)) setSelId(last); }catch(e){}
+    }
     catch(e){ console.error(e); setLoadErr(true); setUsers([]); }
   })(); },[]);
 
