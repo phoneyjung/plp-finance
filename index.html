@@ -774,7 +774,7 @@ function TxnBrowser({shop, user, toast}){
       <div className="card" style={{padding:'6px 0'}}>
         {load ? <Loading label="กำลังโหลด…"/> :
           rows.length===0 ? <div style={{textAlign:'center',color:'var(--muted)',fontSize:13.5,padding:'30px 16px'}}>ไม่มีรายการ{isInc?'รายรับ':'รายจ่าย'}เดือนนี้</div> :
-          rows.map(r=><TxnRow key={r.id} r={r} onEdit={(row)=>setEditRow(row)} onDel={onDel} onView={(row)=>setViewRcpt(row)}/>)}
+          rows.map(r=><TxnRow key={r.id} r={r} showDate={true} onEdit={(row)=>setEditRow(row)} onDel={onDel} onView={(row)=>setViewRcpt(row)}/>)}
       </div>
 
       {editRow && <EntrySheet shop={shop} user={user} editTxn={editRow} onClose={()=>setEditRow(null)} onSaved={()=>{ setEditRow(null); reload(); }} toast={toast}/>}
@@ -967,14 +967,15 @@ function PL({label,v,c,big}){
   return <div><div style={{fontSize:11.5, color:'var(--muted)', marginBottom:4}}>{label}</div>
     <div className="num" style={{fontSize:big?19:16, fontWeight:700, color:c}}>{baht(v)}</div></div>;
 }
-function TxnRow({r,onDel,onView,onEdit}){
+function TxnRow({r,onDel,onView,onEdit,showDate}){
   const inc=r.kind==='income';
+  const dStr=(()=>{ const a=(r.date||'').split('-'); return a.length<3?(r.date||''):`${parseInt(a[2])} ${THAI_MON[parseInt(a[1])-1]}`; })();
   const content=<>
     <CatBadge shopId={r.shopId} name={r.category}/>
     <div style={{flex:1, minWidth:0}}>
       <div style={{fontSize:14.5, fontWeight:500, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis'}}>{r.category}</div>
       <div style={{fontSize:11.5, color:'var(--muted)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis'}}>
-        {r.note? r.note+' · ' : ''}{hhmm(r.ts)} · {r.method==='cash'?'เงินสด':'โอน'}</div>
+        {showDate? dStr+' · ' : ''}{r.note? r.note+' · ' : ''}{hhmm(r.ts)} · {r.method==='cash'?'เงินสด':'โอน'}</div>
     </div>
   </>;
   return <div style={{display:'flex', alignItems:'center', gap:12, padding:'10px 16px'}}>
