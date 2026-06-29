@@ -2106,7 +2106,7 @@ function ShopSummary({shop}){
   useEffect(()=>{ let live=true; (async()=>{
     setLoad(true);
     try{
-      const [man,imp,cap]=await Promise.all([txnsBySource('manual'),txnsBySource('import'),capitalEntries(shop.id)]);
+      const [man,imp,cap]=await Promise.all([txnsBySource('manual'),txnsBySource('import'),capitalEntries(shop.id),loadCatMeta(shop.id)]);
       if(!live) return;
       const io=[...man,...imp].filter(t=>t.shopId===shop.id);
       setD({io,cap});
@@ -2120,20 +2120,51 @@ function ShopSummary({shop}){
   const S=(arr,k)=>arr.reduce((s,t)=>s+(t.kind===k?(Number(t.amount)||0):0),0);
   const income=S(io,'income'), expense=S(io,'expense'), profit=income-expense;
   const invest=S(cap,'invest')-S(cap,'withdraw');
+  const byCat=(k)=>{ const m={}; io.forEach(t=>{ if(t.kind!==k) return; const c=t.category||'อื่นๆ'; m[c]=(m[c]||0)+(Number(t.amount)||0); }); return Object.entries(m).map(([name,amt])=>({name,amt})).sort((a,b)=>b.amt-a.amt); };
+  const incCats=byCat('income'), expCats=byCat('expense');
+
+  const catCard=(title,items,tot,color)=>(
+    <div style={{background:'#fff',border:'1px solid var(--line)',borderRadius:16,padding:16,marginBottom:14}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline',marginBottom:12}}>
+        <span className="kanit" style={{fontWeight:600,fontSize:15}}>{title}</span>
+        <span className="num" style={{fontWeight:700,fontSize:14,color}}>{baht(tot)}</span>
+      </div>
+      {items.length===0 ? <div style={{fontSize:13,color:'var(--muted)',textAlign:'center',padding:'6px 0'}}>ยังไม่มีข้อมูล</div> :
+        items.map(it=>{ const pct=tot>0?(it.amt/tot*100):0; return (
+          <div key={it.name} style={{display:'flex',alignItems:'center',gap:11,marginBottom:12}}>
+            <CatBadge shopId={shop.id} name={it.name} size={34}/>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline',marginBottom:4}}>
+                <span style={{fontSize:14,fontWeight:500,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{it.name}</span>
+                <span style={{flexShrink:0,marginLeft:8}}><span className="num" style={{fontWeight:600,fontSize:13.5}}>{baht(it.amt).replace('฿','')}</span> <span style={{fontSize:11,color:'var(--muted)'}}>· {pct.toFixed(0)}%</span></span>
+              </div>
+              <div style={{height:7,background:'var(--soft)',borderRadius:5,overflow:'hidden'}}>
+                <div style={{height:'100%',width:`${Math.max(2,Math.round(pct))}%`,background:color,borderRadius:5}}/>
+              </div>
+            </div>
+          </div>
+        );})}
+    </div>
+  );
 
   return (
-    <div style={wrap}>
-      <div style={{fontSize:12.5,opacity:.8}}>ภาพรวม · {shop.name} (ทั้งหมด)</div>
-      <div className="num" style={{fontSize:33,fontWeight:800,letterSpacing:'-.5px',lineHeight:1.15,color:profit>=0?'#F5C451':'#FF8A8A'}}>{profit>=0?'':'-'}{baht(Math.abs(profit))}</div>
-      <div style={{fontSize:11.5,opacity:.7,marginTop:1}}>กำไรสะสม = รายรับ − รายจ่าย (รวมทุกช่วงเวลา)</div>
-      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8,marginTop:14}}>
-        {[['รายรับรวม',income,'#5BD08A'],['รายจ่ายรวม',expense,'#FF9A9A'],['ลงทุนสุทธิ',invest,'#86BBFF']].map(([l,v,c])=>(
-          <div key={l} style={{background:'rgba(255,255,255,.08)',borderRadius:12,padding:'10px 10px'}}>
-            <div style={{fontSize:10,opacity:.7,marginBottom:3}}>{l}</div>
-            <div className="num" style={{fontSize:15,fontWeight:700,color:c}}>{baht(v).replace('฿','')}</div>
-          </div>
-        ))}
+    <div>
+      <div style={wrap}>
+        <div style={{fontSize:12.5,opacity:.8}}>ภาพรวม · {shop.name} (ทั้งหมด)</div>
+        <div className="num" style={{fontSize:33,fontWeight:800,letterSpacing:'-.5px',lineHeight:1.15,color:profit>=0?'#F5C451':'#FF8A8A'}}>{profit>=0?'':'-'}{baht(Math.abs(profit))}</div>
+        <div style={{fontSize:11.5,opacity:.7,marginTop:1}}>กำไรสะสม = รายรับ − รายจ่าย (รวมทุกช่วงเวลา)</div>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8,marginTop:14}}>
+          {[['รายรับรวม',income,'#5BD08A'],['รายจ่ายรวม',expense,'#FF9A9A'],['ลงทุนสุทธิ',invest,'#86BBFF']].map(([l,v,c])=>(
+            <div key={l} style={{background:'rgba(255,255,255,.08)',borderRadius:12,padding:'10px 10px'}}>
+              <div style={{fontSize:10,opacity:.7,marginBottom:3}}>{l}</div>
+              <div className="num" style={{fontSize:15,fontWeight:700,color:c}}>{baht(v).replace('฿','')}</div>
+            </div>
+          ))}
+        </div>
       </div>
+
+      {catCard('รายรับแยกหมวด (ทั้งหมด)', incCats, income, '#16A34A')}
+      {catCard('รายจ่ายแยกหมวด (ทั้งหมด)', expCats, expense, '#DC2626')}
     </div>
   );
 }
