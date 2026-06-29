@@ -230,7 +230,7 @@ async function saveCashCount(shopId,date,amount,by){
 }
 
 /* ---------- STAMP (Owl Cha reward) ---------- */
-const STAMP_QR_BASE='https://phoneyjung.github.io/REPO/reward-qr/';   // โฟลเดอร์ QR: pts-1.png ... pts-10.png  (ใส่ REPO ให้ถูก, ลงท้าย /)
+const STAMP_QR_BASE='https://phoneyjung.github.io/plp-finance/reward-qr/';   // โฟลเดอร์ QR: pts-1.png ... pts-10.png  (ใส่ REPO ให้ถูก, ลงท้าย /)
 const STAMP_MAX=10;
 function stampHms(d){ return pad(d.getHours())+':'+pad(d.getMinutes())+':'+pad(d.getSeconds()); }
 async function addStampLog(shopId, points, by, mode){
