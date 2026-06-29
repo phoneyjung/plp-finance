@@ -147,6 +147,10 @@ async function findUserByPin(pin){
   const s=await db.collection('users').where('pin','==',pin).limit(1).get();
   if(s.empty) return null; const d=s.docs[0]; return {id:d.id, ...d.data()};
 }
+async function getUserById(id){
+  const d=await db.collection('users').doc(id).get();
+  return d.exists ? {id:d.id, ...d.data()} : null;
+}
 async function usersEmpty(){ const s=await db.collection('users').limit(1).get(); return s.empty; }
 async function createAdmin(pin){
   const data={name:'แอดมิน', role:'admin', pin, shopIds:'all', active:true, createdAt:FieldValue.serverTimestamp()};
@@ -154,7 +158,6 @@ async function createAdmin(pin){
 }
 async function allUsers(){ const s=await db.collection('users').get(); return s.docs.map(d=>({id:d.id,...d.data()})); }
 async function addUser({name,role,pin,shopIds},actor){
-  if(await findUserByPin(pin)) throw new Error('PIN นี้ถูกใช้แล้ว เลือกเลขอื่น');
   await db.collection('users').add({name,role,pin,shopIds,active:true,createdAt:FieldValue.serverTimestamp()});
   await writeLog('all', actor, 'user.add', `เพิ่มผู้ใช้ ${name} (${(ROLES[role]&&ROLES[role].label)||role})`, []);
 }
@@ -421,10 +424,15 @@ function App(){
   },[shopId]);
 
   const onLogin=async(pin, expectId)=>{
-    let u=await findUserByPin(pin);
-    if(!u){ if((await usersEmpty()) && pin===SETUP_ADMIN_PIN) u=await createAdmin(pin); }
-    if(!u || u.active===false) return false;
-    if(expectId && u.id!==expectId) return false;
+    let u;
+    if(expectId){
+      u=await getUserById(expectId);
+      if(!u || u.active===false || u.pin!==pin) return false;
+    } else {
+      u=await findUserByPin(pin);
+      if(!u){ if((await usersEmpty()) && pin===SETUP_ADMIN_PIN) u=await createAdmin(pin); }
+      if(!u || u.active===false) return false;
+    }
     setUser(u);
     const ms = u.shopIds==='all' ? SHOPS : SHOPS.filter(s=>(u.shopIds||[]).includes(s.id));
     if(ms.length===1) setShopId(ms[0].id);
@@ -519,7 +527,7 @@ function Login({onLogin}){
             )}
           </div>
 
-          <button onClick={()=>onSelect(selId==='direct'?'':'direct')} className="press kanit" style={{display:'block', margin:'18px auto 0', border:'none', background:'none', color:selId==='direct'?'#12B3B3':'#B0A491', fontSize:12.5, textDecoration:'underline', padding:6, fontWeight:selId==='direct'?600:400}}>{selId==='direct'?'✓ โหมดใส่รหัสโดยตรง':'ใส่รหัส PIN โดยตรง'}</button>
+          {(users.length===0 || loadErr) && <button onClick={()=>onSelect(selId==='direct'?'':'direct')} className="press kanit" style={{display:'block', margin:'18px auto 0', border:'none', background:'none', color:selId==='direct'?'#12B3B3':'#B0A491', fontSize:12.5, textDecoration:'underline', padding:6, fontWeight:selId==='direct'?600:400}}>{selId==='direct'?'✓ โหมดใส่รหัสโดยตรง':'ใส่รหัส PIN โดยตรง'}</button>}
           {(loadErr||users.length===0) && <div style={{fontSize:11.5, color:'#B0A491', textAlign:'center', marginTop:6, lineHeight:1.5}}>{loadErr?'โหลดรายชื่อไม่ได้ · ใช้ "ใส่รหัสโดยตรง" ได้':'ตั้งค่าครั้งแรก — กด "ใส่รหัส PIN โดยตรง" แล้วใส่รหัสตั้งค่าระบบ'}</div>}
         </>)}
       </div>
@@ -1738,7 +1746,6 @@ function UserSheet({editUser, currentUserId, actor, onClose, onSaved, onDeleted,
     try{
       const data={name:name.trim(),role,pin,shopIds: role==='admin'?'all':shopIds};
       if(isEdit){
-        if(await pinTakenByOther(pin, editUser.id)){ toast('PIN นี้ถูกใช้แล้ว เลือกเลขอื่น','err'); setBusy(false); return; }
         await updateUser(editUser.id,data,actor);
       } else { await addUser(data,actor); }
       toast(isEdit?'บันทึกการแก้ไขแล้ว':'เพิ่มผู้ใช้แล้ว'); onSaved();
@@ -1800,7 +1807,6 @@ function ChangePinSheet({user,onClose,toast}){
     if(p1!==p2){ toast('PIN ใหม่ทั้งสองช่องไม่ตรงกัน','err'); return; }
     setBusy(true);
     try{
-      if(await pinTakenByOther(p1,user.id)){ toast('PIN นี้ถูกใช้แล้ว เลือกเลขอื่น','err'); setBusy(false); return; }
       await updateUser(user.id,{pin:p1},{id:user.id,name:user.name});
       toast('เปลี่ยน PIN เรียบร้อย ใช้ PIN ใหม่ครั้งถัดไป'); onClose();
     }catch(e){ toast('เปลี่ยนไม่สำเร็จ','err'); setBusy(false); }
