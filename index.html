@@ -722,25 +722,26 @@ function StampPanel({shop,user,toast}){
 }
 
 /* ---------- MAIN SHELL ---------- */
-function TxnBrowser({user, toast}){
-  const myIds = user.shopIds==='all' ? SHOPS.map(s=>s.id) : (user.shopIds||[]);
+function TxnBrowser({shop, user, toast}){
   const [ym,setYm]=useState(ymOf(today()));
   const [kind,setKind]=useState('income');
   const [load,setLoad]=useState(true);
   const [rows,setRows]=useState([]);
   const [editRow,setEditRow]=useState(null);
+  const [viewRcpt,setViewRcpt]=useState(null);
 
   const reload=async()=>{
     setLoad(true);
     try{
-      const all=await Promise.all(myIds.map(id=>monthTxns(id, ym)));
-      const flat=all.flat().filter(t=>t.kind===kind && (t.source==='manual'||t.source==='import'));
+      await loadCatMeta(shop.id);
+      const t=await monthTxns(shop.id, ym);
+      const flat=t.filter(x=>x.kind===kind && (x.source==='manual'||x.source==='import'));
       flat.sort((a,b)=>{ if(a.date!==b.date) return a.date<b.date?1:-1; return ((b.ts&&b.ts.seconds)||0)-((a.ts&&a.ts.seconds)||0); });
       setRows(flat);
     }catch(e){ console.error(e); setRows([]); }
     setLoad(false);
   };
-  useEffect(()=>{ reload(); },[ym,kind]);
+  useEffect(()=>{ reload(); },[shop.id,ym,kind]);
 
   const total=rows.reduce((s,r)=>s+(Number(r.amount)||0),0);
   const [yy,mm]=ym.split('-').map(Number);
@@ -748,12 +749,11 @@ function TxnBrowser({user, toast}){
   const shift=(dd)=>{ const dt=new Date(yy,mm-1+dd,1); setYm(`${dt.getFullYear()}-${pad(dt.getMonth()+1)}`); };
   const atCur = ym>=ymOf(today());
   const isInc=kind==='income';
-  const fmtDay=(ds)=>{ const a=(ds||'').split('-'); if(a.length<3) return ds||''; return `${parseInt(a[2])} ${THAI_MON[parseInt(a[1])-1]}`; };
   const onDel=async(r)=>{ if(!window.confirm('ลบรายการนี้?')) return; try{ await delTxn(r.id,{id:user.id,name:user.name}); await reload(); toast('ลบรายการแล้ว'); }catch(e){ toast('ลบไม่สำเร็จ','err'); } };
-  const editShop = editRow ? SHOPS.find(s=>s.id===editRow.shopId) : null;
 
   return (
     <div style={{padding:'14px 16px 90px'}}>
+      <div style={{textAlign:'center',marginBottom:12,fontSize:12.5,color:'var(--muted)'}}>รายการของ <b style={{color:'var(--ink)'}}>{shop.name}</b></div>
       <div style={{background:'var(--soft)',borderRadius:14,padding:4,display:'flex',marginBottom:14}}>
         {[['income','รายรับ'],['expense','รายจ่าย']].map(t=>{ const on=kind===t[0]; return (
           <button key={t[0]} onClick={()=>setKind(t[0])} className="press" style={{flex:1,border:'none',borderRadius:11,padding:'9px',fontWeight:700,fontSize:14.5,background:on?'#fff':'transparent',color:on?(t[0]==='income'?'#16A34A':'#DC2626'):'var(--muted)',boxShadow:on?'0 1px 3px rgba(0,0,0,.08)':'none'}}>{t[1]}</button>
@@ -767,29 +767,18 @@ function TxnBrowser({user, toast}){
       </div>
 
       <div style={{background: isInc?'linear-gradient(135deg,#16A34A,#15803D)':'linear-gradient(135deg,#DC2626,#B91C1C)',color:'#fff',borderRadius:16,padding:'16px 18px',marginBottom:14,display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-        <div><div style={{fontSize:12.5,opacity:.88}}>{isInc?'รายรับรวมเดือนนี้':'รายจ่ายรวมเดือนนี้'} · ทุกสาขา</div><div className="num" style={{fontSize:26,fontWeight:800,lineHeight:1.1}}>{baht(total)}</div></div>
+        <div><div style={{fontSize:12.5,opacity:.88}}>{isInc?'รายรับรวมเดือนนี้':'รายจ่ายรวมเดือนนี้'}</div><div className="num" style={{fontSize:26,fontWeight:800,lineHeight:1.1}}>{baht(total)}</div></div>
         <div style={{textAlign:'right',fontSize:12.5,opacity:.88}}>{rows.length} รายการ</div>
       </div>
 
       <div className="card" style={{padding:'6px 0'}}>
         {load ? <Loading label="กำลังโหลด…"/> :
           rows.length===0 ? <div style={{textAlign:'center',color:'var(--muted)',fontSize:13.5,padding:'30px 16px'}}>ไม่มีรายการ{isInc?'รายรับ':'รายจ่าย'}เดือนนี้</div> :
-          rows.map(r=>{ const sh=SHOPS.find(s=>s.id===r.shopId)||{emoji:'🏪',name:r.shopId}; return (
-            <div key={r.id} style={{display:'flex',alignItems:'center',gap:11,padding:'10px 14px'}}>
-              <button onClick={()=>setEditRow(r)} className="press" style={{flex:1,minWidth:0,display:'flex',alignItems:'center',gap:11,border:'none',background:'none',padding:0,textAlign:'left'}}>
-                <span style={{width:34,height:34,borderRadius:10,background:'var(--soft)',display:'grid',placeItems:'center',fontSize:17,flexShrink:0,overflow:'hidden'}}>{sh.logo? <img src={sh.logo} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}}/> : sh.emoji}</span>
-                <div style={{flex:1,minWidth:0}}>
-                  <div style={{fontSize:14.5,fontWeight:500,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{r.category}</div>
-                  <div style={{fontSize:11.5,color:'var(--muted)',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{sh.name} · {fmtDay(r.date)}{r.note?' · '+r.note:''}</div>
-                </div>
-              </button>
-              <div className="num" style={{fontSize:15,fontWeight:600,color:isInc?'#16A34A':'#DC2626'}}>{isInc?'+':'-'}{baht(r.amount).replace('฿','')}</div>
-              <button onClick={()=>onDel(r)} className="press" style={{border:'none',background:'none',color:'#C0C4CC'}}><I.trash/></button>
-            </div>
-          );})}
+          rows.map(r=><TxnRow key={r.id} r={r} onEdit={(row)=>setEditRow(row)} onDel={onDel} onView={(row)=>setViewRcpt(row)}/>)}
       </div>
 
-      {editRow && editShop && <EntrySheet shop={editShop} user={user} editTxn={editRow} onClose={()=>setEditRow(null)} onSaved={()=>{ setEditRow(null); reload(); }} toast={toast}/>}
+      {editRow && <EntrySheet shop={shop} user={user} editTxn={editRow} onClose={()=>setEditRow(null)} onSaved={()=>{ setEditRow(null); reload(); }} toast={toast}/>}
+      {viewRcpt && <ReceiptViewer txn={viewRcpt} onClose={()=>setViewRcpt(null)}/>}
     </div>
   );
 }
@@ -829,7 +818,7 @@ function Main({shop,user,canSwitch,onSwitch,logout}){
         {tab==='analyze' && <Analyze shop={shop} user={user} toast={toast}/>}
         {tab==='referral' && <Referral shop={shop} user={user} toast={toast}/>}
         {tab==='capital' && <Capital shop={shop} user={user} toast={toast}/>}
-        {tab==='txns' && <TxnBrowser user={user} toast={toast}/>}
+        {tab==='txns' && <TxnBrowser shop={shop} user={user} toast={toast}/>}
         {tab==='stamp' && <StampPanel shop={shop} user={user} toast={toast}/>}
         {tab==='settings' && <Settings shop={shop} user={user} logout={logout} toast={toast}/>}
       </div>
@@ -2110,71 +2099,39 @@ async function addCapital({shopId,shareholder,type,amount,note,by,actor}){
   return ref.id;
 }
 
-function AllShopsSummary({user}){
-  const myIds = user.shopIds==='all' ? SHOPS.map(s=>s.id) : (user.shopIds||[]);
+function ShopSummary({shop}){
   const [load,setLoad]=useState(true);
   const [d,setD]=useState(null);
   useEffect(()=>{ let live=true; (async()=>{
     setLoad(true);
     try{
-      const [man,imp,cap]=await Promise.all([txnsBySource('manual'),txnsBySource('import'),txnsBySource('capital')]);
+      const [man,imp,cap]=await Promise.all([txnsBySource('manual'),txnsBySource('import'),capitalEntries(shop.id)]);
       if(!live) return;
-      const io=[...man,...imp].filter(t=>myIds.includes(t.shopId));
-      const cp=cap.filter(t=>myIds.includes(t.shopId));
-      setD({io,cp});
-    }catch(e){ console.error(e); if(live) setD({io:[],cp:[]}); }
+      const io=[...man,...imp].filter(t=>t.shopId===shop.id);
+      setD({io,cap});
+    }catch(e){ console.error(e); if(live) setD({io:[],cap:[]}); }
     if(live) setLoad(false);
-  })(); return ()=>{ live=false; }; },[]);
+  })(); return ()=>{ live=false; }; },[shop.id]);
 
   const wrap={borderRadius:20,padding:'18px 18px 16px',marginBottom:16,background:'linear-gradient(160deg,#15324f 0%,#0d2238 100%)',color:'#fff',boxShadow:'0 8px 24px rgba(13,34,56,.28)'};
-  if(load) return <div style={wrap}><div style={{textAlign:'center',padding:'18px 0',opacity:.85,fontSize:13}}>กำลังรวมยอดทุกสาขา…</div></div>;
-  const {io,cp}=d;
+  if(load) return <div style={wrap}><div style={{textAlign:'center',padding:'18px 0',opacity:.85,fontSize:13}}>กำลังรวมยอด…</div></div>;
+  const {io,cap}=d;
   const S=(arr,k)=>arr.reduce((s,t)=>s+(t.kind===k?(Number(t.amount)||0):0),0);
   const income=S(io,'income'), expense=S(io,'expense'), profit=income-expense;
-  const invest=S(cp,'invest')-S(cp,'withdraw'), dividend=S(cp,'dividend');
-  const per = myIds.map(id=>{ const sh=SHOPS.find(s=>s.id===id)||{id,name:id,emoji:'🏪'};
-    const a=io.filter(t=>t.shopId===id), c=cp.filter(t=>t.shopId===id);
-    const inc=S(a,'income'), exp=S(a,'expense');
-    return {...sh, income:inc, expense:exp, profit:inc-exp, invest:S(c,'invest')-S(c,'withdraw')};
-  }).sort((x,y)=>y.profit-x.profit);
-  const maxAbs=Math.max(1,...per.map(p=>Math.abs(p.profit)));
+  const invest=S(cap,'invest')-S(cap,'withdraw');
 
   return (
-    <div>
-      <div style={wrap}>
-        <div style={{fontSize:12.5,opacity:.8}}>ภาพรวมทุกสาขา · กำไรสะสมรวม (ทั้งหมด)</div>
-        <div className="num" style={{fontSize:33,fontWeight:800,letterSpacing:'-.5px',lineHeight:1.15,color:profit>=0?'#F5C451':'#FF8A8A'}}>{profit>=0?'':'-'}{baht(Math.abs(profit)).replace('฿','฿')}</div>
-        <div style={{fontSize:11.5,opacity:.7,marginTop:1}}>{per.length} สาขา · รวมทุกช่วงเวลา</div>
-        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8,marginTop:14}}>
-          {[['รายรับรวม',income,'#5BD08A'],['รายจ่ายรวม',expense,'#FF9A9A'],['ลงทุนรวม',invest,'#86BBFF']].map(([l,v,c])=>(
-            <div key={l} style={{background:'rgba(255,255,255,.08)',borderRadius:12,padding:'10px 10px'}}>
-              <div style={{fontSize:10,opacity:.7,marginBottom:3}}>{l}</div>
-              <div className="num" style={{fontSize:15,fontWeight:700,color:c}}>{baht(v).replace('฿','')}</div>
-            </div>
-          ))}
-        </div>
-        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginTop:13,paddingTop:11,borderTop:'1px solid rgba(255,255,255,.14)',fontSize:12.5}}>
-          <span style={{opacity:.82}}>ปันผลจ่ายให้หุ้นส่วนสะสม</span>
-          <span className="num" style={{fontWeight:700,color:'#D9C2FF'}}>{baht(dividend)}</span>
-        </div>
-      </div>
-
-      <div style={{background:'#fff',border:'1px solid var(--line)',borderRadius:16,padding:16,marginBottom:16}}>
-        <div className="kanit" style={{fontWeight:600,fontSize:15,marginBottom:12}}>กำไรแยกตามสาขา</div>
-        {per.length===0 ? <div style={{fontSize:13,color:'var(--muted)',textAlign:'center',padding:'8px 0'}}>ยังไม่มีข้อมูล</div> :
-          per.map(p=>(
-            <div key={p.id} style={{marginBottom:14}}>
-              <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline',marginBottom:5}}>
-                <span style={{fontSize:14,fontWeight:500}}>{p.emoji} {p.name}</span>
-                <span className="num" style={{fontWeight:700,fontSize:14.5,color:p.profit>=0?'#16A34A':'#DC2626'}}>{p.profit>=0?'+':'-'}{baht(Math.abs(p.profit)).replace('฿','฿')}</span>
-              </div>
-              <div style={{height:8,background:'var(--soft)',borderRadius:6,overflow:'hidden'}}>
-                <div style={{height:'100%',width:`${Math.round(Math.abs(p.profit)/maxAbs*100)}%`,background:p.profit>=0?'var(--primary)':'#E78A8A',borderRadius:6}}/>
-              </div>
-              <div style={{fontSize:11,color:'var(--muted)',marginTop:4}}>รับ {baht(p.income)} · จ่าย {baht(p.expense)} · ทุน {baht(p.invest)}</div>
-            </div>
-          ))
-        }
+    <div style={wrap}>
+      <div style={{fontSize:12.5,opacity:.8}}>ภาพรวม · {shop.name} (ทั้งหมด)</div>
+      <div className="num" style={{fontSize:33,fontWeight:800,letterSpacing:'-.5px',lineHeight:1.15,color:profit>=0?'#F5C451':'#FF8A8A'}}>{profit>=0?'':'-'}{baht(Math.abs(profit))}</div>
+      <div style={{fontSize:11.5,opacity:.7,marginTop:1}}>กำไรสะสม = รายรับ − รายจ่าย (รวมทุกช่วงเวลา)</div>
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8,marginTop:14}}>
+        {[['รายรับรวม',income,'#5BD08A'],['รายจ่ายรวม',expense,'#FF9A9A'],['ลงทุนสุทธิ',invest,'#86BBFF']].map(([l,v,c])=>(
+          <div key={l} style={{background:'rgba(255,255,255,.08)',borderRadius:12,padding:'10px 10px'}}>
+            <div style={{fontSize:10,opacity:.7,marginBottom:3}}>{l}</div>
+            <div className="num" style={{fontSize:15,fontWeight:700,color:c}}>{baht(v).replace('฿','')}</div>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -2203,7 +2160,7 @@ function Capital({shop,user,toast}){
   if(load) return <Loading/>;
   return (
     <div style={{padding:'14px 16px 8px'}}>
-      <AllShopsSummary user={user}/>
+      <ShopSummary shop={shop}/>
       <div style={{background:'var(--primary)',borderRadius:18,padding:18,marginBottom:14,color:'#fff'}}>
         <div style={{fontSize:13,opacity:.85}}>เงินทุนรวม · {shop.name}</div>
         <div className="num" style={{fontSize:28,fontWeight:800,marginTop:2}}>{baht(totalCapAll)}</div>
