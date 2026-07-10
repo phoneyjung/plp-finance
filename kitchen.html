@@ -47,6 +47,7 @@ firebase.auth().signInAnonymously().catch(e => console.error('auth', e));
 
 const PIN = '1303';
 const SWEET_LABEL = { none:'ไม่หวาน', less:'หวานน้อย', normal:'หวานปกติ', extra:'หวานมาก' };
+const ICE_LABEL = { less:'น้ำแข็งน้อย', no:'ไม่ใส่น้ำแข็ง', sep:'แยกน้ำแข็ง' };
 
 function cleanUndefined(obj){
   if (Array.isArray(obj)) return obj.map(cleanUndefined);
@@ -282,7 +283,7 @@ function OrderCard({ o, now, onDone, onUndo }){
       {(o.items || []).map((it, i) => (
         <div key={i} style={{display:'flex', justifyContent:'space-between', padding:'6px 10px',
                              background:'var(--bg)', borderRadius:10, marginBottom:6, fontSize:15}}>
-          <div>🧋 {it.name} <span style={{color:'var(--muted)'}}>({SWEET_LABEL[it.sweetness] || it.sweetness}{(it.toppings && it.toppings.length) ? ' + ' + it.toppings.map(t => t.name + (t.n > 1 ? '×' + t.n : '')).join(', ') : ''})</span></div>
+          <div>🧋 {it.name} <span style={{color:'var(--muted)'}}>({SWEET_LABEL[it.sweetness] || it.sweetness}{ICE_LABEL[it.ice] ? ' · ' + ICE_LABEL[it.ice] : ''}{(it.toppings && it.toppings.length) ? ' + ' + it.toppings.map(t => t.name + (t.n > 1 ? '×' + t.n : '')).join(', ') : ''})</span></div>
           <div style={{fontWeight:600}}>×{it.qty}</div>
         </div>
       ))}

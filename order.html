@@ -42,6 +42,12 @@ const { useState, useEffect, useMemo, useRef } = React;
 /* ====== ตั้งค่า ====== */
 const LIFF_ID = '2010531664-XhbuTZLn';   // ← LIFF "Owl Order" (Owl Cha Login channel)
 const SHOP_CLOSE = '21:00';
+const ICES = [
+  { k:'normal', t:'ปกติ' },
+  { k:'less',   t:'น้ำแข็งน้อย' },
+  { k:'no',     t:'ไม่ใส่น้ำแข็ง' },
+  { k:'sep',    t:'แยกน้ำแข็ง' },
+];
 const SWEETS = [
   { k:'none',   t:'ไม่หวาน' },
   { k:'less',   t:'หวานน้อย' },
@@ -142,6 +148,7 @@ function MenuCard({ m, onTap }){
 /* ====== ชีทเลือกตัวเลือกแก้ว ====== */
 function ItemSheet({ m, toppings, onAdd, onClose }){
   const [sweet, setSweet] = useState('normal');
+  const [ice, setIce] = useState('normal');
   const [tops, setTops] = useState([]);   // [{...topping, n:จำนวนช้อน}]
   const MAX1 = t => /cheese/i.test(t.name || '') || /ชีส/.test(t.nameTh || '');
   const [qty, setQty] = useState(1);
@@ -176,6 +183,14 @@ function ItemSheet({ m, toppings, onAdd, onClose }){
           {SWEETS.map(s => (
             <div key={s.k} className={'pill press' + (sweet === s.k ? ' on' : '')}
               onClick={() => setSweet(s.k)}>{s.t}</div>
+          ))}
+        </div>
+
+        <div style={{margin:'16px 0 8px', fontWeight:600, fontSize:15}}>น้ำแข็ง</div>
+        <div style={{display:'flex', gap:8, flexWrap:'wrap'}}>
+          {ICES.map(s => (
+            <div key={s.k} className={'pill press' + (ice === s.k ? ' on' : '')}
+              onClick={() => setIce(s.k)}>{s.t}</div>
           ))}
         </div>
 
@@ -228,7 +243,7 @@ function ItemSheet({ m, toppings, onAdd, onClose }){
         </div>
 
         <button className="btn press" style={{width:'100%', background:'var(--accent)', color:'#fff', fontSize:17}}
-          onClick={() => { onAdd({ m, sweet, tops, qty, unit }); onClose(); }}>
+          onClick={() => { onAdd({ m, sweet, ice, tops, qty, unit }); onClose(); }}>
           ใส่ตะกร้า · {unit * qty} ฿
         </button>
       </div>
@@ -263,7 +278,7 @@ function CartSheet({ cart, setCart, profile, inLine, onDone, onClose }){
       const start = new Date(pickup.getTime() - minPrep * 60000);
       const items = cart.map(c => ({
         menuId: c.m.id, name: c.m.name, nameTh: c.m.nameTh || '',
-        sweetness: c.sweet, toppings: c.tops.map(t => ({ name: t.nameTh || t.name, price: t.price, n: t.n })),
+        sweetness: c.sweet, ice: c.ice || 'normal', toppings: c.tops.map(t => ({ name: t.nameTh || t.name, price: t.price, n: t.n })),
         qty: c.qty, price: c.m.price, unit: c.unit, prepMin: c.m.prepMin || 10
       }));
       const orderNo = await nextOrderNo();
@@ -282,8 +297,9 @@ function CartSheet({ cart, setCart, profile, inLine, onDone, onClose }){
       // ส่งสรุปเข้าแชทร้าน (ในนามลูกค้า) — ลูกค้าเก็บไว้โชว์หน้าร้าน + แอดมินเห็นทันที
       if (inLine && window.liff && liff.isInClient()){
         const sw = { none:'ไม่หวาน', less:'หวานน้อย', normal:'หวานปกติ', extra:'หวานมาก' };
+        const ic = { less:'น้ำแข็งน้อย', no:'ไม่ใส่น้ำแข็ง', sep:'แยกน้ำแข็ง' };
         const lines = items.map(it =>
-          '• ' + (it.nameTh || it.name) + ' (' + (sw[it.sweetness] || '') +
+          '• ' + (it.nameTh || it.name) + ' (' + (sw[it.sweetness] || '') + (ic[it.ice] ? '/' + ic[it.ice] : '') +
           (it.toppings.length ? ' +' + it.toppings.map(t => t.name + (t.n > 1 ? 'x' + t.n : '')).join('/') : '') + ') ×' + it.qty
         ).join('\n');
         try{
@@ -313,7 +329,7 @@ function CartSheet({ cart, setCart, profile, inLine, onDone, onClose }){
               <div style={{flex:1}}>
                 <div style={{fontWeight:600, fontSize:15}}>{c.m.nameTh || c.m.name}</div>
                 <div style={{fontSize:12.5, color:'var(--muted)'}}>
-                  {SWEETS.find(s => s.k === c.sweet).t}
+                  {SWEETS.find(s => s.k === c.sweet).t}{c.ice && c.ice !== 'normal' ? ' · ' + ICES.find(s => s.k === c.ice).t : ''}
                   {c.tops.length > 0 && ' · ' + c.tops.map(t => (t.nameTh || t.name) + (t.n > 1 ? '×' + t.n : '')).join(', ')}
                 </div>
               </div>
