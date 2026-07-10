@@ -178,22 +178,6 @@ function ItemSheet({ m, toppings, onAdd, onClose }){
           <div onClick={onClose} style={{fontSize:22, color:'var(--muted)', cursor:'pointer'}}>✕</div>
         </div>
 
-        <div style={{margin:'16px 0 8px', fontWeight:600, fontSize:15}}>ระดับความหวาน</div>
-        <div style={{display:'flex', gap:8, flexWrap:'wrap'}}>
-          {SWEETS.map(s => (
-            <div key={s.k} className={'pill press' + (sweet === s.k ? ' on' : '')}
-              onClick={() => setSweet(s.k)}>{s.t}</div>
-          ))}
-        </div>
-
-        <div style={{margin:'16px 0 8px', fontWeight:600, fontSize:15}}>น้ำแข็ง</div>
-        <div style={{display:'flex', gap:8, flexWrap:'wrap'}}>
-          {ICES.map(s => (
-            <div key={s.k} className={'pill press' + (ice === s.k ? ' on' : '')}
-              onClick={() => setIce(s.k)}>{s.t}</div>
-          ))}
-        </div>
-
         {toppings.length > 0 && <>
           <div style={{margin:'16px 0 8px', fontWeight:600, fontSize:15}}>ท็อปปิ้ง <span style={{color:'var(--muted)', fontWeight:400, fontSize:13}}>(เลือกได้หลายอย่าง)</span></div>
           {toppings.map(t => {
@@ -229,6 +213,22 @@ function ItemSheet({ m, toppings, onAdd, onClose }){
             );
           })}
         </>}
+
+        <div style={{margin:'16px 0 8px', fontWeight:600, fontSize:15}}>น้ำแข็ง</div>
+        <div style={{display:'flex', gap:8, flexWrap:'wrap'}}>
+          {ICES.map(s => (
+            <div key={s.k} className={'pill press' + (ice === s.k ? ' on' : '')}
+              onClick={() => setIce(s.k)}>{s.t}</div>
+          ))}
+        </div>
+
+        <div style={{margin:'16px 0 8px', fontWeight:600, fontSize:15}}>ระดับความหวาน</div>
+        <div style={{display:'flex', gap:8, flexWrap:'wrap'}}>
+          {SWEETS.map(s => (
+            <div key={s.k} className={'pill press' + (sweet === s.k ? ' on' : '')}
+              onClick={() => setSweet(s.k)}>{s.t}</div>
+          ))}
+        </div>
 
         <div style={{display:'flex', alignItems:'center', gap:14, margin:'16px 0'}}>
           <div style={{fontWeight:600, fontSize:15}}>จำนวน</div>
