@@ -48,6 +48,97 @@ firebase.auth().signInAnonymously().catch(e => console.error('auth', e));
 const PIN = '1303';
 const SWEET_LABEL = { none:'ไม่หวาน', less:'หวานน้อย', normal:'หวานปกติ', extra:'หวานมาก' };
 
+const CATEGORIES = ['ขายดี','คลาสสิค','เฟเวอริต','นมสด','ช็อคโกอาวล์','โซดา','พรีเมียมฟรุต','ท็อปปิ้ง'];
+
+const SEED_MENUS = [
+  {cat:"ขายดี", name:"Thai Tea Cheese", nameTh:"ชาไทยชีส", price:49},
+  {cat:"ขายดี", name:"Shine Muscat Tea Cheese", nameTh:"ชาองุ่นไชน์มัสแคทชีส", price:54},
+  {cat:"ขายดี", name:"Double Choc Cheese Crunch", nameTh:"ดับเบิ้ลช็อคชีสครันช์", price:64},
+  {cat:"ขายดี", name:"Peach Tea Cheese", nameTh:"ชาพีชชีส", price:64},
+  {cat:"ขายดี", name:"Coconut Shizuoka Matcha Latte", nameTh:"มัทฉะลาเต้มะพร้าว", price:49},
+  {cat:"ขายดี", name:"Shizuoka Matcha Latte", nameTh:"มัทฉะลาเต้", price:49},
+  {cat:"ขายดี", name:"Brown Sugar Milk Tea", nameTh:"ชานมไข่มุกบราวน์ชูการ์", price:44},
+  {cat:"ขายดี", name:"Coconut Shizuoka Matcha Latte Cheese", nameTh:"มัทฉะลาเต้มะพร้าวชีส", price:69},
+  {cat:"ขายดี", name:"Boba Choco Mint", nameTh:"นมสดมินท์ช็อคโกไข่มุก", price:54},
+  {cat:"ขายดี", name:"Jasmine Green Tea Cheese", nameTh:"ชาเขียวมะลิชีส", price:39},
+  {cat:"ขายดี", name:"Fresh Milk Brown Sugar", nameTh:"นมสดบราวน์ชูการ์ไข่มุก", price:54},
+  {cat:"คลาสสิค", name:"Jasmine Green Tea", nameTh:"ชาเขียวมะลิ", price:19},
+  {cat:"คลาสสิค", name:"Taiwan Milk Tea", nameTh:"ชานมไต้หวัน", price:24},
+  {cat:"คลาสสิค", name:"Apple Tea", nameTh:"ชาแอปเปิ้ล", price:24},
+  {cat:"คลาสสิค", name:"Lemon Tea", nameTh:"ชามะนาว", price:24},
+  {cat:"คลาสสิค", name:"Strawberry Tea", nameTh:"ชาสตรอว์เบอร์รี่", price:24},
+  {cat:"คลาสสิค", name:"Blueberry Tea", nameTh:"ชาบลูเบอร์รี่", price:24},
+  {cat:"คลาสสิค", name:"Passion Fruit Tea", nameTh:"ชาเสาวรส", price:24},
+  {cat:"คลาสสิค", name:"Lychee Tea", nameTh:"ชาลิ้นจี่", price:24},
+  {cat:"เฟเวอริต", name:"Caramel Milk Tea", nameTh:"ชานมคาราเมล", price:29},
+  {cat:"เฟเวอริต", name:"Mint Milk Tea", nameTh:"ชานมมินท์", price:29},
+  {cat:"เฟเวอริต", name:"Thai Tea", nameTh:"ชาไทย", price:29},
+  {cat:"เฟเวอริต", name:"Cocoa Milk Tea", nameTh:"ชานมโกโก้", price:29},
+  {cat:"เฟเวอริต", name:"Milo Milk Tea", nameTh:"ชานมไมโล", price:29},
+  {cat:"เฟเวอริต", name:"Coffee Milk Tea", nameTh:"ชานมกาแฟ", price:29},
+  {cat:"เฟเวอริต", name:"Green Milk Tea", nameTh:"ชาเขียวนม", price:29},
+  {cat:"นมสด", name:"Fresh Milk", nameTh:"นมสด", price:34},
+  {cat:"นมสด", name:"Double Choc", nameTh:"ดับเบิ้ลช็อค", price:44},
+  {cat:"นมสด", name:"Nom Chompoo", nameTh:"นมสดชมพู", price:34},
+  {cat:"นมสด", name:"Cocoa Fresh Milk", nameTh:"นมสดโกโก้", price:39},
+  {cat:"นมสด", name:"Mint Fresh Milk", nameTh:"นมสดมินท์", price:39},
+  {cat:"นมสด", name:"Coffee Fresh Milk", nameTh:"นมสดกาแฟ", price:39},
+  {cat:"นมสด", name:"Caramel Fresh Milk", nameTh:"นมสดคาราเมล", price:39},
+  {cat:"นมสด", name:"Green Tea Fresh Milk", nameTh:"นมสดชาเขียว", price:39},
+  {cat:"นมสด", name:"Milo Fresh Milk", nameTh:"นมสดไมโล", price:39},
+  {cat:"ช็อคโกอาวล์", name:"Choco Owl Caramel", nameTh:"นมสดคาราเมลช็อคโก", price:49},
+  {cat:"ช็อคโกอาวล์", name:"Choco Owl Mint", nameTh:"นมสดมินท์ช็อคโก", price:49},
+  {cat:"ช็อคโกอาวล์", name:"Choco Owl Thai Tea", nameTh:"ชาไทยช็อคโก", price:39},
+  {cat:"ช็อคโกอาวล์", name:"Fruity Milk Apple", nameTh:"ฟรุตตี้มิลค์แอปเปิ้ล", price:44},
+  {cat:"ช็อคโกอาวล์", name:"Fruity Milk Strawberry", nameTh:"ฟรุตตี้มิลค์สตรอว์เบอร์รี่", price:44},
+  {cat:"โซดา", name:"Strawberry Soda", nameTh:"สตรอว์เบอร์รี่โซดา", price:24},
+  {cat:"โซดา", name:"Apple Soda", nameTh:"แอปเปิ้ลโซดา", price:24},
+  {cat:"โซดา", name:"Lychee Soda", nameTh:"ลิ้นจี่โซดา", price:24},
+  {cat:"โซดา", name:"Passion Fruit Soda", nameTh:"เสาวรสโซดา", price:24},
+  {cat:"โซดา", name:"Lemon Soda", nameTh:"มะนาวโซดา", price:24},
+  {cat:"โซดา", name:"Blueberry Soda", nameTh:"บลูเบอร์รี่โซดา", price:24},
+  {cat:"โซดา", name:"Sala Soda", nameTh:"สละโซดา", price:24},
+  {cat:"โซดา", name:"Sala Lemon Soda", nameTh:"สละมะนาวโซดา", price:29},
+  {cat:"พรีเมียมฟรุต", name:"Shine Muscat Tea", nameTh:"ชาองุ่นไชน์มัสแคท", price:34},
+  {cat:"พรีเมียมฟรุต", name:"Peach Tea", nameTh:"ชาพีช", price:44},
+  {cat:"พรีเมียมฟรุต", name:"Peach Orange Tea", nameTh:"ชาพีชส้ม", price:44},
+  {cat:"พรีเมียมฟรุต", name:"Peach Melon Tea", nameTh:"ชาพีชเมลอน", price:44},
+  {cat:"พรีเมียมฟรุต", name:"Peach Soda", nameTh:"พีชโซดา", price:44},
+  {cat:"พรีเมียมฟรุต", name:"Peach Melon Soda", nameTh:"พีชเมลอนโซดา", price:44},
+  {cat:"พรีเมียมฟรุต", name:"Peach Orange Soda", nameTh:"พีชส้มโซดา", price:44},
+];
+const SEED_TOPPINGS = [
+  {name:"Cheese Crunch", nameTh:"ชีสครันช์", price:25},
+  {name:"Cheese", nameTh:"ชีส", price:20},
+  {name:"Boba", nameTh:"ไข่มุก", price:5},
+  {name:"Konjac", nameTh:"ไข่มุกบุก", price:10},
+  {name:"Crystal", nameTh:"คริสตัลใส", price:10},
+  {name:"Brown Sugar Crystal", nameTh:"คริสตัลบราวน์ชูการ์", price:10},
+  {name:"Rainbow Jelly", nameTh:"เรนโบว์เจลลี่", price:5},
+];
+
+async function importSeed(){
+  const now = new Date().toISOString();
+  let batch = db.batch(); let n = 0;
+  const commit = async () => { await batch.commit(); batch = db.batch(); n = 0; };
+  for (const m of SEED_MENUS){
+    batch.set(db.collection('owlMenu').doc(), cleanUndefined({
+      name: m.name, nameTh: m.nameTh, desc: m.nameTh, category: m.cat,
+      price: m.price, prepMin: 10, photo: '', active: true, createdAt: now, updatedAt: now
+    }));
+    if (++n >= 400) await commit();
+  }
+  for (const t of SEED_TOPPINGS){
+    batch.set(db.collection('owlMenu').doc(), cleanUndefined({
+      name: t.name, nameTh: t.nameTh, desc: t.nameTh, category: 'ท็อปปิ้ง',
+      price: t.price, prepMin: 0, photo: '', active: true, createdAt: now, updatedAt: now
+    }));
+    if (++n >= 400) await commit();
+  }
+  if (n) await batch.commit();
+}
+
+
 function cleanUndefined(obj){
   if (Array.isArray(obj)) return obj.map(cleanUndefined);
   if (obj && typeof obj === 'object'){
@@ -238,6 +329,7 @@ function OrdersTab(){
 /* ================= ฟอร์มเพิ่ม/แก้เมนู ================= */
 function MenuForm({ init, onSaved, onCancel }){
   const [name, setName] = useState(init ? init.name : '');
+  const [category, setCategory] = useState(init ? (init.category || CATEGORIES[0]) : CATEGORIES[0]);
   const [desc, setDesc] = useState(init ? init.desc : '');
   const [price, setPrice] = useState(init ? String(init.price) : '');
   const [prepMin, setPrepMin] = useState(init ? String(init.prepMin) : '10');
@@ -258,6 +350,7 @@ function MenuForm({ init, onSaved, onCancel }){
     setBusy(true);
     const data = cleanUndefined({
       name: name.trim(),
+      category,
       desc: desc.trim(),
       price: Number(price),
       prepMin: Number(prepMin),
@@ -285,6 +378,9 @@ function MenuForm({ init, onSaved, onCancel }){
           <input type="file" accept="image/*" onChange={pick} style={{display:'none'}} />
         </label>
         <div style={{flex:1}}>
+          <select value={category} onChange={e => setCategory(e.target.value)} style={{marginBottom:8}}>
+            {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
           <input placeholder="ชื่อเมนู เช่น Shine Muscat" value={name} onChange={e => setName(e.target.value)} style={{marginBottom:8}} />
           <input placeholder="ส่วนผสม เช่น ชาองุ่น + ไข่มุก" value={desc} onChange={e => setDesc(e.target.value)} />
         </div>
@@ -313,11 +409,18 @@ function MenuTab(){
   const [menus, setMenus] = useState([]);
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState(null);
+  const [seeding, setSeeding] = useState(false);
+  const runSeed = async () => {
+    if (!confirm('นำเข้าเมนูทั้งบอร์ด 62 รายการ? (ทำครั้งเดียว)')) return;
+    setSeeding(true);
+    try{ await importSeed(); }catch(e){ alert('นำเข้าไม่สำเร็จ: ' + e.message); }
+    setSeeding(false);
+  };
 
   useEffect(() => {
     const unsub = db.collection('owlMenu').onSnapshot(snap => {
       const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      list.sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''));
+      list.sort((a, b) => (a.price || 0) - (b.price || 0) || (a.name || '').localeCompare(b.name || ''));
       setMenus(list);
     }, e => console.error('menu', e));
     return () => unsub();
@@ -331,9 +434,17 @@ function MenuTab(){
       {!adding && !editing &&
         <button className="btn press" onClick={() => setAdding(true)}
           style={{width:'100%', background:'var(--brand)', color:'#fff', marginBottom:14, fontSize:16}}>➕ เพิ่มเมนูใหม่</button>}
+      {!adding && !editing && menus.length === 0 && !seeding &&
+        <button className="btn press" onClick={runSeed}
+          style={{width:'100%', background:'var(--accent)', color:'#fff', marginBottom:14, fontSize:15}}>
+          📥 นำเข้าเมนูจากบอร์ดร้าน (55 เมนู + 7 ท็อปปิ้ง) — กดครั้งเดียว</button>}
+      {seeding && <div style={{textAlign:'center', color:'var(--muted)', marginBottom:14}}>กำลังนำเข้าเมนู…</div>}
       {adding && <MenuForm onSaved={() => setAdding(false)} onCancel={() => setAdding(false)} />}
       {editing && <MenuForm init={editing} onSaved={() => setEditing(null)} onCancel={() => setEditing(null)} />}
-      {menus.map(m => (
+      {CATEGORIES.filter(c => menus.some(m => (m.category || 'อื่นๆ') === c)).map(c => (
+        <div key={c}>
+          <div style={{fontWeight:700, color:'var(--brand)', margin:'14px 0 8px', fontSize:15}}>— {c} —</div>
+          {menus.filter(m => (m.category || 'อื่นๆ') === c).map(m => (
         <div key={m.id} style={{background:'var(--card)', borderRadius:16, padding:12, marginBottom:10,
                                 display:'flex', gap:12, alignItems:'center', opacity:m.active ? 1 : .5,
                                 border:'1.5px solid var(--line)'}}>
@@ -342,7 +453,7 @@ function MenuTab(){
               <div style={{textAlign:'center', lineHeight:'64px', fontSize:22}}>🧋</div>}
           </div>
           <div style={{flex:1, minWidth:0}}>
-            <div style={{fontWeight:700}}>{m.name} · {m.price}.-</div>
+            <div style={{fontWeight:700}}>{m.name}{m.nameTh ? ' · ' + m.nameTh : ''} · {m.price}.-</div>
             <div style={{fontSize:13, color:'var(--muted)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis'}}>
               {m.desc || '—'} · ทำก่อนทาน ≤{m.prepMin} นาที
             </div>
@@ -353,6 +464,8 @@ function MenuTab(){
               <a onClick={() => remove(m)} style={{color:'var(--hot)', cursor:'pointer'}}>ลบ</a>
             </div>
           </div>
+        </div>
+      ))}
         </div>
       ))}
       {menus.length === 0 && !adding &&
