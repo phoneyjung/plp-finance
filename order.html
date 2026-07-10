@@ -476,10 +476,10 @@ function Done({ info }){
           </div>
           <button className="btn press" onClick={saveQr}
             style={{marginTop:10, background:'var(--ink)', color:'#fff', fontSize:14.5, width:'100%'}}>
-            💾 เซฟรูป QR ไปสแกนในแอปธนาคาร
+            🖼 เปิด QR เต็มจอ · แคปไปสแกน
           </button>
           <div style={{fontSize:12, color:'var(--muted)', marginTop:8, lineHeight:1.6, textAlign:'left'}}>
-            💡 โอนจากมือถือเครื่องนี้: แคปหน้าจอนี้ → เปิดแอปธนาคาร → สแกน → เลือกรูปจากคลังภาพ (หรือกดปุ่มเซฟรูป QR ด้านบน)
+            💡 กดปุ่มด้านบน → แคปหน้าจอ → เปิดแอปธนาคาร → สแกน → เลือกรูปที่แคป ยอดจะขึ้นให้อัตโนมัติ
           </div>
         </div>
         <div style={{fontSize:13, color:'var(--muted)'}}>📍 หน้าหอเพชรรัตน์ 4 ตรงข้ามโรงอาหารเพชรรัตน์</div>
@@ -488,10 +488,12 @@ function Done({ info }){
             style={{position:'fixed', inset:0, background:'rgba(20,18,14,.93)', zIndex:99,
                     display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:24}}>
             <img src={qrFull} style={{width:'78vw', maxWidth:330, background:'#fff', padding:14, borderRadius:16}} />
-            <div style={{color:'#fff', fontSize:15.5, marginTop:16, textAlign:'center', lineHeight:1.7}}>
-              👆 <b>กดค้างที่รูป QR</b> แล้วเลือก<br/>"บันทึกรูปภาพ / Save image"
+            <div style={{color:'#fff', fontSize:16, marginTop:18, textAlign:'center', lineHeight:1.8}}>
+              📸 <b>แคปหน้าจอตอนนี้เลย</b><br/>
+              แล้วเปิดแอปธนาคาร → สแกน →<br/>
+              เลือกรูปที่แคปจากคลังภาพ 💸
             </div>
-            <div style={{color:'rgba(255,255,255,.55)', fontSize:12.5, marginTop:14}}>แตะพื้นที่ว่างเพื่อปิด</div>
+            <div style={{color:'rgba(255,255,255,.55)', fontSize:12.5, marginTop:16}}>แตะพื้นที่ว่างเพื่อปิด</div>
           </div>}
         {(info.sendStatus === 'ok' || info.sendStatus === 'push')
           ? <div style={{marginTop:10, fontSize:13, color:'var(--accent)', fontWeight:600}}>✅ ส่งสรุปออเดอร์เข้าแชทแล้ว</div>
