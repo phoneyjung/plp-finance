@@ -60,7 +60,7 @@ const SWEETS = [
   { k:'normal', t:'หวานปกติ' },
   { k:'extra',  t:'หวานมาก' },
 ];
-const CATEGORIES = ['ขายดี','คลาสสิค','เฟเวอริต','นมสด','ช็อคโกอาวล์','โซดา','พรีเมียมฟรุต'];
+const CATEGORIES = ['ขายดี','คลาสสิค','เฟเวอริต','นมสด','ช็อคโกอาวล์','โซดา','พรีเมียมฟรุต','ท็อปปิ้ง'];
 const POSTERS = [
   { f:'owl-img/poster-cover.jpg', t:"Owl Cha", menu:'', cat:'ขายดี' },
   { f:'owl-img/poster-matcha.jpg', t:"Matcha Shizuoka", menu:'', cat:'ขายดี' },
@@ -82,7 +82,7 @@ const POSTERS = [
   { f:'owl-img/poster-shinemuscat.jpg', t:"ไชน์มัสแคท", menu:'Shine Muscat Tea', cat:'' },
   { f:'owl-img/poster-premiumpeach.jpg', t:"พรีเมียมพีช", menu:'', cat:'พรีเมียมฟรุต' },
   { f:'owl-img/poster-peach.jpg', t:"พีช", menu:'Peach Tea', cat:'' },
-  { f:'owl-img/poster-topping-new.jpg', t:"ท็อปปิ้ง", menu:'', cat:'' },
+  { f:'owl-img/poster-topping-new.jpg', t:"ท็อปปิ้ง", menu:'', cat:'ท็อปปิ้ง' },
 ];
 const CAT_POSTER = {
   'ขายดี':'owl-img/poster-thaiteacheese.jpg',
@@ -92,13 +92,14 @@ const CAT_POSTER = {
   'ช็อคโกอาวล์':'owl-img/poster-chocoowl.jpg',
   'โซดา':'owl-img/poster-soda.jpg',
   'พรีเมียมฟรุต':'owl-img/poster-premiumpeach.jpg',
+  'ท็อปปิ้ง':'owl-img/poster-topping-new.jpg',
 };
 // แบนเนอร์บนสุด: กดแล้วเปิดชีทสั่งเมนู (menu = ชื่ออังกฤษ) หรือสลับหมวด (cat)
 const BANNERS = [
   { img:'owl-img/banner-1.jpg', menu:'', cat:'ขายดี' },
-  { img:'owl-img/banner-2.jpg', menu:'', cat:'นมสด' },
-  { img:'owl-img/banner-3.jpg', menu:'', cat:'ช็อคโกอาวล์' },
-  { img:'owl-img/banner-4.jpg', menu:'', cat:'โซดา' },
+  { img:'owl-img/banner-2.jpg', menu:'', cat:'เฟเวอริต' },
+  { img:'owl-img/banner-3.jpg', menu:'', cat:'ขายดี' },
+  { img:'owl-img/banner-4.jpg', menu:'', cat:'พรีเมียมฟรุต' },
   { img:'owl-img/banner-5.jpg', menu:'', cat:'พรีเมียมฟรุต' },
 ];
 
@@ -216,6 +217,7 @@ function MenuCard({ m, onTap }){
 
 /* ====== ชีทเลือกตัวเลือกแก้ว ====== */
 function ItemSheet({ m, toppings, onAdd, onClose }){
+  const isTop = m.category === 'ท็อปปิ้ง';
   const [sweet, setSweet] = useState('normal');
   const [ice, setIce] = useState('normal');
   const [tops, setTops] = useState([]);   // [{...topping, n:จำนวนช้อน}]
@@ -247,7 +249,7 @@ function ItemSheet({ m, toppings, onAdd, onClose }){
           <div onClick={onClose} style={{fontSize:22, color:'var(--muted)', cursor:'pointer'}}>✕</div>
         </div>
 
-        {toppings.length > 0 && <>
+        {!isTop && toppings.length > 0 && <>
           <div style={{margin:'16px 0 8px', fontWeight:600, fontSize:15}}>ท็อปปิ้ง <span style={{color:'var(--muted)', fontWeight:400, fontSize:13}}>(เลือกได้หลายอย่าง)</span></div>
           {toppings.map(t => {
             const cur = tops.find(x => x.id === t.id);
@@ -283,6 +285,7 @@ function ItemSheet({ m, toppings, onAdd, onClose }){
           })}
         </>}
 
+        {!isTop && <>
         <div style={{margin:'16px 0 8px', fontWeight:600, fontSize:15}}>น้ำแข็ง</div>
         <div style={{display:'flex', gap:8, flexWrap:'wrap'}}>
           {ICES.map(s => (
@@ -298,6 +301,7 @@ function ItemSheet({ m, toppings, onAdd, onClose }){
               onClick={() => setSweet(s.k)}>{s.t}</div>
           ))}
         </div>
+        </>}
 
         <div style={{display:'flex', alignItems:'center', gap:14, margin:'16px 0'}}>
           <div style={{fontWeight:600, fontSize:15}}>จำนวน</div>
@@ -312,7 +316,7 @@ function ItemSheet({ m, toppings, onAdd, onClose }){
         </div>
 
         <button className="btn press" style={{width:'100%', background:'var(--accent)', color:'#fff', fontSize:17}}
-          onClick={() => { onAdd({ m, sweet, ice, tops, qty, unit }); onClose(); }}>
+          onClick={() => { onAdd(isTop ? { m, sweet:'', ice:'', tops:[], qty, unit } : { m, sweet, ice, tops, qty, unit }); onClose(); }}>
           ใส่ตะกร้า · {unit * qty} ฿
         </button>
       </div>
@@ -351,7 +355,7 @@ function CartSheet({ cart, setCart, profile, inLine, onDone, onClose }){
       const start = new Date(pickup.getTime() - minPrep * 60000);
       const items = cart.map(c => ({
         menuId: c.m.id, name: c.m.name, nameTh: c.m.nameTh || '',
-        sweetness: c.sweet, ice: c.ice || 'normal', toppings: c.tops.map(t => ({ name: t.nameTh || t.name, price: t.price, n: t.n })),
+        sweetness: c.sweet, ice: (c.ice !== undefined ? c.ice : 'normal'), toppings: c.tops.map(t => ({ name: t.nameTh || t.name, price: t.price, n: t.n })),
         qty: c.qty, price: c.m.price, unit: c.unit, prepMin: c.m.prepMin || 10
       }));
       const orderNo = await nextOrderNo();
@@ -371,10 +375,12 @@ function CartSheet({ cart, setCart, profile, inLine, onDone, onClose }){
       // ส่งสรุปเข้าแชทร้าน (ในนามลูกค้า) — ลูกค้าเก็บไว้โชว์หน้าร้าน + แอดมินเห็นทันที
       const sw = { none:'ไม่หวาน', less:'หวานน้อย', normal:'หวานปกติ', extra:'หวานมาก' };
       const ic = { less:'น้ำแข็งน้อย', no:'ไม่ใส่น้ำแข็ง', sep:'แยกน้ำแข็ง' };
-      const lines = items.map(it =>
-        '• ' + (it.nameTh || it.name) + ' (' + (sw[it.sweetness] || '') + (ic[it.ice] ? '/' + ic[it.ice] : '') +
-        (it.toppings.length ? ' +' + it.toppings.map(t => t.name + (t.n > 1 ? 'x' + t.n : '')).join('/') : '') + ') ×' + it.qty
-      ).join('\n');
+      const lines = items.map(it => {
+        const parts = [sw[it.sweetness], ic[it.ice]].filter(Boolean).join('/');
+        const tp = it.toppings.length ? ' +' + it.toppings.map(t => t.name + (t.n > 1 ? 'x' + t.n : '')).join('/') : '';
+        const opt = (parts || tp) ? ' (' + parts + tp + ')' : '';
+        return '• ' + (it.nameTh || it.name) + opt + ' ×' + it.qty;
+      }).join('\n');
       const summaryText = '🦉 สั่งล่วงหน้า Owl Cha\n\n' + lines +
         '\nรวม ' + total + ' บาท\n\n' +
         '----------------------------\n' +
@@ -421,7 +427,7 @@ function CartSheet({ cart, setCart, profile, inLine, onDone, onClose }){
               <div style={{flex:1}}>
                 <div style={{fontWeight:600, fontSize:15}}>{c.m.nameTh || c.m.name}</div>
                 <div style={{fontSize:12.5, color:'var(--muted)'}}>
-                  {SWEETS.find(s => s.k === c.sweet).t}{c.ice && c.ice !== 'normal' ? ' · ' + ICES.find(s => s.k === c.ice).t : ''}
+                  {c.sweet ? SWEETS.find(s => s.k === c.sweet).t : 'ท็อปปิ้ง'}{c.ice && c.ice !== 'normal' ? ' · ' + ICES.find(s => s.k === c.ice).t : ''}
                   {c.tops.length > 0 && ' · ' + c.tops.map(t => (t.nameTh || t.name) + (t.n > 1 ? '×' + t.n : '')).join(', ')}
                 </div>
               </div>
@@ -665,8 +671,8 @@ function App(){
   const drinks = (menus || []).filter(m => m.category !== 'ท็อปปิ้ง');
   const toppings = (menus || []).filter(m => m.category === 'ท็อปปิ้ง')
                                 .sort((a, b) => ((a.sortOrder != null ? a.sortOrder : 1e9) - (b.sortOrder != null ? b.sortOrder : 1e9)) || (a.price - b.price));
-  const cats = CATEGORIES.filter(c => drinks.some(m => m.category === c));
-  const shown = drinks.filter(m => m.category === cat)
+  const cats = CATEGORIES.filter(c => (menus || []).some(m => m.category === c));
+  const shown = (menus || []).filter(m => m.category === cat)
                       .sort((a, b) => ((a.sortOrder != null ? a.sortOrder : 1e9) - (b.sortOrder != null ? b.sortOrder : 1e9)) || (a.price - b.price) || a.name.localeCompare(b.name));
   const cupCount = cart.reduce((s, c) => s + c.qty, 0);
   const total = cart.reduce((s, c) => s + c.unit * c.qty, 0);
