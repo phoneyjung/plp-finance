@@ -436,7 +436,7 @@ function MenuTab(){
   useEffect(() => {
     const unsub = db.collection('owlMenu').onSnapshot(snap => {
       const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      list.sort((a, b) => (a.price || 0) - (b.price || 0) || (a.name || '').localeCompare(b.name || ''));
+      list.sort((a, b) => ((a.sortOrder != null ? a.sortOrder : 1e9) - (b.sortOrder != null ? b.sortOrder : 1e9)) || (a.price || 0) - (b.price || 0) || (a.name || '').localeCompare(b.name || ''));
       setMenus(list);
     }, e => console.error('menu', e));
     return () => unsub();
@@ -444,6 +444,21 @@ function MenuTab(){
 
   const toggle = m => db.collection('owlMenu').doc(m.id).update({ active: !m.active });
   const remove = m => { if (confirm('ลบเมนู "' + m.name + '" ?')) db.collection('owlMenu').doc(m.id).delete(); };
+  const move = async (m, dir) => {
+    const catName = m.category || 'อื่นๆ';
+    const same = menus.filter(x => (x.category || 'อื่นๆ') === catName);
+    const idx = same.findIndex(x => x.id === m.id);
+    const j = idx + dir;
+    if (j < 0 || j >= same.length) return;
+    const batch = db.batch();
+    same.forEach((x, i) => {
+      let ord = i * 10;
+      if (i === idx) ord = j * 10;
+      else if (i === j) ord = idx * 10;
+      batch.update(db.collection('owlMenu').doc(x.id), { sortOrder: ord });
+    });
+    try{ await batch.commit(); }catch(e){ alert('เลื่อนไม่สำเร็จ: ' + e.message); }
+  };
 
   return (
     <div>
@@ -473,7 +488,9 @@ function MenuTab(){
             <div style={{fontSize:13, color:'var(--muted)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis'}}>
               {m.desc || '—'} · ทำก่อนทาน ≤{m.prepMin} นาที
             </div>
-            <div style={{display:'flex', gap:14, marginTop:4, fontSize:14}}>
+            <div style={{display:'flex', gap:14, marginTop:4, fontSize:14, alignItems:'center'}}>
+              <a className="press" onClick={() => move(m, -1)} style={{cursor:'pointer', border:'1px solid var(--line)', borderRadius:8, padding:'0 8px', lineHeight:'22px'}}>▲</a>
+              <a className="press" onClick={() => move(m, 1)} style={{cursor:'pointer', border:'1px solid var(--line)', borderRadius:8, padding:'0 8px', lineHeight:'22px'}}>▼</a>
               <a onClick={() => setEditing(m)} style={{color:'var(--blue)', cursor:'pointer'}}>แก้ไข</a>
               <a onClick={() => toggle(m)} style={{color:m.active ? 'var(--warn)' : 'var(--ok)', cursor:'pointer'}}>
                 {m.active ? 'พักขาย' : 'เปิดขาย'}</a>

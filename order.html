@@ -366,10 +366,10 @@ function App(){
 
   const drinks = (menus || []).filter(m => m.category !== 'ท็อปปิ้ง');
   const toppings = (menus || []).filter(m => m.category === 'ท็อปปิ้ง')
-                                .sort((a, b) => (a.price - b.price));
+                                .sort((a, b) => ((a.sortOrder != null ? a.sortOrder : 1e9) - (b.sortOrder != null ? b.sortOrder : 1e9)) || (a.price - b.price));
   const cats = CATEGORIES.filter(c => drinks.some(m => m.category === c));
   const shown = drinks.filter(m => m.category === cat)
-                      .sort((a, b) => (a.price - b.price) || a.name.localeCompare(b.name));
+                      .sort((a, b) => ((a.sortOrder != null ? a.sortOrder : 1e9) - (b.sortOrder != null ? b.sortOrder : 1e9)) || (a.price - b.price) || a.name.localeCompare(b.name));
   const cupCount = cart.reduce((s, c) => s + c.qty, 0);
   const total = cart.reduce((s, c) => s + c.unit * c.qty, 0);
 
