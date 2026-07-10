@@ -45,7 +45,6 @@ const LIFF_ID = '2010531664-XhbuTZLn';   // ← LIFF "Owl Order" (Owl Cha Login 
 const NOTIFY_URL = 'PASTE_NOTIFY_URL';    // ← Apps Script "Owl Notify" (แผนสำรองส่งสรุป)
 const SHOP_PP_ID = '004999245446611';     // PromptPay ID ร้าน (K+ รับได้ทุกธนาคาร)
 const SHOP_PP_NAME = 'น.ส. ณัฐฏฒฑากรณ์ ส. (K+)';
-const SHOP_QR_IMG = 'https://phoneyjung.github.io/plp-finance/owl-img/qr-shop.jpg';
 const TEST_MODE = /test=1/.test(decodeURIComponent(window.location.search + window.location.hash));
 const SHOP_OPEN = '07:00';
 const SHOP_CLOSE = '21:00';
@@ -338,16 +337,11 @@ function CartSheet({ cart, setCart, profile, inLine, onDone, onClose }){
       ).join('\n');
       const summaryText = '🦉 สั่งล่วงหน้า Owl Cha\n' + lines +
         '\nรวม ' + total + ' บาท\n👤 ' + name.trim() + ' 📞 ' + ph +
-        '\n🕐 มารับ ' + slot + ' น.\n📌 หมายเลขออเดอร์ ' + orderNo +
-        '\n\n💸 กรุณาโอน ' + total + ' บาท ตาม QR ที่ส่งให้ (บัญชี ' + SHOP_PP_NAME + ')' +
-        '\nแล้วส่งสลิปในแชทนี้ ร้านจะเริ่มทำหลังยืนยันยอดครับ';
+        '\n🕐 มารับ ' + slot + ' น.\n📌 หมายเลขออเดอร์ ' + orderNo;
       let sendStatus = 'notline';
       if (inLine && window.liff && liff.isInClient()){
         try{
-          await liff.sendMessages([
-            { type:'text', text: summaryText },
-            { type:'image', originalContentUrl: SHOP_QR_IMG, previewImageUrl: SHOP_QR_IMG }
-          ]);
+          await liff.sendMessages([{ type:'text', text: summaryText }]);
           sendStatus = 'ok';
         }catch(e){
           sendStatus = (e && (e.message || e.code)) || 'unknown';
@@ -488,7 +482,7 @@ function Done({ info }){
             💾 เซฟรูป QR ไปสแกนในแอปธนาคาร
           </button>
           <div style={{fontSize:12, color:'var(--muted)', marginTop:8, lineHeight:1.6, textAlign:'left'}}>
-            💡 โอนจากมือถือเครื่องนี้: แคปหน้าจอนี้ → เปิดแอปธนาคาร → สแกน → เลือกรูปจากคลังภาพ หรือใช้รูป QR ที่ส่งเข้าแชท Owl Cha แล้วใส่ยอดเอง
+            💡 โอนจากมือถือเครื่องนี้: แคปหน้าจอนี้ → เปิดแอปธนาคาร → สแกน → เลือกรูปจากคลังภาพ (หรือกดปุ่มเซฟรูป QR ด้านบน)
           </div>
         </div>
         <div style={{fontSize:13, color:'var(--muted)'}}>📍 หน้าหอเพชรรัตน์ 4 ตรงข้ามโรงอาหารเพชรรัตน์</div>
