@@ -40,7 +40,7 @@
 const { useState, useEffect, useMemo, useRef } = React;
 
 /* ====== ตั้งค่า ====== */
-const LIFF_ID = 'PASTE_LIFF_ID_HERE';   // ← LIFF "Owl Order" (Owl Cha Login channel)
+const LIFF_ID = '2010531664-XhbuTZLn';   // ← LIFF "Owl Order" (Owl Cha Login channel)
 const SHOP_CLOSE = '21:00';
 const SWEETS = [
   { k:'none',   t:'ไม่หวาน' },
@@ -74,6 +74,18 @@ function cleanUndefined(obj){
 function todayKey(){
   const x = new Date();
   return x.getFullYear() + '-' + String(x.getMonth()+1).padStart(2,'0') + '-' + String(x.getDate()).padStart(2,'0');
+}
+async function nextOrderNo(){
+  const ref = db.collection('settings').doc('owlOrderCounter');
+  const day = todayKey();
+  const n = await db.runTransaction(async tx => {
+    const snap = await tx.get(ref);
+    const d = snap.exists ? snap.data() : {};
+    const next = (d.day === day ? (d.seq || 0) : 0) + 1;
+    tx.set(ref, { day, seq: next });
+    return next;
+  });
+  return 'PE' + String(n).padStart(3, '0');
 }
 function slotList(){
   const now = new Date();
@@ -230,7 +242,9 @@ function CartSheet({ cart, setCart, profile, inLine, onDone, onClose }){
         sweetness: c.sweet, toppings: c.tops.map(t => ({ name: t.nameTh || t.name, price: t.price })),
         qty: c.qty, price: c.m.price, unit: c.unit, prepMin: c.m.prepMin || 10
       }));
+      const orderNo = await nextOrderNo();
       const doc = cleanUndefined({
+        orderNo,
         status: 'new', dateKey: todayKey(),
         createdAt: new Date().toISOString(),
         pickupAt: pickup.toISOString(), startAt: start.toISOString(),
@@ -252,10 +266,10 @@ function CartSheet({ cart, setCart, profile, inLine, onDone, onClose }){
           await liff.sendMessages([{ type:'text',
             text:'🦉 สั่งล่วงหน้า Owl Cha\n' + lines +
                  '\nรวม ' + total + ' บาท\n👤 ' + name.trim() + ' 📞 ' + ph +
-                 '\n🕐 มารับ ' + slot + ' น.\n(หมายเลขออเดอร์ ' + ref.id.slice(-5).toUpperCase() + ')' }]);
+                 '\n🕐 มารับ ' + slot + ' น.\n📌 หมายเลขออเดอร์ ' + orderNo }]);
         }catch(e){ console.warn('sendMessages', e); }
       }
-      onDone({ id: ref.id, slot, total, name: name.trim() });
+      onDone({ id: ref.id, orderNo, slot, total, name: name.trim() });
     }catch(e){ alert('สั่งไม่สำเร็จ: ' + e.message); }
     setBusy(false);
   };
@@ -331,7 +345,8 @@ function Done({ info }){
                    textAlign:'center', border:'1px solid var(--line)'}}>
         <div style={{fontSize:52}}>🦉</div>
         <div style={{fontWeight:700, fontSize:21, margin:'6px 0 2px'}}>รับออเดอร์แล้ว!</div>
-        <div style={{color:'var(--muted)', fontSize:14}}>หมายเลข {info.id.slice(-5).toUpperCase()} · คุณ{info.name}</div>
+        <div style={{fontWeight:700, fontSize:26, color:'var(--accent)', margin:'2px 0'}}>{info.orderNo}</div>
+        <div style={{color:'var(--muted)', fontSize:14}}>คุณ{info.name}</div>
         <div style={{background:'var(--soft)', borderRadius:14, padding:14, margin:'16px 0', fontSize:15, lineHeight:1.8, textAlign:'left'}}>
           🕐 มารับเวลา <b>{info.slot} น.</b> · รวม <b>{info.total} ฿</b><br/>
           <b>ถึงหน้าร้านแล้ว:</b><br/>
