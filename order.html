@@ -61,6 +61,49 @@ const SWEETS = [
   { k:'extra',  t:'หวานมาก' },
 ];
 const CATEGORIES = ['ขายดี','คลาสสิค','เฟเวอริต','นมสด','ช็อคโกอาวล์','โซดา','พรีเมียมฟรุต'];
+const POSTERS = [
+  { f:'owl-img/poster-cover.jpg', t:"Owl Cha", menu:'', cat:'ขายดี' },
+  { f:'owl-img/poster-matcha.jpg', t:"Matcha Shizuoka", menu:'', cat:'ขายดี' },
+  { f:'owl-img/poster-thaiteacheese.jpg', t:"ชาไทยชีส", menu:'Thai Tea Cheese', cat:'' },
+  { f:'owl-img/poster-thaitea.jpg', t:"ชาไทย", menu:'Thai Tea', cat:'' },
+  { f:'owl-img/poster-brownsugar.jpg', t:"บราวน์ชูการ์", menu:'Brown Sugar Milk Tea', cat:'' },
+  { f:'owl-img/poster-cheese.jpg', t:"Cheese Lover", menu:'', cat:'ขายดี' },
+  { f:'owl-img/poster-classic.jpg', t:"Classic Tea", menu:'', cat:'คลาสสิค' },
+  { f:'owl-img/poster-freshmilk.jpg', t:"นมสด", menu:'', cat:'นมสด' },
+  { f:'owl-img/poster-nomchompoo.jpg', t:"นมชมพู", menu:'Nom Chompoo', cat:'' },
+  { f:'owl-img/poster-nomchompoo3.jpg', t:"นมชมพู", menu:'Nom Chompoo', cat:'' },
+  { f:'owl-img/poster-doublechoc.jpg', t:"ดับเบิ้ลช็อค", menu:'Double Choc', cat:'' },
+  { f:'owl-img/poster-chocoowl.jpg', t:"Choco Owl", menu:'', cat:'ช็อคโกอาวล์' },
+  { f:'owl-img/poster-chocoowl2.jpg', t:"Choco Owl", menu:'', cat:'ช็อคโกอาวล์' },
+  { f:'owl-img/poster-coffee.jpg', t:"ชานมกาแฟ", menu:'Coffee Milk Tea', cat:'' },
+  { f:'owl-img/poster-milo.jpg', t:"ไมโล", menu:'Milo Milk Tea', cat:'' },
+  { f:'owl-img/poster-fruity.jpg', t:"Fruity Milk", menu:'', cat:'ช็อคโกอาวล์' },
+  { f:'owl-img/poster-soda.jpg', t:"โซดา", menu:'', cat:'โซดา' },
+  { f:'owl-img/poster-shinemuscat.jpg', t:"ไชน์มัสแคท", menu:'Shine Muscat Tea', cat:'' },
+  { f:'owl-img/poster-premiumpeach.jpg', t:"พรีเมียมพีช", menu:'', cat:'พรีเมียมฟรุต' },
+  { f:'owl-img/poster-peach.jpg', t:"พีช", menu:'Peach Tea', cat:'' },
+  { f:'owl-img/poster-menuboard.jpg', t:"เมนูรวม", menu:'', cat:'ขายดี' },
+  { f:'owl-img/poster-topping-new.jpg', t:"ท็อปปิ้ง", menu:'', cat:'' },
+  { f:'owl-img/poster-topping.jpg', t:"ท็อปปิ้ง", menu:'', cat:'' },
+  { f:'owl-img/poster-sweetlevel.jpg', t:"ระดับความหวาน", menu:'', cat:'' },
+];
+const CAT_POSTER = {
+  'ขายดี':'owl-img/poster-thaiteacheese.jpg',
+  'คลาสสิค':'owl-img/poster-classic.jpg',
+  'เฟเวอริต':'owl-img/poster-coffee.jpg',
+  'นมสด':'owl-img/poster-freshmilk.jpg',
+  'ช็อคโกอาวล์':'owl-img/poster-chocoowl.jpg',
+  'โซดา':'owl-img/poster-soda.jpg',
+  'พรีเมียมฟรุต':'owl-img/poster-premiumpeach.jpg',
+};
+// แบนเนอร์บนสุด: กดแล้วเปิดชีทสั่งเมนู (menu = ชื่ออังกฤษ) หรือสลับหมวด (cat)
+const BANNERS = [
+  { img:'owl-img/banner-1.jpg', menu:'', cat:'ขายดี' },
+  { img:'owl-img/banner-2.jpg', menu:'', cat:'นมสด' },
+  { img:'owl-img/banner-3.jpg', menu:'', cat:'ช็อคโกอาวล์' },
+  { img:'owl-img/banner-4.jpg', menu:'', cat:'โซดา' },
+  { img:'owl-img/banner-5.jpg', menu:'', cat:'พรีเมียมฟรุต' },
+];
 
 const firebaseConfig = {
   apiKey: "AIzaSyAVaizHIgRcgrufwwI1ohbOinOy0DtTiM0",
@@ -449,8 +492,10 @@ function Done({ info }){
     const dataUrl = (canvas && canvas.toDataURL('image/png')) || (img && img.src) || '';
     if (dataUrl) setQrFull(dataUrl);
   };
-  const goChat = () => {
-    if (!confirm('แคปหน้าจอ QR ไว้แล้วใช่ไหมคะ? 🦉\n(ถ้ายังไม่แคป กด "ยกเลิก" แล้วแคปก่อนน้า\nกลับมาดูบิลนี้ได้อีกที่แถบ "เปิดบิลล่าสุด" บนหน้าสั่ง)')) return;
+  const [askClose, setAskClose] = useState(false);
+  const goChat = () => setAskClose(true);
+  const reallyGo = () => {
+    setAskClose(false);
     try{
       if (window.liff && liff.isInClient()) liff.closeWindow();
       else alert('เปิดแชท Owl Cha แล้วแนบรูปสลิปได้เลยครับ');
@@ -524,6 +569,26 @@ function Done({ info }){
               — ใช้หน้านี้โชว์พนักงานแทนได้เลย
             </div>}
 
+        {askClose &&
+          <div style={{position:'fixed', inset:0, background:'rgba(20,18,14,.55)', zIndex:98,
+                       display:'flex', alignItems:'center', justifyContent:'center', padding:26}}>
+            <div style={{background:'#fff', borderRadius:20, padding:'24px 20px', maxWidth:330, width:'100%', textAlign:'center'}}>
+              <div style={{fontSize:40}}>🦉</div>
+              <div style={{fontWeight:700, fontSize:17.5, marginTop:6}}>แคปหน้าจอ QR แล้วหรือยังคะ?</div>
+              <div style={{fontSize:13.5, color:'var(--muted)', lineHeight:1.7, marginTop:8}}>
+                ถ้ายังไม่แคป กลับไปแคปก่อนน้า<br/>
+                (กลับมาดูบิลนี้ได้ที่แถบ<br/>"🧾 เปิดบิลล่าสุด" บนหน้าสั่ง)
+              </div>
+              <button className="btn press" onClick={reallyGo}
+                style={{marginTop:16, width:'100%', background:'#E58A2E', color:'#fff', fontSize:15.5}}>
+                แคปแล้ว · ไปส่งสลิปเลย ✉️
+              </button>
+              <button className="btn press" onClick={() => setAskClose(false)}
+                style={{marginTop:9, width:'100%', background:'var(--soft)', color:'var(--ink)', fontSize:14.5}}>
+                ยังไม่แคป · กลับไปแคปก่อน
+              </button>
+            </div>
+          </div>}
         {qrFull &&
           <div onClick={() => setQrFull('')}
             style={{position:'fixed', inset:0, background:'rgba(20,18,14,.93)', zIndex:99,
@@ -537,6 +602,39 @@ function Done({ info }){
             <div style={{color:'rgba(255,255,255,.55)', fontSize:12.5, marginTop:16}}>แตะพื้นที่ว่างเพื่อปิด</div>
           </div>}
       </div>
+    </div>
+  );
+}
+
+/* ====== แกลเลอรีโปสเตอร์ ====== */
+function PosterViewer({ start, onClose, onPick }){
+  const ref = useRef(null);
+  const [at, setAt] = useState(start);
+  useEffect(() => {
+    if (ref.current) ref.current.scrollLeft = start * ref.current.clientWidth;
+  }, []);
+  const onScroll = () => {
+    if (ref.current) setAt(Math.round(ref.current.scrollLeft / ref.current.clientWidth));
+  };
+  return (
+    <div style={{position:'fixed', inset:0, background:'rgba(20,18,14,.96)', zIndex:80,
+                 display:'flex', flexDirection:'column'}}>
+      <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'14px 16px'}}>
+        <div style={{color:'#fff', fontSize:14.5}}>📖 {POSTERS[at] ? POSTERS[at].t : ''} <span style={{opacity:.55}}>· {at+1}/{POSTERS.length}</span></div>
+        <div onClick={onClose} style={{color:'#fff', fontSize:24, padding:'0 6px', cursor:'pointer'}}>✕</div>
+      </div>
+      <div ref={ref} onScroll={onScroll}
+        style={{flex:1, display:'flex', overflowX:'auto', scrollSnapType:'x mandatory', WebkitOverflowScrolling:'touch'}}>
+        {POSTERS.map((p, i) => (
+          <div key={i} style={{width:'100vw', flexShrink:0, scrollSnapAlign:'center',
+                               display:'flex', alignItems:'center', justifyContent:'center', padding:'0 8px 20px'}}>
+            <img src={p.f} loading="lazy" className="press"
+              onClick={() => onPick && onPick(p)}
+              style={{maxWidth:'100%', maxHeight:'100%', objectFit:'contain', borderRadius:12, cursor:'pointer'}} />
+          </div>
+        ))}
+      </div>
+      <div style={{color:'rgba(255,255,255,.5)', fontSize:12.5, textAlign:'center', padding:'0 0 16px'}}>ปัดซ้าย-ขวาดูใบถัดไป · 👆 แตะรูปเพื่อไปสั่งเมนูนั้นเลย</div>
     </div>
   );
 }
@@ -556,6 +654,7 @@ function App(){
   const [cart, setCart] = useState([]);
   const [showCart, setShowCart] = useState(false);
   const [done, setDone] = useState(null);
+  const [posterAt, setPosterAt] = useState(-1);   // index ใน POSTERS (-1 = ปิด)
   const keyRef = useRef(0);
 
   useEffect(() => {
@@ -582,11 +681,27 @@ function App(){
           <div style={{fontWeight:700, fontSize:30, letterSpacing:1}}>OWL{TEST_MODE && <span style={{fontSize:13, background:'#FBE3B9', borderRadius:8, padding:'2px 8px', marginLeft:8, verticalAlign:'middle'}}>🧪 โหมดทดสอบ</span>}</div>
           <div style={{fontSize:13, color:'var(--muted)'}}>フクロウ · อาวน์ชา</div>
         </div>
-        <div style={{fontSize:13.5, color:'var(--muted)', marginTop:2}}>
-          สั่งล่วงหน้า รับหน้าร้าน · ไม่ต้องรอคิว 🧋
+        <div style={{fontSize:13.5, color:'var(--muted)', marginTop:2, display:'flex', alignItems:'center', gap:10}}>
+          <span>สั่งล่วงหน้า รับหน้าร้าน · ไม่ต้องรอคิว 🧋</span>
+          <span className="pill press" onClick={() => setPosterAt(0)}
+            style={{fontSize:12.5, padding:'4px 11px'}}>📖 โปสเตอร์เมนู</span>
         </div>
       </div>
 
+      <div style={{display:'flex', gap:10, overflowX:'auto', margin:'6px -14px 4px', padding:'0 14px',
+                   scrollSnapType:'x mandatory', WebkitOverflowScrolling:'touch'}}>
+        {BANNERS.map((b, i) => (
+          <img key={i} src={b.img} loading="lazy" className="press" alt=""
+            onClick={() => {
+              const m = b.menu && drinks.find(x => x.name === b.menu && x.active !== false);
+              if (m) setSel(m);
+              else if (b.cat && cats.includes(b.cat)) setCat(b.cat);
+            }}
+            onError={e => { e.target.style.display = 'none'; }}
+            style={{width:'84%', maxWidth:430, flexShrink:0, borderRadius:16, scrollSnapAlign:'center',
+                    border:'1px solid var(--line)', cursor:'pointer', aspectRatio:'16/9', objectFit:'cover'}} />
+        ))}
+      </div>
       {lastOrder &&
         <div className="press" onClick={() => setDone(lastOrder)}
           style={{background:'#fff', border:'1.5px solid var(--line)', borderRadius:14,
@@ -607,7 +722,20 @@ function App(){
       {menus !== null && shown.length === 0 &&
         <div style={{textAlign:'center', color:'var(--muted)', padding:'50px 0'}}>ยังไม่มีเมนูในหมวดนี้</div>}
 
-      <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginTop:6}}>
+      {CAT_POSTER[cat] &&
+        <div className="press" onClick={() => {
+            const i = POSTERS.findIndex(p => p.f === CAT_POSTER[cat]);
+            setPosterAt(i >= 0 ? i : 0);
+          }}
+          style={{position:'relative', borderRadius:16, overflow:'hidden', marginTop:6,
+                  border:'1px solid var(--line)', cursor:'pointer', height:110}}>
+          <img src={CAT_POSTER[cat]} loading="lazy"
+            style={{width:'100%', height:'100%', objectFit:'cover', objectPosition:'center 22%'}}
+            onError={e => { e.target.parentNode.style.display = 'none'; }} />
+          <div style={{position:'absolute', right:10, bottom:8, background:'rgba(29,27,22,.72)', color:'#fff',
+                       fontSize:12, borderRadius:999, padding:'4px 11px'}}>ดูโปสเตอร์ ›</div>
+        </div>}
+      <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginTop:10}}>
         {shown.map(m => <MenuCard key={m.id} m={m} onTap={setSel} />)}
       </div>
 
@@ -622,6 +750,16 @@ function App(){
           </button>
         </div>}
 
+      {posterAt >= 0 && <PosterViewer start={posterAt} onClose={() => setPosterAt(-1)}
+        onPick={p => {
+          if (p.menu){
+            const m = drinks.find(x => x.name === p.menu && x.active !== false);
+            if (m){ setPosterAt(-1); if (cats.includes(m.category)) setCat(m.category); setSel(m); return; }
+          }
+          if (p.cat && cats.includes(p.cat)){
+            setPosterAt(-1); setCat(p.cat); window.scrollTo({ top: 0, behavior: 'smooth' });
+          }
+        }} />}
       {sel && <ItemSheet m={sel} toppings={toppings} onClose={() => setSel(null)}
         onAdd={it => setCart(p => [...p, { ...it, key: ++keyRef.current }])} />}
       {showCart && <CartSheet cart={cart} setCart={setCart} profile={profile} inLine={inLine}
