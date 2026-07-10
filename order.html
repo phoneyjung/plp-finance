@@ -335,9 +335,13 @@ function CartSheet({ cart, setCart, profile, inLine, onDone, onClose }){
         '• ' + (it.nameTh || it.name) + ' (' + (sw[it.sweetness] || '') + (ic[it.ice] ? '/' + ic[it.ice] : '') +
         (it.toppings.length ? ' +' + it.toppings.map(t => t.name + (t.n > 1 ? 'x' + t.n : '')).join('/') : '') + ') ×' + it.qty
       ).join('\n');
-      const summaryText = '🦉 สั่งล่วงหน้า Owl Cha\n' + lines +
-        '\nรวม ' + total + ' บาท\n👤 ' + name.trim() + ' 📞 ' + ph +
-        '\n🕐 มารับ ' + slot + ' น.\n📌 หมายเลขออเดอร์ ' + orderNo;
+      const summaryText = '🦉 สั่งล่วงหน้า Owl Cha\n\n' + lines +
+        '\nรวม ' + total + ' บาท\n\n' +
+        '----------------------------\n' +
+        '👤 ' + name.trim() + '\n' +
+        '📞 ' + ph + '\n' +
+        '🕐 มารับ ' + slot + ' น.\n' +
+        '📌 หมายเลขออเดอร์ ' + orderNo;
       let sendStatus = 'notline';
       if (inLine && window.liff && liff.isInClient()){
         try{
@@ -355,7 +359,7 @@ function CartSheet({ cart, setCart, profile, inLine, onDone, onClose }){
           sendStatus = 'push';
         }catch(e){}
       }
-            onDone({ id: ref.id, orderNo, slot, total, name: name.trim(), sendStatus });
+            onDone({ id: ref.id, orderNo, slot, total, name: name.trim(), sendStatus, items });
     }catch(e){ alert('สั่งไม่สำเร็จ: ' + e.message); }
     setBusy(false);
   };
@@ -430,59 +434,93 @@ function CartSheet({ cart, setCart, profile, inLine, onDone, onClose }){
 function Done({ info }){
   const qrRef = useRef(null);
   const [qrFull, setQrFull] = useState('');
-  const saveQr = async () => {
-    const canvas = qrRef.current && qrRef.current.querySelector('canvas');
-    const img = qrRef.current && qrRef.current.querySelector('img');
-    const dataUrl = (canvas && canvas.toDataURL('image/png')) || (img && img.src) || '';
-    if (!dataUrl) return;
-    try{
-      if (navigator.canShare && window.File){
-        const blob = await (await fetch(dataUrl)).blob();
-        const file = new File([blob], 'owl-qr-' + info.orderNo + '.png', { type:'image/png' });
-        if (navigator.canShare({ files:[file] })){
-          await navigator.share({ files:[file] });
-          return;
-        }
-      }
-    }catch(e){}
-    setQrFull(dataUrl);   // เปิดเต็มจอ ให้กดค้างบันทึก
-  };
   useEffect(() => {
     if (qrRef.current && window.QRCode){
       qrRef.current.innerHTML = '';
       new QRCode(qrRef.current, { text: shopPayload(info.total),
-                                  width: 190, height: 190, correctLevel: QRCode.CorrectLevel.M });
+                                  width: 180, height: 180, correctLevel: QRCode.CorrectLevel.M });
     }
   }, []);
+  const openQr = () => {
+    const canvas = qrRef.current && qrRef.current.querySelector('canvas');
+    const img = qrRef.current && qrRef.current.querySelector('img');
+    const dataUrl = (canvas && canvas.toDataURL('image/png')) || (img && img.src) || '';
+    if (dataUrl) setQrFull(dataUrl);
+  };
+  const goChat = () => {
+    try{
+      if (window.liff && liff.isInClient()) liff.closeWindow();
+      else alert('เปิดแชท Owl Cha แล้วแนบรูปสลิปได้เลยครับ');
+    }catch(e){}
+  };
+  const swL = { none:'ไม่หวาน', less:'หวานน้อย', normal:'หวานปกติ', extra:'หวานมาก' };
+  const icL = { less:'น้ำแข็งน้อย', no:'ไม่ใส่น้ำแข็ง', sep:'แยกน้ำแข็ง' };
+  const detail = it => [swL[it.sweetness], icL[it.ice],
+    ...(it.toppings || []).map(t => '+' + t.name + (t.n > 1 ? '×' + t.n : ''))].filter(Boolean).join(' · ');
   return (
-    <div style={{minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center', padding:20}}>
-      <div style={{background:'#fff', borderRadius:22, padding:'28px 22px', maxWidth:400, width:'100%',
-                   textAlign:'center', border:'1px solid var(--line)'}}>
-        <div style={{fontSize:52}}>🦉</div>
-        <div style={{fontWeight:700, fontSize:21, margin:'6px 0 2px'}}>รับออเดอร์แล้ว!</div>
-        <div style={{fontWeight:700, fontSize:26, color:'var(--accent)', margin:'2px 0'}}>{info.orderNo}</div>
-        <div style={{color:'var(--muted)', fontSize:14}}>คุณ{info.name}</div>
-        <div style={{background:'var(--soft)', borderRadius:14, padding:14, margin:'14px 0 10px', fontSize:15, lineHeight:1.8, textAlign:'left'}}>
-          🕐 มารับเวลา <b>{info.slot} น.</b> · ยอดชำระ <b>{info.total} ฿</b><br/>
-          1️⃣ สแกน QR โอน <b>{info.total} บาท</b><br/>
-          2️⃣ ส่งสลิปในแชท Owl Cha 📎<br/>
-          3️⃣ ถึงเวลารับ ไปที่ร้าน แจ้งชื่อได้เลย 🧋
+    <div style={{minHeight:'100vh', display:'flex', alignItems:'flex-start', justifyContent:'center', padding:'20px 14px 30px'}}>
+      <div style={{background:'#fff', borderRadius:22, padding:'26px 20px 22px', maxWidth:410, width:'100%',
+                   border:'1px solid var(--line)', boxShadow:'0 12px 34px rgba(29,27,22,.10)'}}>
+
+        <div style={{textAlign:'center'}}>
+          <img src="owl-img/owl-logo.jpg" alt="OWL"
+            style={{width:84, objectFit:'contain'}}
+            onError={e => { e.target.style.display = 'none'; }} />
+          <div style={{fontSize:11, letterSpacing:3.5, color:'var(--muted)', marginTop:4}}>OWL CHA · アウンチャ</div>
+          <div className="num" style={{fontWeight:800, fontSize:32, color:'var(--accent)', lineHeight:1.25, marginTop:8}}>{info.orderNo}</div>
+          <div style={{color:'var(--muted)', fontSize:13.5}}>คุณ{info.name} · 🕐 มารับ {info.slot} น.</div>
         </div>
-        <div style={{background:'#fff', border:'1.5px solid var(--line)', borderRadius:14, padding:'14px 10px 8px', marginBottom:12}}>
-          <div ref={qrRef} style={{display:'flex', justifyContent:'center'}} />
-          <div style={{fontSize:13, color:'var(--muted)', marginTop:8, lineHeight:1.5}}>
-            ยอด {info.total}.00 บาท · ชื่อบัญชี <b style={{color:'var(--ink)'}}>{SHOP_PP_NAME}</b><br/>
-            เช็คชื่อบัญชีก่อนกดโอนทุกครั้ง
+
+        <div style={{borderTop:'1.5px dashed var(--line)', margin:'16px 0 12px'}} />
+        {(info.items || []).map((it, i) => (
+          <div key={i} style={{display:'flex', justifyContent:'space-between', gap:10, marginBottom:9}}>
+            <div style={{flex:1, minWidth:0}}>
+              <div style={{fontSize:14.5}}>{it.nameTh || it.name} <span style={{color:'var(--muted)'}}>×{it.qty}</span></div>
+              <div style={{fontSize:11.5, color:'var(--muted)'}}>{detail(it)}</div>
+            </div>
+            <div style={{fontWeight:600, fontSize:14.5, flexShrink:0}}>{it.unit * it.qty} ฿</div>
           </div>
-          <button className="btn press" onClick={saveQr}
-            style={{marginTop:10, background:'var(--ink)', color:'#fff', fontSize:14.5, width:'100%'}}>
+        ))}
+        <div style={{display:'flex', justifyContent:'space-between', borderTop:'1.5px dashed var(--line)',
+                     paddingTop:11, marginTop:4, fontWeight:700, fontSize:16.5}}>
+          <div>ยอดชำระ</div><div>{info.total} ฿</div>
+        </div>
+
+        <div style={{background:'var(--soft)', border:'1.5px solid var(--line)', borderRadius:16,
+                     padding:'14px 10px 12px', margin:'14px 0 0', textAlign:'center'}}>
+          <div ref={qrRef} style={{display:'flex', justifyContent:'center'}} />
+          <div style={{fontSize:12.5, color:'var(--muted)', marginTop:8, lineHeight:1.5}}>
+            สแกนโอน {info.total}.00 บาท<br/>
+            ชื่อบัญชี <b style={{color:'var(--ink)'}}>{SHOP_PP_NAME}</b>
+          </div>
+          <button className="btn press" onClick={openQr}
+            style={{marginTop:9, background:'var(--ink)', color:'#fff', fontSize:14, width:'100%'}}>
             🖼 เปิด QR เต็มจอ · แคปไปสแกน
           </button>
-          <div style={{fontSize:12, color:'var(--muted)', marginTop:8, lineHeight:1.6, textAlign:'left'}}>
-            💡 กดปุ่มด้านบน → แคปหน้าจอ → เปิดแอปธนาคาร → สแกน → เลือกรูปที่แคป ยอดจะขึ้นให้อัตโนมัติ
-          </div>
         </div>
-        <div style={{fontSize:13, color:'var(--muted)'}}>📍 หน้าหอเพชรรัตน์ 4 ตรงข้ามโรงอาหารเพชรรัตน์</div>
+
+        <div style={{background:'#FDF1E3', border:'1.5px solid #F2C48D', borderRadius:16,
+                     padding:'13px 14px', margin:'12px 0 0'}}>
+          <div style={{fontWeight:700, fontSize:15, color:'#9A5B1F'}}>📎 โอนเสร็จแล้ว อย่าลืม!</div>
+          <div style={{fontSize:13.5, color:'#7A4A1C', lineHeight:1.65, marginTop:3}}>
+            ส่ง<b>สลิปการโอน</b>เข้าแชท Owl Cha ทันที<br/>ร้านจะเริ่มทำเครื่องดื่มหลังตรวจยอดครับ
+          </div>
+          <button className="btn press" onClick={goChat}
+            style={{marginTop:10, background:'#E58A2E', color:'#fff', fontSize:15, width:'100%'}}>
+            ✉️ ไปส่งสลิปในแชทเลย
+          </button>
+        </div>
+
+        <div style={{fontSize:12.5, color:'var(--muted)', textAlign:'center', marginTop:14}}>
+          📍 หน้าหอเพชรรัตน์ 4 ตรงข้ามโรงอาหารเพชรรัตน์
+        </div>
+        {(info.sendStatus === 'ok' || info.sendStatus === 'push')
+          ? <div style={{marginTop:8, fontSize:13, color:'var(--accent)', fontWeight:600, textAlign:'center'}}>✅ ส่งสรุปออเดอร์เข้าแชทแล้ว</div>
+          : <div style={{marginTop:8, fontSize:12.5, color:'#B4552D', lineHeight:1.5, textAlign:'center'}}>
+              ⚠️ ยังไม่ได้ส่งสรุปเข้าแชท ({info.sendStatus === 'notline' ? 'ไม่ได้เปิดผ่าน LINE' : String(info.sendStatus).slice(0, 120)})
+              — ใช้หน้านี้โชว์พนักงานแทนได้เลย
+            </div>}
+
         {qrFull &&
           <div onClick={() => setQrFull('')}
             style={{position:'fixed', inset:0, background:'rgba(20,18,14,.93)', zIndex:99,
@@ -495,12 +533,6 @@ function Done({ info }){
             </div>
             <div style={{color:'rgba(255,255,255,.55)', fontSize:12.5, marginTop:16}}>แตะพื้นที่ว่างเพื่อปิด</div>
           </div>}
-        {(info.sendStatus === 'ok' || info.sendStatus === 'push')
-          ? <div style={{marginTop:10, fontSize:13, color:'var(--accent)', fontWeight:600}}>✅ ส่งสรุปออเดอร์เข้าแชทแล้ว</div>
-          : <div style={{marginTop:10, fontSize:12.5, color:'#B4552D', lineHeight:1.5}}>
-              ⚠️ ยังไม่ได้ส่งสรุปเข้าแชท ({info.sendStatus === 'notline' ? 'ไม่ได้เปิดผ่าน LINE' : String(info.sendStatus).slice(0, 120)})
-              <br/>ใช้หน้านี้โชว์พนักงานแทนได้เลย
-            </div>}
       </div>
     </div>
   );
