@@ -975,7 +975,7 @@ function TxnRow({r,onDel,onView,onEdit,showDate}){
     <div style={{flex:1, minWidth:0}}>
       <div style={{fontSize:14.5, fontWeight:500, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis'}}>{r.category}</div>
       <div style={{fontSize:11.5, color:'var(--muted)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis'}}>
-        {showDate? dStr+' · ' : ''}{r.note? r.note+' · ' : ''}{hhmm(r.ts)} · {r.method==='cash'?'เงินสด':'โอน'}</div>
+        {showDate? dStr+' · ' : ''}{r.note? r.note+' · ' : ''}{hhmm(r.ts)} · {r.method==='cash'?'เงินสด':'โอน'}{r.by&&r.by.name?' · ✍️ '+r.by.name:''}</div>
     </div>
   </>;
   return <div style={{display:'flex', alignItems:'center', gap:12, padding:'10px 16px'}}>
@@ -2257,7 +2257,7 @@ function Capital({shop,user,toast}){
                 <span className="kanit" style={{fontSize:11,fontWeight:600,color:col,background:'var(--soft)',borderRadius:7,padding:'3px 8px',flexShrink:0}}>{lab}</span>
                 <div style={{flex:1,minWidth:0}}>
                   <div style={{fontSize:14,fontWeight:500,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{r.category}</div>
-                  <div style={{fontSize:11.5,color:'var(--muted)'}}>{r.date}{r.note?' · '+r.note:''}</div>
+                  <div style={{fontSize:11.5,color:'var(--muted)'}}>{r.date}{r.note?' · '+r.note:''}{r.by&&r.by.name?' · ✍️ '+r.by.name:''}</div>
                 </div>
                 <span className="num" style={{fontWeight:600,fontSize:14,color:col,flexShrink:0}}>{sign}{baht(r.amount)}</span>
                 {isAdmin && <button onClick={async()=>{ if(window.confirm('ลบรายการนี้?')){ await delTxn(r.id, {id:user.id,name:user.name}); reload(); } }} className="press" style={{border:'none',background:'none',color:'#C0C4CC',padding:4,flexShrink:0}}><I.trash/></button>}
