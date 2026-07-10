@@ -429,12 +429,13 @@ function CartSheet({ cart, setCart, profile, inLine, onDone, onClose }){
 /* ====== หน้าสำเร็จ ====== */
 function Done({ info }){
   const qrRef = useRef(null);
+  const [qrFull, setQrFull] = useState('');
   const saveQr = async () => {
+    const canvas = qrRef.current && qrRef.current.querySelector('canvas');
+    const img = qrRef.current && qrRef.current.querySelector('img');
+    const dataUrl = (canvas && canvas.toDataURL('image/png')) || (img && img.src) || '';
+    if (!dataUrl) return;
     try{
-      const canvas = qrRef.current && qrRef.current.querySelector('canvas');
-      const img = qrRef.current && qrRef.current.querySelector('img');
-      const dataUrl = canvas ? canvas.toDataURL('image/png') : (img && img.src);
-      if (!dataUrl) throw 0;
       if (navigator.canShare && window.File){
         const blob = await (await fetch(dataUrl)).blob();
         const file = new File([blob], 'owl-qr-' + info.orderNo + '.png', { type:'image/png' });
@@ -443,12 +444,8 @@ function Done({ info }){
           return;
         }
       }
-      const a = document.createElement('a');
-      a.href = dataUrl; a.download = 'owl-qr-' + info.orderNo + '.png';
-      document.body.appendChild(a); a.click(); a.remove();
-    }catch(e){
-      alert('กดค้างที่รูป QR แล้วเลือก "บันทึกรูปภาพ" ได้เลยครับ');
-    }
+    }catch(e){}
+    setQrFull(dataUrl);   // เปิดเต็มจอ ให้กดค้างบันทึก
   };
   useEffect(() => {
     if (qrRef.current && window.QRCode){
@@ -486,6 +483,16 @@ function Done({ info }){
           </div>
         </div>
         <div style={{fontSize:13, color:'var(--muted)'}}>📍 หน้าหอเพชรรัตน์ 4 ตรงข้ามโรงอาหารเพชรรัตน์</div>
+        {qrFull &&
+          <div onClick={() => setQrFull('')}
+            style={{position:'fixed', inset:0, background:'rgba(20,18,14,.93)', zIndex:99,
+                    display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:24}}>
+            <img src={qrFull} style={{width:'78vw', maxWidth:330, background:'#fff', padding:14, borderRadius:16}} />
+            <div style={{color:'#fff', fontSize:15.5, marginTop:16, textAlign:'center', lineHeight:1.7}}>
+              👆 <b>กดค้างที่รูป QR</b> แล้วเลือก<br/>"บันทึกรูปภาพ / Save image"
+            </div>
+            <div style={{color:'rgba(255,255,255,.55)', fontSize:12.5, marginTop:14}}>แตะพื้นที่ว่างเพื่อปิด</div>
+          </div>}
         {(info.sendStatus === 'ok' || info.sendStatus === 'push')
           ? <div style={{marginTop:10, fontSize:13, color:'var(--accent)', fontWeight:600}}>✅ ส่งสรุปออเดอร์เข้าแชทแล้ว</div>
           : <div style={{marginTop:10, fontSize:12.5, color:'#B4552D', lineHeight:1.5}}>
