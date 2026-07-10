@@ -359,7 +359,9 @@ function CartSheet({ cart, setCart, profile, inLine, onDone, onClose }){
           sendStatus = 'push';
         }catch(e){}
       }
-            onDone({ id: ref.id, orderNo, slot, total, name: name.trim(), sendStatus, items });
+            const doneInfo = { id: ref.id, orderNo, slot, total, name: name.trim(), sendStatus, items };
+      try{ localStorage.setItem('owlLastOrder', JSON.stringify({ ...doneInfo, dateKey: todayKey() })); }catch(e){}
+      onDone(doneInfo);
     }catch(e){ alert('สั่งไม่สำเร็จ: ' + e.message); }
     setBusy(false);
   };
@@ -448,6 +450,7 @@ function Done({ info }){
     if (dataUrl) setQrFull(dataUrl);
   };
   const goChat = () => {
+    if (!confirm('แคปหน้าจอ QR ไว้แล้วใช่ไหมคะ? 🦉\n(ถ้ายังไม่แคป กด "ยกเลิก" แล้วแคปก่อนน้า\nกลับมาดูบิลนี้ได้อีกที่แถบ "เปิดบิลล่าสุด" บนหน้าสั่ง)')) return;
     try{
       if (window.liff && liff.isInClient()) liff.closeWindow();
       else alert('เปิดแชท Owl Cha แล้วแนบรูปสลิปได้เลยครับ');
@@ -541,6 +544,12 @@ function Done({ info }){
 /* ====== App ====== */
 function App(){
   const { profile, inLine } = useLiff();
+  const [lastOrder] = useState(() => {
+    try{
+      const v = JSON.parse(localStorage.getItem('owlLastOrder') || 'null');
+      return (v && v.dateKey === todayKey()) ? v : null;
+    }catch(e){ return null; }
+  });
   const [menus, setMenus] = useState(null);
   const [cat, setCat] = useState('ขายดี');
   const [sel, setSel] = useState(null);
@@ -578,6 +587,14 @@ function App(){
         </div>
       </div>
 
+      {lastOrder &&
+        <div className="press" onClick={() => setDone(lastOrder)}
+          style={{background:'#fff', border:'1.5px solid var(--line)', borderRadius:14,
+                  padding:'10px 14px', margin:'4px 0 2px', display:'flex', justifyContent:'space-between',
+                  alignItems:'center', cursor:'pointer', fontSize:14}}>
+          <span>🧾 เปิดบิลล่าสุด <b>{lastOrder.orderNo}</b> · มารับ {lastOrder.slot} น.</span>
+          <span style={{color:'var(--muted)'}}>ดู QR ›</span>
+        </div>}
       <div style={{display:'flex', gap:8, overflowX:'auto', padding:'10px 2px', position:'sticky', top:0,
                    background:'var(--bg)', zIndex:10}}>
         {cats.map(c => (
