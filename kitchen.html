@@ -282,7 +282,7 @@ function OrderCard({ o, now, onDone, onUndo }){
       {(o.items || []).map((it, i) => (
         <div key={i} style={{display:'flex', justifyContent:'space-between', padding:'6px 10px',
                              background:'var(--bg)', borderRadius:10, marginBottom:6, fontSize:15}}>
-          <div>🧋 {it.name} <span style={{color:'var(--muted)'}}>({SWEET_LABEL[it.sweetness] || it.sweetness})</span></div>
+          <div>🧋 {it.name} <span style={{color:'var(--muted)'}}>({SWEET_LABEL[it.sweetness] || it.sweetness}{(it.toppings && it.toppings.length) ? ' + ' + it.toppings.map(t => t.name + (t.n > 1 ? '×' + t.n : '')).join(', ') : ''})</span></div>
           <div style={{fontWeight:600}}>×{it.qty}</div>
         </div>
       ))}

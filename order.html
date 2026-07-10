@@ -142,10 +142,18 @@ function MenuCard({ m, onTap }){
 /* ====== ชีทเลือกตัวเลือกแก้ว ====== */
 function ItemSheet({ m, toppings, onAdd, onClose }){
   const [sweet, setSweet] = useState('normal');
-  const [tops, setTops] = useState([]);
+  const [tops, setTops] = useState([]);   // [{...topping, n:จำนวนช้อน}]
+  const MAX1 = t => /cheese/i.test(t.name || '') || /ชีส/.test(t.nameTh || '');
   const [qty, setQty] = useState(1);
-  const unit = m.price + tops.reduce((s, t) => s + t.price, 0);
-  const toggleTop = t => setTops(p => p.some(x => x.id === t.id) ? p.filter(x => x.id !== t.id) : [...p, t]);
+  const unit = m.price + tops.reduce((s, t) => s + t.price * t.n, 0);
+  const chTop = (t, d) => setTops(p => {
+    const cur = p.find(x => x.id === t.id);
+    const max = MAX1(t) ? 1 : 5;
+    const n = Math.max(0, Math.min(max, (cur ? cur.n : 0) + d));
+    if (n === 0) return p.filter(x => x.id !== t.id);
+    if (cur) return p.map(x => x.id === t.id ? { ...x, n } : x);
+    return [...p, { ...t, n }];
+  });
   return (
     <>
       <div className="sheet-bg" onClick={onClose} />
@@ -174,18 +182,34 @@ function ItemSheet({ m, toppings, onAdd, onClose }){
         {toppings.length > 0 && <>
           <div style={{margin:'16px 0 8px', fontWeight:600, fontSize:15}}>ท็อปปิ้ง <span style={{color:'var(--muted)', fontWeight:400, fontSize:13}}>(เลือกได้หลายอย่าง)</span></div>
           {toppings.map(t => {
-            const on = tops.some(x => x.id === t.id);
+            const cur = tops.find(x => x.id === t.id);
+            const n = cur ? cur.n : 0;
+            const max1 = MAX1(t);
             return (
-              <div key={t.id} className="press" onClick={() => toggleTop(t)}
-                style={{display:'flex', alignItems:'center', gap:10, padding:'9px 12px', marginBottom:6,
-                        background:'#fff', borderRadius:12, cursor:'pointer',
-                        border:'1.5px solid ' + (on ? 'var(--ink)' : 'var(--line)')}}>
-                <div style={{width:20, height:20, borderRadius:6, flexShrink:0,
-                             border:'1.5px solid ' + (on ? 'var(--ink)' : 'var(--line)'),
-                             background:on ? 'var(--ink)' : '#fff', color:'#fff',
-                             fontSize:13, textAlign:'center', lineHeight:'19px'}}>{on ? '✓' : ''}</div>
-                <div style={{flex:1, fontSize:14}}>{t.nameTh || t.name}</div>
-                <div style={{fontSize:13, color:'var(--muted)'}}>+{t.price} ฿</div>
+              <div key={t.id}
+                style={{display:'flex', alignItems:'center', gap:10, padding:'7px 10px', marginBottom:6,
+                        background:'#fff', borderRadius:12,
+                        border:'1.5px solid ' + (n > 0 ? 'var(--ink)' : 'var(--line)')}}>
+                <div style={{width:38, height:38, borderRadius:9, overflow:'hidden', background:'var(--soft)', flexShrink:0}}>
+                  {t.photo ? <img src={t.photo} loading="lazy" style={{width:'100%', height:'100%', objectFit:'cover'}} /> :
+                    <div style={{lineHeight:'38px', textAlign:'center', fontSize:17}}>🥄</div>}
+                </div>
+                <div style={{flex:1, minWidth:0}}>
+                  <div style={{fontSize:14, lineHeight:1.2}}>{t.nameTh || t.name}</div>
+                  <div style={{fontSize:12, color:'var(--muted)'}}>+{t.price} ฿{max1 ? '' : ' /ช้อน'}</div>
+                </div>
+                {n === 0
+                  ? <button className="btn press" onClick={() => chTop(t, 1)}
+                      style={{background:'var(--soft)', color:'var(--ink)', padding:'6px 16px', fontSize:14}}>เพิ่ม</button>
+                  : <div style={{display:'flex', alignItems:'center', gap:0, border:'1.5px solid var(--ink)',
+                                 borderRadius:999, overflow:'hidden', background:'#fff'}}>
+                      <button className="press" onClick={() => chTop(t, -1)}
+                        style={{border:'none', background:'none', width:34, height:32, fontSize:17}}>−</button>
+                      <div style={{width:26, textAlign:'center', fontWeight:700, fontSize:15}}>{n}</div>
+                      <button className="press" onClick={() => chTop(t, 1)} disabled={max1 && n >= 1}
+                        style={{border:'none', background:'none', width:34, height:32, fontSize:17,
+                                opacity:(max1 && n >= 1) ? .25 : 1}}>+</button>
+                    </div>}
               </div>
             );
           })}
@@ -239,7 +263,7 @@ function CartSheet({ cart, setCart, profile, inLine, onDone, onClose }){
       const start = new Date(pickup.getTime() - minPrep * 60000);
       const items = cart.map(c => ({
         menuId: c.m.id, name: c.m.name, nameTh: c.m.nameTh || '',
-        sweetness: c.sweet, toppings: c.tops.map(t => ({ name: t.nameTh || t.name, price: t.price })),
+        sweetness: c.sweet, toppings: c.tops.map(t => ({ name: t.nameTh || t.name, price: t.price, n: t.n })),
         qty: c.qty, price: c.m.price, unit: c.unit, prepMin: c.m.prepMin || 10
       }));
       const orderNo = await nextOrderNo();
@@ -260,7 +284,7 @@ function CartSheet({ cart, setCart, profile, inLine, onDone, onClose }){
         const sw = { none:'ไม่หวาน', less:'หวานน้อย', normal:'หวานปกติ', extra:'หวานมาก' };
         const lines = items.map(it =>
           '• ' + (it.nameTh || it.name) + ' (' + (sw[it.sweetness] || '') +
-          (it.toppings.length ? ' +' + it.toppings.map(t => t.name).join('/') : '') + ') ×' + it.qty
+          (it.toppings.length ? ' +' + it.toppings.map(t => t.name + (t.n > 1 ? 'x' + t.n : '')).join('/') : '') + ') ×' + it.qty
         ).join('\n');
         try{
           await liff.sendMessages([{ type:'text',
@@ -290,7 +314,7 @@ function CartSheet({ cart, setCart, profile, inLine, onDone, onClose }){
                 <div style={{fontWeight:600, fontSize:15}}>{c.m.nameTh || c.m.name}</div>
                 <div style={{fontSize:12.5, color:'var(--muted)'}}>
                   {SWEETS.find(s => s.k === c.sweet).t}
-                  {c.tops.length > 0 && ' · ' + c.tops.map(t => t.nameTh || t.name).join(', ')}
+                  {c.tops.length > 0 && ' · ' + c.tops.map(t => (t.nameTh || t.name) + (t.n > 1 ? '×' + t.n : '')).join(', ')}
                 </div>
               </div>
               <div style={{fontWeight:700}}>{c.unit * c.qty} ฿</div>
