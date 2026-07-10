@@ -74,18 +74,29 @@ function unlockAudio(){
     if (audioCtx.state === 'suspended') audioCtx.resume();
   }catch(e){}
 }
+function tone(t0, freq, dur, vol, type){
+  const o = audioCtx.createOscillator();
+  const g = audioCtx.createGain();
+  o.type = type || 'sine'; o.frequency.value = freq;
+  g.gain.setValueAtTime(vol, audioCtx.currentTime + t0);
+  g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + t0 + dur);
+  o.connect(g); g.connect(audioCtx.destination);
+  o.start(audioCtx.currentTime + t0); o.stop(audioCtx.currentTime + t0 + dur + 0.02);
+}
+// เสียง 1: ออเดอร์ใหม่เข้า — "ติ๊ง ติ๊ง" สูงใส 2 จังหวะ
 function beep(){
   try{
     if (!audioCtx) return;
-    [0, 0.35].forEach(t0 => {
-      const o = audioCtx.createOscillator();
-      const g = audioCtx.createGain();
-      o.type = 'sine'; o.frequency.value = 880;
-      g.gain.setValueAtTime(0.6, audioCtx.currentTime + t0);
-      g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + t0 + 0.3);
-      o.connect(g); g.connect(audioCtx.destination);
-      o.start(audioCtx.currentTime + t0); o.stop(audioCtx.currentTime + t0 + 0.32);
-    });
+    tone(0, 880, 0.3, 0.7); tone(0.35, 880, 0.3, 0.7);
+  }catch(e){}
+}
+// เสียง 2: ถึงเวลาเริ่มทำ — "ปื๊ด-ปื๊ด-ปี๊ดดด" ต่ำ→สูง 3 จังหวะ (square ดังทะลุกว่า)
+function beepMake(){
+  try{
+    if (!audioCtx) return;
+    tone(0, 440, 0.22, 0.7, 'square');
+    tone(0.28, 550, 0.22, 0.7, 'square');
+    tone(0.56, 700, 0.5, 0.7, 'square');
   }catch(e){}
 }
 
@@ -261,7 +272,7 @@ function OrderCard({ o, now, onDone, onUndo }){
                  border:'2px solid ' + border, opacity:isDone ? .65 : 1,
                  boxShadow: ready || late ? '0 4px 16px rgba(0,0,0,.10)' : 'none'}}>
       <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
-        <div style={{fontWeight:700, fontSize:18}}>🕐 รับ {hhmm(o.pickupAt)} · คุณ{o.customer && o.customer.name}</div>
+        <div style={{fontWeight:700, fontSize:18}}>{o.orderNo ? o.orderNo + ' · ' : ''}รับ {hhmm(o.pickupAt)} · คุณ{o.customer && o.customer.name}</div>
         <div style={{fontSize:13, fontWeight:600, color:badge.c}}>{badge.t}</div>
       </div>
       <div style={{fontSize:13, color:'var(--muted)', marginBottom:8}}>
@@ -292,10 +303,23 @@ function OrdersTab(){
   const [soundOn, setSoundOn] = useState(false);
   const known = useRef(null);
 
+  const alerted = useRef(new Set());
   useEffect(() => {
-    const t = setInterval(() => setNow(new Date()), 20000);
+    const t = setInterval(() => setNow(new Date()), 15000);
     return () => clearInterval(t);
   }, []);
+
+  // เตือนรอบ 2: ถึงเวลาเริ่มทำ (คนละเสียงกับออเดอร์เข้า)
+  useEffect(() => {
+    orders.forEach(o => {
+      if (o.status === 'done' || !o.startAt) return;
+      if (alerted.current.has(o.id)) return;
+      if (now >= new Date(o.startAt)){
+        alerted.current.add(o.id);
+        beepMake();
+      }
+    });
+  }, [now, orders]);
 
   useEffect(() => {
     const unsub = db.collection('owlOrders')
@@ -322,7 +346,7 @@ function OrdersTab(){
   return (
     <div>
       {!soundOn &&
-        <button className="btn press" onClick={() => { unlockAudio(); beep(); setSoundOn(true); }}
+        <button className="btn press" onClick={() => { unlockAudio(); beep(); setTimeout(beepMake, 900); setSoundOn(true); }}
           style={{width:'100%', background:'var(--accent)', color:'#fff', marginBottom:12}}>
           🔔 กดเปิดเสียงเตือนออเดอร์ใหม่ (กดครั้งเดียวพอ)
         </button>}
