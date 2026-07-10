@@ -6,6 +6,7 @@
 <title>OWL — สั่งล่วงหน้า</title>
 <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
@@ -41,6 +42,10 @@ const { useState, useEffect, useMemo, useRef } = React;
 
 /* ====== ตั้งค่า ====== */
 const LIFF_ID = '2010531664-XhbuTZLn';   // ← LIFF "Owl Order" (Owl Cha Login channel)
+const NOTIFY_URL = 'PASTE_NOTIFY_URL';    // ← Apps Script "Owl Notify" (แผนสำรองส่งสรุป)
+const SHOP_PP_ID = '004999245446611';     // PromptPay ID ร้าน (K+ รับได้ทุกธนาคาร)
+const SHOP_PP_NAME = 'น.ส. ณัฐฏฒฑากรณ์ ส. (K+)';
+const SHOP_QR_IMG = 'https://phoneyjung.github.io/plp-finance/owl-img/qr-shop.jpg';
 const SHOP_CLOSE = '21:00';
 const ICES = [
   { k:'normal', t:'ปกติ' },
@@ -92,6 +97,25 @@ async function nextOrderNo(){
     return next;
   });
   return 'PE' + String(n).padStart(3, '0');
+}
+function crc16(s){
+  let crc = 0xFFFF;
+  for (let i = 0; i < s.length; i++){
+    crc ^= s.charCodeAt(i) << 8;
+    for (let j = 0; j < 8; j++){
+      crc = (crc & 0x8000) ? ((crc << 1) ^ 0x1021) : (crc << 1);
+      crc &= 0xFFFF;
+    }
+  }
+  return crc.toString(16).toUpperCase().padStart(4, '0');
+}
+function tlv(id, v){ return id + String(v.length).padStart(2, '0') + v; }
+function shopPayload(amount){
+  let p = tlv('00','01') + tlv('01','12') +
+          tlv('29', tlv('00','A000000677010111') + tlv('03', SHOP_PP_ID)) +
+          tlv('53','764') + tlv('54', amount.toFixed(2)) + tlv('58','TH');
+  p += '6304';
+  return p + crc16(p);
 }
 function slotList(){
   const now = new Date();
@@ -284,7 +308,7 @@ function CartSheet({ cart, setCart, profile, inLine, onDone, onClose }){
       const orderNo = await nextOrderNo();
       const doc = cleanUndefined({
         orderNo,
-        status: 'new', dateKey: todayKey(),
+        status: 'new', paid: false, dateKey: todayKey(),
         createdAt: new Date().toISOString(),
         pickupAt: pickup.toISOString(), startAt: start.toISOString(),
         total,
@@ -295,21 +319,38 @@ function CartSheet({ cart, setCart, profile, inLine, onDone, onClose }){
       const ref = await db.collection('owlOrders').add(doc);
 
       // ส่งสรุปเข้าแชทร้าน (ในนามลูกค้า) — ลูกค้าเก็บไว้โชว์หน้าร้าน + แอดมินเห็นทันที
+      const sw = { none:'ไม่หวาน', less:'หวานน้อย', normal:'หวานปกติ', extra:'หวานมาก' };
+      const ic = { less:'น้ำแข็งน้อย', no:'ไม่ใส่น้ำแข็ง', sep:'แยกน้ำแข็ง' };
+      const lines = items.map(it =>
+        '• ' + (it.nameTh || it.name) + ' (' + (sw[it.sweetness] || '') + (ic[it.ice] ? '/' + ic[it.ice] : '') +
+        (it.toppings.length ? ' +' + it.toppings.map(t => t.name + (t.n > 1 ? 'x' + t.n : '')).join('/') : '') + ') ×' + it.qty
+      ).join('\n');
+      const summaryText = '🦉 สั่งล่วงหน้า Owl Cha\n' + lines +
+        '\nรวม ' + total + ' บาท\n👤 ' + name.trim() + ' 📞 ' + ph +
+        '\n🕐 มารับ ' + slot + ' น.\n📌 หมายเลขออเดอร์ ' + orderNo +
+        '\n\n💸 กรุณาโอน ' + total + ' บาท ตาม QR ที่ส่งให้ (บัญชี ' + SHOP_PP_NAME + ')' +
+        '\nแล้วส่งสลิปในแชทนี้ ร้านจะเริ่มทำหลังยืนยันยอดครับ';
+      let sendStatus = 'notline';
       if (inLine && window.liff && liff.isInClient()){
-        const sw = { none:'ไม่หวาน', less:'หวานน้อย', normal:'หวานปกติ', extra:'หวานมาก' };
-        const ic = { less:'น้ำแข็งน้อย', no:'ไม่ใส่น้ำแข็ง', sep:'แยกน้ำแข็ง' };
-        const lines = items.map(it =>
-          '• ' + (it.nameTh || it.name) + ' (' + (sw[it.sweetness] || '') + (ic[it.ice] ? '/' + ic[it.ice] : '') +
-          (it.toppings.length ? ' +' + it.toppings.map(t => t.name + (t.n > 1 ? 'x' + t.n : '')).join('/') : '') + ') ×' + it.qty
-        ).join('\n');
         try{
-          await liff.sendMessages([{ type:'text',
-            text:'🦉 สั่งล่วงหน้า Owl Cha\n' + lines +
-                 '\nรวม ' + total + ' บาท\n👤 ' + name.trim() + ' 📞 ' + ph +
-                 '\n🕐 มารับ ' + slot + ' น.\n📌 หมายเลขออเดอร์ ' + orderNo }]);
-        }catch(e){ console.warn('sendMessages', e); }
+          await liff.sendMessages([
+            { type:'text', text: summaryText },
+            { type:'image', originalContentUrl: SHOP_QR_IMG, previewImageUrl: SHOP_QR_IMG }
+          ]);
+          sendStatus = 'ok';
+        }catch(e){
+          sendStatus = (e && (e.message || e.code)) || 'unknown';
+          console.warn('sendMessages', e);
+        }
       }
-      onDone({ id: ref.id, orderNo, slot, total, name: name.trim() });
+      if (sendStatus !== 'ok' && NOTIFY_URL.indexOf('PASTE') !== 0 && profile && profile.userId){
+        try{
+          fetch(NOTIFY_URL, { method:'POST', headers:{ 'Content-Type':'text/plain' },
+            body: JSON.stringify({ userId: profile.userId, text: summaryText }) }).catch(() => {});
+          sendStatus = 'push';
+        }catch(e){}
+      }
+            onDone({ id: ref.id, orderNo, slot, total, name: name.trim(), sendStatus });
     }catch(e){ alert('สั่งไม่สำเร็จ: ' + e.message); }
     setBusy(false);
   };
@@ -369,7 +410,7 @@ function CartSheet({ cart, setCart, profile, inLine, onDone, onClose }){
             {busy ? 'กำลังส่งออเดอร์…' : 'ยืนยันสั่ง · ' + total + ' ฿'}
           </button>
           <div style={{fontSize:12.5, color:'var(--muted)', marginTop:10, lineHeight:1.5}}>
-            ชำระเงินที่ร้านตอนมารับ (เงินสด/สแกน) · 📍 หน้าหอเพชรรัตน์ 4 ตรงข้ามโรงอาหารเพชรรัตน์
+            ยืนยันแล้วจะได้ QR โอนชำระก่อน ร้านเริ่มทำหลังได้รับยอด · 📍 หน้าหอเพชรรัตน์ 4 ตรงข้ามโรงอาหารเพชรรัตน์
           </div>
         </>}
       </div>
@@ -379,6 +420,14 @@ function CartSheet({ cart, setCart, profile, inLine, onDone, onClose }){
 
 /* ====== หน้าสำเร็จ ====== */
 function Done({ info }){
+  const qrRef = useRef(null);
+  useEffect(() => {
+    if (qrRef.current && window.QRCode){
+      qrRef.current.innerHTML = '';
+      new QRCode(qrRef.current, { text: shopPayload(info.total),
+                                  width: 190, height: 190, correctLevel: QRCode.CorrectLevel.M });
+    }
+  }, []);
   return (
     <div style={{minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center', padding:20}}>
       <div style={{background:'#fff', borderRadius:22, padding:'28px 22px', maxWidth:400, width:'100%',
@@ -387,14 +436,31 @@ function Done({ info }){
         <div style={{fontWeight:700, fontSize:21, margin:'6px 0 2px'}}>รับออเดอร์แล้ว!</div>
         <div style={{fontWeight:700, fontSize:26, color:'var(--accent)', margin:'2px 0'}}>{info.orderNo}</div>
         <div style={{color:'var(--muted)', fontSize:14}}>คุณ{info.name}</div>
-        <div style={{background:'var(--soft)', borderRadius:14, padding:14, margin:'16px 0', fontSize:15, lineHeight:1.8, textAlign:'left'}}>
-          🕐 มารับเวลา <b>{info.slot} น.</b> · รวม <b>{info.total} ฿</b><br/>
-          <b>ถึงหน้าร้านแล้ว:</b><br/>
-          1️⃣ แจ้งชื่อ พร้อมโชว์ข้อความในไลน์<br/>
-          2️⃣ ชำระเงิน (เงินสด/สแกน)<br/>
-          3️⃣ รับเครื่องดื่มได้เลย 🧋
+        <div style={{background:'var(--soft)', borderRadius:14, padding:14, margin:'14px 0 10px', fontSize:15, lineHeight:1.8, textAlign:'left'}}>
+          🕐 มารับเวลา <b>{info.slot} น.</b> · ยอดชำระ <b>{info.total} ฿</b><br/>
+          <b>💸 โอนก่อน ร้านถึงเริ่มทำ:</b><br/>
+          1️⃣ สแกน QR โอน <b>{info.total} บาท</b> (ยอดขึ้นอัตโนมัติ)<br/>
+          2️⃣ ส่งสลิปในแชท Owl Cha 📎<br/>
+          3️⃣ ถึงเวลารับ ไปที่ร้าน แจ้งชื่อได้เลย 🧋
+        </div>
+        <div style={{background:'#fff', border:'1.5px solid var(--line)', borderRadius:14, padding:'14px 10px 8px', marginBottom:12}}>
+          <div ref={qrRef} style={{display:'flex', justifyContent:'center'}} />
+          <div style={{fontSize:13, color:'var(--muted)', marginTop:8, lineHeight:1.5}}>
+            ยอด {info.total}.00 บาท · ชื่อบัญชี <b style={{color:'var(--ink)'}}>{SHOP_PP_NAME}</b><br/>
+            เช็คชื่อบัญชีก่อนกดโอนทุกครั้ง
+          </div>
+          <div style={{fontSize:12, color:'var(--muted)', marginTop:8, lineHeight:1.6, textAlign:'left'}}>
+            💡 โอนจากมือถือเครื่องนี้: แคปหน้าจอนี้ → เปิดแอปธนาคาร → สแกน → เลือกรูปจากคลังภาพ
+            (ยอดจะขึ้นอัตโนมัติ) หรือใช้รูป QR ที่ส่งเข้าแชท Owl Cha แล้วใส่ยอดเอง
+          </div>
         </div>
         <div style={{fontSize:13, color:'var(--muted)'}}>📍 หน้าหอเพชรรัตน์ 4 ตรงข้ามโรงอาหารเพชรรัตน์</div>
+        {(info.sendStatus === 'ok' || info.sendStatus === 'push')
+          ? <div style={{marginTop:10, fontSize:13, color:'var(--accent)', fontWeight:600}}>✅ ส่งสรุปออเดอร์เข้าแชทแล้ว</div>
+          : <div style={{marginTop:10, fontSize:12.5, color:'#B4552D', lineHeight:1.5}}>
+              ⚠️ ยังไม่ได้ส่งสรุปเข้าแชท ({info.sendStatus === 'notline' ? 'ไม่ได้เปิดผ่าน LINE' : String(info.sendStatus).slice(0, 120)})
+              <br/>ใช้หน้านี้โชว์พนักงานแทนได้เลย
+            </div>}
       </div>
     </div>
   );

@@ -256,7 +256,7 @@ function PinGate({ onPass }){
 }
 
 /* ================= การ์ดออเดอร์ ================= */
-function OrderCard({ o, now, onDone, onUndo }){
+function OrderCard({ o, now, onDone, onUndo, onPaid }){
   const start = o.startAt ? new Date(o.startAt) : null;
   const pickup = o.pickupAt ? new Date(o.pickupAt) : null;
   const isDone = o.status === 'done';
@@ -273,7 +273,14 @@ function OrderCard({ o, now, onDone, onUndo }){
                  border:'2px solid ' + border, opacity:isDone ? .65 : 1,
                  boxShadow: ready || late ? '0 4px 16px rgba(0,0,0,.10)' : 'none'}}>
       <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
-        <div style={{fontWeight:700, fontSize:18}}>{o.orderNo ? o.orderNo + ' · ' : ''}รับ {hhmm(o.pickupAt)} · คุณ{o.customer && o.customer.name}</div>
+        <div style={{fontWeight:700, fontSize:18}}>
+          {o.orderNo ? o.orderNo + ' · ' : ''}รับ {hhmm(o.pickupAt)} · คุณ{o.customer && o.customer.name}
+          <span style={{fontSize:12.5, fontWeight:600, marginLeft:8, padding:'2px 8px', borderRadius:999,
+                        background:o.paid ? 'rgba(46,158,107,.12)' : 'rgba(225,91,78,.12)',
+                        color:o.paid ? 'var(--ok)' : 'var(--hot)'}}>
+            {o.paid ? '💰 ชำระแล้ว' : '💸 รอชำระ'}
+          </span>
+        </div>
         <div style={{fontSize:13, fontWeight:600, color:badge.c}}>{badge.t}</div>
       </div>
       <div style={{fontSize:13, color:'var(--muted)', marginBottom:8}}>
@@ -291,7 +298,12 @@ function OrderCard({ o, now, onDone, onUndo }){
         <div style={{fontWeight:700}}>รวม {o.total} บาท</div>
         {isDone
           ? <button className="btn press" onClick={() => onUndo(o.id)} style={{background:'var(--line)', color:'var(--ink)', fontSize:14}}>↩ ย้อนกลับ</button>
-          : <button className="btn press" onClick={() => onDone(o.id)} style={{background:'var(--ok)', color:'#fff', fontSize:15}}>✅ ทำเสร็จแล้ว</button>}
+          : <div style={{display:'flex', gap:8}}>
+              {!o.paid &&
+                <button className="btn press" onClick={() => onPaid(o.id)}
+                  style={{background:'var(--blue)', color:'#fff', fontSize:15}}>💰 ยืนยันรับเงิน</button>}
+              <button className="btn press" onClick={() => onDone(o.id)} style={{background:'var(--ok)', color:'#fff', fontSize:15}}>✅ ทำเสร็จแล้ว</button>
+            </div>}
       </div>
     </div>
   );
@@ -313,7 +325,7 @@ function OrdersTab(){
   // เตือนรอบ 2: ถึงเวลาเริ่มทำ (คนละเสียงกับออเดอร์เข้า)
   useEffect(() => {
     orders.forEach(o => {
-      if (o.status === 'done' || !o.startAt) return;
+      if (o.status === 'done' || !o.startAt || !o.paid) return;
       if (alerted.current.has(o.id)) return;
       if (now >= new Date(o.startAt)){
         alerted.current.add(o.id);
@@ -354,11 +366,13 @@ function OrdersTab(){
       {active.length === 0 &&
         <div style={{textAlign:'center', color:'var(--muted)', padding:'40px 0'}}>ยังไม่มีออเดอร์วันนี้ 🦉</div>}
       {active.map(o => <OrderCard key={o.id} o={o} now={now}
-        onDone={id => setStatus(id, 'done')} onUndo={id => setStatus(id, 'new')} />)}
+        onDone={id => setStatus(id, 'done')} onUndo={id => setStatus(id, 'new')}
+        onPaid={id => db.collection('owlOrders').doc(id).update({ paid: true, paidAt: new Date().toISOString() })} />)}
       {done.length > 0 && <>
         <div style={{color:'var(--muted)', fontSize:14, margin:'16px 0 8px'}}>เสร็จแล้ววันนี้ ({done.length})</div>
         {done.map(o => <OrderCard key={o.id} o={o} now={now}
-          onDone={id => setStatus(id, 'done')} onUndo={id => setStatus(id, 'new')} />)}
+          onDone={id => setStatus(id, 'done')} onUndo={id => setStatus(id, 'new')}
+          onPaid={id => db.collection('owlOrders').doc(id).update({ paid: true, paidAt: new Date().toISOString() })} />)}
       </>}
     </div>
   );
