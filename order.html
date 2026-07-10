@@ -82,10 +82,7 @@ const POSTERS = [
   { f:'owl-img/poster-shinemuscat.jpg', t:"ไชน์มัสแคท", menu:'Shine Muscat Tea', cat:'' },
   { f:'owl-img/poster-premiumpeach.jpg', t:"พรีเมียมพีช", menu:'', cat:'พรีเมียมฟรุต' },
   { f:'owl-img/poster-peach.jpg', t:"พีช", menu:'Peach Tea', cat:'' },
-  { f:'owl-img/poster-menuboard.jpg', t:"เมนูรวม", menu:'', cat:'ขายดี' },
   { f:'owl-img/poster-topping-new.jpg', t:"ท็อปปิ้ง", menu:'', cat:'' },
-  { f:'owl-img/poster-topping.jpg', t:"ท็อปปิ้ง", menu:'', cat:'' },
-  { f:'owl-img/poster-sweetlevel.jpg', t:"ระดับความหวาน", menu:'', cat:'' },
 ];
 const CAT_POSTER = {
   'ขายดี':'owl-img/poster-thaiteacheese.jpg',
@@ -727,13 +724,18 @@ function App(){
             const i = POSTERS.findIndex(p => p.f === CAT_POSTER[cat]);
             setPosterAt(i >= 0 ? i : 0);
           }}
-          style={{position:'relative', borderRadius:16, overflow:'hidden', marginTop:6,
-                  border:'1px solid var(--line)', cursor:'pointer', height:110}}>
+          style={{display:'flex', alignItems:'center', gap:12, background:'#fff',
+                  border:'1px solid var(--line)', borderRadius:16, padding:'8px 12px',
+                  marginTop:6, cursor:'pointer'}}>
           <img src={CAT_POSTER[cat]} loading="lazy"
-            style={{width:'100%', height:'100%', objectFit:'cover', objectPosition:'center 22%'}}
+            style={{width:52, height:72, objectFit:'cover', objectPosition:'top',
+                    borderRadius:8, background:'var(--soft)', flexShrink:0}}
             onError={e => { e.target.parentNode.style.display = 'none'; }} />
-          <div style={{position:'absolute', right:10, bottom:8, background:'rgba(29,27,22,.72)', color:'#fff',
-                       fontSize:12, borderRadius:999, padding:'4px 11px'}}>ดูโปสเตอร์ ›</div>
+          <div style={{flex:1, minWidth:0}}>
+            <div style={{fontWeight:600, fontSize:14.5}}>📖 โปสเตอร์หมวด{cat}</div>
+            <div style={{fontSize:12, color:'var(--muted)'}}>แตะดูรูปใหญ่ · เจอแก้วน่ากินกดสั่งได้เลย</div>
+          </div>
+          <div style={{color:'var(--muted)', fontSize:18}}>›</div>
         </div>}
       <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginTop:10}}>
         {shown.map(m => <MenuCard key={m.id} m={m} onTap={setSel} />)}
