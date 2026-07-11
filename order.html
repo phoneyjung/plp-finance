@@ -217,13 +217,13 @@ function MenuCard({ m, onTap }){
 }
 
 /* ====== ชีทเลือกตัวเลือกแก้ว ====== */
-function ItemSheet({ m, toppings, onAdd, onClose }){
+function ItemSheet({ m, toppings, onAdd, onClose, init }){
   const isTop = m.category === 'ท็อปปิ้ง';
-  const [sweet, setSweet] = useState('normal');
-  const [ice, setIce] = useState('normal');
-  const [tops, setTops] = useState([]);   // [{...topping, n:จำนวนช้อน}]
+  const [sweet, setSweet] = useState(init ? (init.sweet || 'normal') : 'normal');
+  const [ice, setIce] = useState(init ? (init.ice || 'normal') : 'normal');
+  const [tops, setTops] = useState(init ? (init.tops || []) : []);   // [{...topping, n:จำนวนช้อน}]
   const MAX1 = t => /cheese/i.test(t.name || '') || /ชีส/.test(t.nameTh || '');
-  const [qty, setQty] = useState(1);
+  const [qty, setQty] = useState(init ? init.qty : 1);
   const unit = m.price + tops.reduce((s, t) => s + t.price * t.n, 0);
   const chTop = (t, d) => setTops(p => {
     const cur = p.find(x => x.id === t.id);
@@ -318,7 +318,7 @@ function ItemSheet({ m, toppings, onAdd, onClose }){
 
         <button className="btn press" style={{width:'100%', background:'var(--accent)', color:'#fff', fontSize:17}}
           onClick={() => { onAdd(isTop ? { m, sweet:'', ice:'', tops:[], qty, unit } : { m, sweet, ice, tops, qty, unit }); onClose(); }}>
-          ใส่ตะกร้า · {unit * qty} ฿
+          {init ? '💾 บันทึกการแก้ไข' : 'ใส่ตะกร้า'} · {unit * qty} ฿
         </button>
       </div>
     </>
@@ -326,7 +326,7 @@ function ItemSheet({ m, toppings, onAdd, onClose }){
 }
 
 /* ====== ตะกร้า + ยืนยัน ====== */
-function CartSheet({ cart, setCart, profile, inLine, onDone, onClose }){
+function CartSheet({ cart, setCart, profile, inLine, onDone, onClose, onEdit }){
   const [name, setName] = useState(profile ? profile.displayName : '');
   const [phone, setPhone] = useState('');
   const [slot, setSlot] = useState('');
@@ -453,6 +453,8 @@ function CartSheet({ cart, setCart, profile, inLine, onDone, onClose }){
               <button className="press" onClick={() => chQty(i, 1)}
                 style={{width:30, height:30, borderRadius:8, border:'1.5px solid var(--line)', background:'#fff'}}>+</button>
               <div style={{flex:1}} />
+              <div onClick={() => onEdit && onEdit(i)}
+                style={{fontSize:13.5, color:'var(--accent)', fontWeight:600, cursor:'pointer', marginRight:14}}>✏️ แก้ไข</div>
               <div onClick={() => rm(i)} style={{fontSize:13, color:'var(--muted)', cursor:'pointer'}}>ลบ</div>
             </div>
           </div>
@@ -717,6 +719,7 @@ function App(){
   const [showCart, setShowCart] = useState(false);
   const [done, setDone] = useState(null);
   const [posterAt, setPosterAt] = useState(-1);   // index ใน POSTERS (-1 = ปิด)
+  const [editIdx, setEditIdx] = useState(-1);     // index ในตะกร้าที่กำลังแก้
   const keyRef = useRef(0);
 
   useEffect(() => {
@@ -830,7 +833,11 @@ function App(){
       {sel && <ItemSheet m={sel} toppings={toppings} onClose={() => setSel(null)}
         onAdd={it => setCart(p => [...p, { ...it, key: ++keyRef.current }])} />}
       {showCart && <CartSheet cart={cart} setCart={setCart} profile={profile} inLine={inLine}
-        onClose={() => setShowCart(false)} onDone={setDone} />}
+        onClose={() => setShowCart(false)} onDone={setDone} onEdit={i => setEditIdx(i)} />}
+      {editIdx >= 0 && cart[editIdx] &&
+        <ItemSheet m={cart[editIdx].m} init={cart[editIdx]} toppings={toppings}
+          onClose={() => setEditIdx(-1)}
+          onAdd={it => setCart(p => p.map((c, i) => i === editIdx ? { ...it, key: c.key } : c))} />}
     </div>
   );
 }
