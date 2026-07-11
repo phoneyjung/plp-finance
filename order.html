@@ -42,7 +42,8 @@ const { useState, useEffect, useMemo, useRef } = React;
 
 /* ====== ตั้งค่า ====== */
 const LIFF_ID = '2010531664-XhbuTZLn';   // ← LIFF "Owl Order" (Owl Cha Login channel)
-const NOTIFY_URL = 'PASTE_NOTIFY_URL';    // ← Apps Script "Owl Notify" (แผนสำรองส่งสรุป)
+const NOTIFY_URL = 'PASTE_NOTIFY_URL';    // ← Apps Script "Owl Notify"
+const OWL_REPLY = 'รับออเดอร์เรียบร้อยแล้วน้าา 🦉💚\n\nน้องฮูกรอสลิปอยู่นะคะ\nโอนเสร็จแล้ว 📎 ส่งสลิปการชำระเงิน\nเข้าแชทนี้ได้เลยค่ะ\n\nพอตรวจยอดเสร็จ ร้านจะเริ่มทำ\nเครื่องดื่มให้ทันทีเลยค่า 🧋✨\nขอบคุณที่อุดหนุน Owl Cha นะคะ 🥰';
 const SHOP_PP_ID = '004999245446611';     // PromptPay ID ร้าน (K+ รับได้ทุกธนาคาร)
 const SHOP_PP_NAME = 'น.ส. ณัฐฏฒฑากรณ์ ส. (K+)';
 const TEST_MODE = /test=1/.test(decodeURIComponent(window.location.search + window.location.hash));
@@ -336,6 +337,16 @@ function CartSheet({ cart, setCart, profile, inLine, onDone, onClose }){
   const chQty = (i, d) => setCart(p => p.map((c, x) => x === i ? { ...c, qty: Math.max(1, c.qty + d) } : c));
   const rm = i => setCart(p => p.filter((_, x) => x !== i));
 
+  const [review, setReview] = useState(false);
+  const askConfirm = () => {
+    if (!cart.length) return;
+    if (!name.trim()) return alert('กรุณาใส่ชื่อ');
+    const ph = phone.replace(/[^0-9]/g, '');
+    if (ph.length < 9 || ph.length > 10) return alert('กรุณาใส่เบอร์โทร 9-10 หลัก');
+    if (!slot && slots.length) return alert('กรุณาเลือกเวลามารับ');
+    if (!slot) return alert('วันนี้ปิดรับออเดอร์แล้วครับ 🙏');
+    setReview(true);
+  };
   const confirm = async () => {
     if (!cart.length) return;
     if (!name.trim()) return alert('กรุณาใส่ชื่อ');
@@ -398,11 +409,13 @@ function CartSheet({ cart, setCart, profile, inLine, onDone, onClose }){
           console.warn('sendMessages', e);
         }
       }
-      if (sendStatus !== 'ok' && NOTIFY_URL.indexOf('PASTE') !== 0 && profile && profile.userId){
+      // OA ตอบกลับน้องฮูกขอสลิปทุกออเดอร์ (+ สำรองส่งสรุปถ้าข้อความลูกค้าไม่ออก)
+      if (NOTIFY_URL.indexOf('PASTE') !== 0 && profile && profile.userId){
+        const texts = sendStatus === 'ok' ? [OWL_REPLY] : [summaryText, OWL_REPLY];
         try{
           fetch(NOTIFY_URL, { method:'POST', headers:{ 'Content-Type':'text/plain' },
-            body: JSON.stringify({ userId: profile.userId, text: summaryText }) }).catch(() => {});
-          sendStatus = 'push';
+            body: JSON.stringify({ userId: profile.userId, texts }) }).catch(() => {});
+          if (sendStatus !== 'ok') sendStatus = 'push';
         }catch(e){}
       }
             const doneInfo = { id: ref.id, orderNo, slot, total, name: name.trim(), sendStatus, items };
@@ -462,7 +475,7 @@ function CartSheet({ cart, setCart, profile, inLine, onDone, onClose }){
                 {slots.map(s => <option key={s} value={s}>{s} น.</option>)}
               </select>
             : <div style={{color:'var(--muted)', marginBottom:14}}>วันนี้ปิดรับออเดอร์แล้ว (รับออเดอร์ {SHOP_OPEN}–{SHOP_CLOSE} น.) แวะมาใหม่พรุ่งนี้นะครับ 🦉</div>}
-          <button className="btn press" disabled={busy || !slots.length} onClick={confirm}
+          <button className="btn press" disabled={busy || !slots.length} onClick={askConfirm}
             style={{width:'100%', background:slots.length ? 'var(--ink)' : 'var(--line)',
                     color:slots.length ? '#fff' : 'var(--muted)', fontSize:17,
                     cursor:slots.length ? 'pointer' : 'not-allowed'}}>
@@ -473,6 +486,52 @@ function CartSheet({ cart, setCart, profile, inLine, onDone, onClose }){
             ยืนยันแล้วจะได้ QR โอนชำระก่อน ร้านเริ่มทำหลังได้รับยอด · 📍 หน้าหอเพชรรัตน์ 4 ตรงข้ามโรงอาหารเพชรรัตน์
           </div>
         </>}
+
+        {review &&
+          <div style={{position:'fixed', inset:0, background:'rgba(20,18,14,.55)', zIndex:70,
+                       display:'flex', alignItems:'center', justifyContent:'center', padding:20}}>
+            <div style={{background:'#fff', borderRadius:20, padding:'20px 18px', maxWidth:360, width:'100%',
+                         maxHeight:'82vh', overflowY:'auto'}}>
+              <div style={{textAlign:'center', fontSize:34}}>🦉</div>
+              <div style={{fontWeight:700, fontSize:17.5, textAlign:'center', marginTop:2}}>ตรวจทานออเดอร์ก่อนน้า</div>
+              <div style={{fontSize:12.5, color:'#B4552D', textAlign:'center', marginTop:3}}>
+                กดสั่งแล้วแก้ไข/ยกเลิกไม่ได้นะคะ
+              </div>
+              <div style={{borderTop:'1.5px dashed var(--line)', margin:'12px 0 10px'}} />
+              {cart.map((c, i) => (
+                <div key={i} style={{display:'flex', justifyContent:'space-between', gap:8, marginBottom:7, fontSize:14}}>
+                  <div style={{flex:1}}>
+                    {c.m.nameTh || c.m.name} ×{c.qty}
+                    <div style={{fontSize:11.5, color:'var(--muted)'}}>
+                      {[c.sweet ? SWEETS.find(s => s.k === c.sweet).t : 'ท็อปปิ้ง',
+                        c.ice && c.ice !== 'normal' ? ICES.find(s => s.k === c.ice).t : '',
+                        ...c.tops.map(t => '+' + (t.nameTh || t.name) + (t.n > 1 ? '×' + t.n : ''))]
+                        .filter(Boolean).join(' · ')}
+                    </div>
+                  </div>
+                  <div style={{fontWeight:600}}>{c.unit * c.qty} ฿</div>
+                </div>
+              ))}
+              <div style={{display:'flex', justifyContent:'space-between', fontWeight:700, fontSize:15.5,
+                           borderTop:'1.5px dashed var(--line)', paddingTop:9, marginTop:2}}>
+                <div>รวม</div><div>{total} ฿</div>
+              </div>
+              <div style={{background:'var(--soft)', borderRadius:12, padding:'9px 12px', marginTop:10,
+                           fontSize:13.5, lineHeight:1.7}}>
+                👤 {name.trim()} · 📞 {phone.replace(/[^0-9]/g, '')}<br/>
+                🕐 มารับวันนี้ {slot} น. ที่หน้าร้าน
+              </div>
+              <button className="btn press" disabled={busy}
+                onClick={() => { setReview(false); confirm(); }}
+                style={{marginTop:14, width:'100%', background:'var(--accent)', color:'#fff', fontSize:16}}>
+                ✅ ถูกต้อง · สั่งเลย {total} ฿
+              </button>
+              <button className="btn press" onClick={() => setReview(false)}
+                style={{marginTop:8, width:'100%', background:'var(--soft)', color:'var(--ink)', fontSize:14.5}}>
+                ✏️ ขอแก้ก่อน
+              </button>
+            </div>
+          </div>}
       </div>
     </>
   );
