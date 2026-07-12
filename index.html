@@ -459,6 +459,26 @@ function App(){
     }
   },[shopId]);
 
+  const [restoring,setRestoring]=useState(()=>{ try{ return !!localStorage.getItem('plp_session'); }catch(e){ return false; } });
+  useEffect(()=>{
+    let sid=null;
+    try{ sid=localStorage.getItem('plp_session'); }catch(e){}
+    if(!sid){ setRestoring(false); return; }
+    (async()=>{
+      try{
+        const u=await getUserById(sid);
+        if(u && u.active!==false){
+          setUser(u);
+          const ms = u.shopIds==='all' ? SHOPS : SHOPS.filter(s=>(u.shopIds||[]).includes(s.id));
+          if(ms.length===1) setShopId(ms[0].id);
+        } else {
+          try{ localStorage.removeItem('plp_session'); }catch(e){}
+        }
+      }catch(e){ console.warn('restore', e); }
+      setRestoring(false);
+    })();
+  },[]);
+
   const onLogin=async(pin, expectId)=>{
     let u;
     if(expectId){
@@ -470,14 +490,15 @@ function App(){
       if(!u || u.active===false) return false;
     }
     setUser(u);
-    try{ localStorage.setItem('plp_last_user', u.id); }catch(e){}
+    try{ localStorage.setItem('plp_last_user', u.id); localStorage.setItem('plp_session', u.id); }catch(e){}
     const ms = u.shopIds==='all' ? SHOPS : SHOPS.filter(s=>(u.shopIds||[]).includes(s.id));
     if(ms.length===1) setShopId(ms[0].id);
     return true;
   };
-  const logout=()=>{ setUser(null); setShopId(null); };
+  const logout=()=>{ try{ localStorage.removeItem('plp_session'); }catch(e){} setUser(null); setShopId(null); };
 
   if(!FB_OK) return <div className="shell"><ConfigError/></div>;
+  if(restoring) return <div className="shell" style={{minHeight:'100vh',display:'grid',placeItems:'center',color:'var(--muted)'}} >กำลังเข้าสู่ระบบ…</div>;
   if(!user) return <div className="shell"><Login onLogin={onLogin}/></div>;
   if(!shopId) return <div className="shell"><Picker shops={myShops} onPick={setShopId} user={user} logout={logout}/></div>;
   return <div className="shell"><Main shop={shop} user={user} canSwitch={myShops.length>1}
