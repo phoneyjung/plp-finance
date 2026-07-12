@@ -121,6 +121,7 @@ const ROLES = {
 const FRONT_PERMS = [
   ['home','หน้าแรก (ภาพรวมวันนี้)'],
   ['record','บันทึกรายรับ-รายจ่าย'],
+  ['orders','รับออเดอร์สั่งล่วงหน้า (Owl Cha)'],
   ['stamp','ให้แต้มลูกค้า (Owl Cha)'],
   ['referral','แนะนำเพื่อน'],
   ['analyze','วิเคราะห์'],
@@ -354,6 +355,7 @@ const I={
   spark:(p)=><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"{...p}><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M18 6l-2.5 2.5M8.5 15.5 6 18"/></svg>,
   calendar:(p)=><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"{...p}><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 9.5h17M8 3v4M16 3v4"/></svg>,
   stamp:(p)=><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"{...p}><path d="M4 9.4a2 2 0 0 0 0 5.2V18a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3.4a2 2 0 0 0 0-5.2V6a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v3.4Z"/><path d="m12 8.6 1.1 2.2 2.4.35-1.75 1.7.42 2.4L12 16.2l-2.19 1.05.42-2.4L8.48 13.15l2.4-.35z"/></svg>,
+  cup:(p)=><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"{...p}><path d="M6.5 7h11l-1.2 13a1.5 1.5 0 0 1-1.5 1.3H9.2A1.5 1.5 0 0 1 7.7 20L6.5 7Z"/><path d="M6 7l9.5-4M6.9 11.5h10.2"/><circle cx="10" cy="15.5" r=".9"/><circle cx="13.6" cy="17.5" r=".9"/></svg>,
 };
 
 /* ---------- category icons (20) ---------- */
@@ -809,6 +811,107 @@ function TxnBrowser({shop, user, toast}){
   );
 }
 
+
+/* ===== Owl Cha: บอร์ดรับออเดอร์ (จากระบบสั่งล่วงหน้า) ===== */
+const OWL_SW={none:'ไม่หวาน',less:'หวานน้อย',normal:'หวานปกติ',extra:'หวานมาก'};
+const OWL_IC={less:'น้ำแข็งน้อย',no:'ไม่ใส่น้ำแข็ง',sep:'แยกน้ำแข็ง'};
+function owlHM(iso){ if(!iso) return '--:--'; const d=new Date(iso); return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); }
+function owlToday(){ const x=new Date(); return x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0')+'-'+String(x.getDate()).padStart(2,'0'); }
+let owlAC=null;
+function owlUnlock(){ try{ if(!owlAC) owlAC=new (window.AudioContext||window.webkitAudioContext)(); if(owlAC.state==='suspended') owlAC.resume(); }catch(e){} }
+function owlTone(t0,f,dur,vol,type){ const o=owlAC.createOscillator(),g=owlAC.createGain(); o.type=type||'sine'; o.frequency.value=f; g.gain.setValueAtTime(vol,owlAC.currentTime+t0); g.gain.exponentialRampToValueAtTime(0.001,owlAC.currentTime+t0+dur); o.connect(g); g.connect(owlAC.destination); o.start(owlAC.currentTime+t0); o.stop(owlAC.currentTime+t0+dur+0.02); }
+function owlBeep(){ try{ if(!owlAC) return; owlTone(0,880,0.3,0.7); owlTone(0.35,880,0.3,0.7); }catch(e){} }
+function owlBeepMake(){ try{ if(!owlAC) return; owlTone(0,440,0.22,0.7,'square'); owlTone(0.28,550,0.22,0.7,'square'); owlTone(0.56,700,0.5,0.7,'square'); }catch(e){} }
+
+function OwlOrderCard({o,now,onDone,onUndo,onPaid}){
+  const start=o.startAt?new Date(o.startAt):null;
+  const pickup=o.pickupAt?new Date(o.pickupAt):null;
+  const isDone=o.status==='done';
+  const late=!isDone&&pickup&&now>pickup;
+  const ready=!isDone&&!late&&start&&now>=start;
+  const border=isDone?'var(--line)':late?'#E15B4E':ready?'#E5A13A':'var(--line)';
+  const badge=isDone?{t:'✅ เสร็จแล้ว',c:'#2E9E6B'}:late?{t:'⏰ เลยเวลารับ!',c:'#E15B4E'}:ready?{t:'🔥 ถึงเวลาทำ!',c:'#B47B12'}:{t:'รอถึงเวลา',c:'var(--muted)'};
+  const optTxt=(it)=>{ const parts=[OWL_SW[it.sweetness],OWL_IC[it.ice]].filter(Boolean).join(' · '); const tp=(it.toppings&&it.toppings.length)?it.toppings.map(t=>t.name+(t.n>1?'×'+t.n:'')).join(', '):''; const s=parts+(tp?(parts?' + ':'+ ')+tp:''); return s?'('+s+')':''; };
+  return (
+    <div className="card" style={{padding:14,marginBottom:12,border:'2px solid '+border,opacity:isDone?.65:1}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,flexWrap:'wrap'}}>
+        <div style={{fontWeight:700,fontSize:16.5}} className="kanit">
+          {o.test?'🧪 ':''}{o.orderNo?o.orderNo+' · ':''}รับ {owlHM(o.pickupAt)} · คุณ{o.customer&&o.customer.name}
+          <span style={{fontSize:12,fontWeight:600,marginLeft:8,padding:'2px 8px',borderRadius:999,background:o.paid?'rgba(46,158,107,.12)':'rgba(225,91,78,.12)',color:o.paid?'#2E9E6B':'#E15B4E'}}>{o.paid?'💰 ชำระแล้ว':'💸 รอชำระ'}</span>
+        </div>
+        <div style={{fontSize:12.5,fontWeight:600,color:badge.c}}>{badge.t}</div>
+      </div>
+      <div style={{fontSize:12.5,color:'var(--muted)',margin:'2px 0 8px'}}>
+        เริ่มทำได้ตั้งแต่ <b style={{color:'var(--ink)'}}>{owlHM(o.startAt)}</b> · สั่ง {owlHM(o.createdAt)}
+        {o.customer&&o.customer.phone?<> · <a href={'tel:'+o.customer.phone} style={{color:'#3E7CB1'}}>📞 {o.customer.phone}</a></>:null}
+      </div>
+      {(o.items||[]).map((it,i)=>(
+        <div key={i} style={{display:'flex',justifyContent:'space-between',gap:8,padding:'6px 10px',background:'var(--soft)',borderRadius:10,marginBottom:6,fontSize:14}}>
+          <div>🧋 {it.name} <span style={{color:'var(--muted)'}}>{optTxt(it)}</span></div>
+          <div style={{fontWeight:600,flexShrink:0}}>×{it.qty}</div>
+        </div>
+      ))}
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginTop:8,gap:8,flexWrap:'wrap'}}>
+        <div style={{fontWeight:700}}>รวม {o.total} บาท</div>
+        {isDone
+          ? <button className="press" onClick={()=>onUndo(o.id)} style={{border:'none',borderRadius:12,padding:'9px 14px',background:'var(--line)',color:'var(--ink)',fontSize:13.5,fontFamily:'inherit'}}>↩ ย้อนกลับ</button>
+          : <div style={{display:'flex',gap:8}}>
+              {!o.paid && <button className="press" onClick={()=>onPaid(o.id)} style={{border:'none',borderRadius:12,padding:'9px 14px',background:'#3E7CB1',color:'#fff',fontWeight:600,fontSize:14,fontFamily:'inherit'}}>💰 ยืนยันรับเงิน</button>}
+              <button className="press" onClick={()=>onDone(o.id)} style={{border:'none',borderRadius:12,padding:'9px 14px',background:'#2E9E6B',color:'#fff',fontWeight:600,fontSize:14,fontFamily:'inherit'}}>✅ ทำเสร็จแล้ว</button>
+            </div>}
+      </div>
+    </div>
+  );
+}
+
+function OwlOrdersPanel(){
+  const [orders,setOrders]=useState([]);
+  const [now,setNow]=useState(new Date());
+  const [soundOn,setSoundOn]=useState(false);
+  const known=useRef(null);
+  const alerted=useRef(new Set());
+  useEffect(()=>{ const t=setInterval(()=>setNow(new Date()),15000); return ()=>clearInterval(t); },[]);
+  useEffect(()=>{
+    const unsub=db.collection('owlOrders').where('dateKey','==',owlToday()).onSnapshot(snap=>{
+      const list=snap.docs.map(d=>({id:d.id,...d.data()}));
+      list.sort((a,b)=>(a.pickupAt||'').localeCompare(b.pickupAt||''));
+      if(known.current!==null){ if(list.some(o=>!known.current.has(o.id))) owlBeep(); }
+      known.current=new Set(list.map(o=>o.id));
+      setOrders(list);
+    },e=>console.error('owlOrders',e));
+    return ()=>unsub();
+  },[]);
+  useEffect(()=>{
+    orders.forEach(o=>{
+      if(o.status==='done'||!o.startAt||!o.paid) return;
+      if(alerted.current.has(o.id)) return;
+      if(now>=new Date(o.startAt)){ alerted.current.add(o.id); owlBeepMake(); }
+    });
+  },[now,orders]);
+  const setSt=(id,patch)=>db.collection('owlOrders').doc(id).update(patch).catch(e=>alert('บันทึกไม่สำเร็จ: '+e.message));
+  const active=orders.filter(o=>o.status!=='done');
+  const done=orders.filter(o=>o.status==='done');
+  return (
+    <div style={{padding:'14px 14px 0'}}>
+      {!soundOn &&
+        <button className="press kanit" onClick={()=>{ owlUnlock(); owlBeep(); setTimeout(owlBeepMake,900); setSoundOn(true); }}
+          style={{width:'100%',border:'none',borderRadius:14,padding:'13px',background:'#E5A13A',color:'#fff',fontWeight:600,fontSize:15,marginBottom:12}}>
+          🔔 กดเปิดเสียงเตือนออเดอร์ (ครั้งเดียวพอ · เปิดหน้านี้ค้างไว้)
+        </button>}
+      {active.length===0 && <div style={{textAlign:'center',color:'var(--muted)',padding:'34px 0'}}>ยังไม่มีออเดอร์วันนี้ 🦉</div>}
+      {active.map(o=><OwlOrderCard key={o.id} o={o} now={now}
+        onDone={id=>setSt(id,{status:'done'})} onUndo={id=>setSt(id,{status:'new'})}
+        onPaid={id=>setSt(id,{paid:true,paidAt:new Date().toISOString()})}/>)}
+      {done.length>0 && <>
+        <div style={{color:'var(--muted)',fontSize:13.5,margin:'14px 0 8px'}}>เสร็จแล้ววันนี้ ({done.length})</div>
+        {done.map(o=><OwlOrderCard key={o.id} o={o} now={now}
+          onDone={id=>setSt(id,{status:'done'})} onUndo={id=>setSt(id,{status:'new'})}
+          onPaid={id=>setSt(id,{paid:true,paidAt:new Date().toISOString()})}/>)}
+      </>}
+    </div>
+  );
+}
+
 function Main({shop,user,canSwitch,onSwitch,logout}){
   const [tab,setTab]=useState('home');
   const readOnly = user.role==='partner';
@@ -821,7 +924,7 @@ function Main({shop,user,canSwitch,onSwitch,logout}){
     {k:'referral',label:'แนะนำ',icon:I.users},
     {k:'capital',label:'ทุน',icon:I.wallet},
     ...(user.role==='admin' ? [{k:'txns',label:'รายการ',icon:I.table}] : []),
-    ...(shop.id==='owlcha' ? [{k:'stamp',label:'แต้ม',icon:I.stamp}] : []),
+    ...(shop.id==='owlcha' ? [{k:'orders',label:'ออเดอร์',icon:I.cup},{k:'stamp',label:'แต้ม',icon:I.stamp}] : []),
     {k:'settings',label:'ตั้งค่า',icon:I.gear},
   ].filter(x=> !(user.role==='staff' && (x.k==='capital'||x.k==='analyze'||x.k==='referral')))
    .filter(x=> !(user.role==='front' && x.k!=='settings' && !(user.perms&&user.perms[x.k])));
@@ -847,6 +950,7 @@ function Main({shop,user,canSwitch,onSwitch,logout}){
         {tab==='referral' && <Referral shop={shop} user={user} toast={toast}/>}
         {tab==='capital' && <Capital shop={shop} user={user} toast={toast}/>}
         {tab==='txns' && <TxnBrowser shop={shop} user={user} toast={toast}/>}
+        {tab==='orders' && <OwlOrdersPanel/>}
         {tab==='stamp' && <StampPanel shop={shop} user={user} toast={toast}/>}
         {tab==='settings' && <Settings shop={shop} user={user} logout={logout} toast={toast}/>}
       </div>
