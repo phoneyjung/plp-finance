@@ -1084,7 +1084,24 @@ const OC_SEED_MENU = [
   { id:'t07', cat:'top', name:'เรนโบว์เยลลี่',                  sell:5,  lines:[{ref:'i:jelly',qty:50}], addon:true },
 ];
 const OC_SEED_SETTINGS = { targetPct:35, pack:[ {ing:'cup',qty:1}, {ing:'lidSeal',qty:1}, {ing:'strawSmall',qty:1} ] };
-const OC_SEED = { ing:OC_SEED_ING, bases:OC_SEED_BASE, menus:OC_SEED_MENU, settings:OC_SEED_SETTINGS };
+const OC_SEED_BIZ = {
+  cupsPerDay:300, avgPrice:36, avgCost:15, daysPerMonth:30,
+  staff:[
+    { id:'st1', name:'พนักงานประจำ 1', pay:13000 },
+    { id:'st2', name:'พนักงานประจำ 2', pay:13000 },
+    { id:'st3', name:'พาร์ทไทม์ (ช่วงพีค)', pay:6000 },
+  ],
+  fixed:[
+    { id:'fx1', name:'ค่าเช่าที่', amt:0 },
+    { id:'fx2', name:'ค่าไฟ', amt:0 },
+    { id:'fx3', name:'ค่าน้ำ', amt:0 },
+    { id:'fx4', name:'น้ำแข็ง (น็อคชา+ใส่แก้ว)', amt:2000 },
+    { id:'fx5', name:'ค่าส่งวัตถุดิบ', amt:1000 },
+    { id:'fx6', name:'การตลาด/โปรแจก', amt:2000 },
+    { id:'fx7', name:'สำรองซ่อม/จุกจิก', amt:2000 },
+  ],
+};
+const OC_SEED = { ing:OC_SEED_ING, bases:OC_SEED_BASE, menus:OC_SEED_MENU, settings:OC_SEED_SETTINGS, biz:OC_SEED_BIZ };
 const OC_CATS = [
   ['best','⭐ Best Seller'],['classic','🍃 Classic'],['fav','💛 Favourite'],['fresh','🥛 Fresh Milk'],
   ['choco','🍫 Choco Owl'],['soda','🫧 Soda'],['premium','🍑 Premium Fruit'],['top','🧀 Toppings'],['other','📌 อื่นๆ']
@@ -1092,6 +1109,142 @@ const OC_CATS = [
 const ocCatKey = (m)=> (m.cat && OC_CATS.some(x=>x[0]===m.cat)) ? m.cat : 'other';
 const ocCatLabel = (c)=>{ const f=OC_CATS.find(x=>x[0]===c); return f?f[1]:'📌 อื่นๆ'; };
 const ocSortMenus = (menus)=>{ const ord=OC_CATS.map(x=>x[0]); return [...menus].sort((a,b)=> ord.indexOf(ocCatKey(a)) - ord.indexOf(ocCatKey(b))); };
+
+/* ---- Export Excel (xlsx-js-style: รองรับสีเซลล์) ---- */
+function ocLoadXlsx(){
+  return new Promise((res,rej)=>{
+    if(window.XLSX && window.XLSX.utils){ res(); return; }
+    const s=document.createElement('script');
+    s.src='https://unpkg.com/xlsx-js-style@1.2.0/dist/xlsx.bundle.js';
+    s.onload=()=>res(); s.onerror=()=>rej(new Error('load fail'));
+    document.head.appendChild(s);
+  });
+}
+function ocBuildWorkbook(data){
+  const ingMap=Object.fromEntries(data.ing.map(g=>[g.id,g]));
+  const baseMap=Object.fromEntries(data.bases.map(b=>[b.id,b]));
+  const pk=ocPackCost(data.settings,ingMap);
+  const target=data.settings.targetPct||35;
+  const r2=n=>Math.round(n*100)/100;
+  const CATFILL={best:'F6E0A8',classic:'DCEBD2',fav:'FFE3B8',fresh:'D9E8F5',choco:'E4D3C4',soda:'D5EFF2',premium:'F8D7DA',top:'E6DAF0',other:'E8E8E8'};
+  const thin={style:'thin',color:{rgb:'D8D0C4'}};
+  const bd={top:thin,bottom:thin,left:thin,right:thin};
+  const sHead={font:{bold:true,color:{rgb:'FFFFFF'},sz:11},fill:{fgColor:{rgb:'5B4636'}},alignment:{horizontal:'center',vertical:'center'},border:bd};
+  const sCat=hex=>({font:{bold:true,sz:11,color:{rgb:'3B2F24'}},fill:{fgColor:{rgb:hex}},border:bd});
+  const sTxt={border:bd,alignment:{vertical:'center'}};
+  const sNum={border:bd,alignment:{horizontal:'right'}};
+  const sNumB={border:bd,alignment:{horizontal:'right'},font:{bold:true}};
+  const sOK={fill:{fgColor:{rgb:'C6EFCE'}},font:{color:{rgb:'006100'},bold:true},alignment:{horizontal:'center'},border:bd};
+  const sWarn={fill:{fgColor:{rgb:'FFEB9C'}},font:{color:{rgb:'9C6500'},bold:true},alignment:{horizontal:'center'},border:bd};
+  const sBad={fill:{fgColor:{rgb:'FFC7CE'}},font:{color:{rgb:'9C0006'},bold:true},alignment:{horizontal:'center'},border:bd};
+  const cell=(v,s,z)=>{ const c={v:v,t:(typeof v==='number'?'n':'s'),s:s||{}}; if(z)c.z=z; return c; };
+  const toSheet=(rows,merges,cols)=>{
+    const ws={}; let maxC=0;
+    rows.forEach((row,R)=>row.forEach((c,C)=>{ if(c==null)return; ws[XLSX.utils.encode_cell({r:R,c:C})]=c; if(C>maxC)maxC=C; }));
+    ws['!ref']=XLSX.utils.encode_range({s:{r:0,c:0},e:{r:Math.max(rows.length-1,0),c:maxC}});
+    if(merges) ws['!merges']=merges;
+    if(cols) ws['!cols']=cols;
+    return ws;
+  };
+  /* ---- Sheet 1: ต้นทุนเมนู ---- */
+  const rows=[], merges=[];
+  rows.push([cell('Owl Cha — ต้นทุนต่อแก้ว',{font:{bold:true,sz:14,color:{rgb:'5B4636'}}})]);
+  rows.push([cell('วันที่ '+new Date().toLocaleDateString('th-TH')+'  ·  เป้าหมายต้นทุน ไม่เกิน '+target+'% ของราคาขาย  ·  ค่าแพ็กเกจ/แก้ว '+r2(pk)+' บาท',{font:{sz:10,color:{rgb:'8A8072'}}})]);
+  rows.push([]);
+  merges.push({s:{r:0,c:0},e:{r:0,c:8}},{s:{r:1,c:0},e:{r:1,c:8}});
+  rows.push(['เมนู','วัตถุดิบ (฿)','แพ็กเกจ (฿)','รวมต้นทุน (฿)','ราคาขาย (฿)','กำไร (฿)','%กำไร','%ต้นทุน','สถานะ'].map(h=>cell(h,sHead)));
+  let lastCat=null;
+  ocSortMenus(data.menus).forEach(m=>{
+    const catK=ocCatKey(m);
+    if(catK!==lastCat){
+      lastCat=catK;
+      const catStyle=sCat(CATFILL[catK]||'E8E8E8');
+      rows.push([cell(ocCatLabel(catK),catStyle),cell('',catStyle),cell('',catStyle),cell('',catStyle),cell('',catStyle),cell('',catStyle),cell('',catStyle),cell('',catStyle),cell('',catStyle)]);
+      merges.push({s:{r:rows.length-1,c:0},e:{r:rows.length-1,c:8}});
+    }
+    const c=ocMenuCost(m,ingMap,baseMap);
+    const pkv=m.addon?0:pk;
+    const tot=c.total+pkv;
+    const pct=m.sell>0? tot/m.sell*100 : null;
+    const st = pct===null ? cell('ใส่ราคา',sWarn)
+      : (pct<=target ? cell('ผ่าน',sOK) : (pct<=target+10 ? cell('เกินนิด',sWarn) : cell('เกินเป้า',sBad)));
+    rows.push([
+      cell(m.name+(c.missing?' (ขาดราคาวัตถุดิบ)':''),sTxt),
+      cell(r2(c.total),sNum,'#,##0.00'),
+      cell(r2(pkv),sNum,'#,##0.00'),
+      cell(r2(tot),sNumB,'#,##0.00'),
+      cell(m.sell||0,sNum,'#,##0'),
+      m.sell>0 ? cell(r2(m.sell-tot),sNum,'#,##0.00') : cell('',sTxt),
+      m.sell>0 ? cell(r2((m.sell-tot)/m.sell*100)/100,{border:bd,alignment:{horizontal:'right'},font:{bold:true,color:{rgb:'1D6F42'}}},'0%') : cell('',sTxt),
+      pct!==null ? cell(r2(pct)/100,sNumB,'0%') : cell('',sTxt),
+      st
+    ]);
+  });
+  const ws1=toSheet(rows,merges,[{wch:32},{wch:12},{wch:12},{wch:13},{wch:12},{wch:10},{wch:9},{wch:9},{wch:10}]);
+  /* ---- Sheet 2: วัตถุดิบ ---- */
+  const rows2=[];
+  rows2.push(['วัตถุดิบ','ราคา/แพ็ก (฿)','ขนาดแพ็ก','หน่วย','ต้นทุน ฿/หน่วย'].map(h=>cell(h,sHead)));
+  data.ing.forEach(g=>{
+    const miss = g.price<=0 && g.id!=='water';
+    const sT = miss ? {...sTxt,fill:{fgColor:{rgb:'FFC7CE'}}} : sTxt;
+    const sN = miss ? {...sNum,fill:{fgColor:{rgb:'FFC7CE'}}} : sNum;
+    rows2.push([ cell(g.name,sT), cell(g.price,sN,'#,##0.00'), cell(g.qty,sN,'#,##0'), cell(g.unit,{...sTxt,alignment:{horizontal:'center'}}), cell(r2(ocIngUnitCost(g)*1000)/1000,sN,'#,##0.000') ]);
+  });
+  const ws2=toSheet(rows2,null,[{wch:34},{wch:14},{wch:11},{wch:8},{wch:14}]);
+  /* ---- Sheet 3: เบส ---- */
+  const rows3=[];
+  rows3.push(['เบส / ส่วนผสม','ปริมาณ','หน่วย','ต้นทุน (฿)'].map(h=>cell(h,sHead)));
+  data.bases.forEach(b=>{
+    const t=ocBaseTotals(b,ingMap);
+    const sB={font:{bold:true,color:{rgb:'3B2F24'}},fill:{fgColor:{rgb:'F5EDD8'}},border:bd};
+    rows3.push([ cell(b.name,sB), cell(b.yieldQty,{...sB,alignment:{horizontal:'right'}},'#,##0'), cell(b.yieldUnit,{...sB,alignment:{horizontal:'center'}}), cell(r2(t.total),{...sB,alignment:{horizontal:'right'}},'#,##0.00') ]);
+    (b.lines||[]).forEach(l=>{
+      const g=ingMap[l.ing];
+      rows3.push([ cell('    - '+(g?g.name:l.ing),sTxt), cell(l.qty,sNum,'#,##0'), cell(g?g.unit:'',{...sTxt,alignment:{horizontal:'center'}}), cell(g?r2(ocIngUnitCost(g)*l.qty):0,sNum,'#,##0.00') ]);
+    });
+    rows3.push([ cell('    = ต้นทุนต่อ '+b.yieldUnit,{...sTxt,font:{italic:true,color:{rgb:'8A8072'}}}), cell('',sTxt), cell('',sTxt), cell(Math.round(t.per*1000)/1000,{...sNum,font:{bold:true,color:{rgb:'5B4636'}}},'#,##0.000') ]);
+  });
+  const ws3=toSheet(rows3,null,[{wch:36},{wch:10},{wch:8},{wch:12}]);
+  /* ---- Sheet 4: สรุปรายเดือน ---- */
+  const biz = data.biz || {cupsPerDay:0,avgPrice:0,avgCost:0,daysPerMonth:30,staff:[],fixed:[]};
+  const staffT=(biz.staff||[]).reduce((s,x)=>s+(x.pay||0),0);
+  const fixedT=(biz.fixed||[]).reduce((s,x)=>s+(x.amt||0),0);
+  const rev=biz.cupsPerDay*biz.avgPrice*biz.daysPerMonth, cogs=biz.cupsPerDay*biz.avgCost*biz.daysPerMonth;
+  const net=rev-cogs-staffT-fixedT, marginC=biz.avgPrice-biz.avgCost;
+  const beC=(marginC>0&&biz.daysPerMonth>0)?(staffT+fixedT)/biz.daysPerMonth/marginC:0;
+  const sSec={font:{bold:true,color:{rgb:'3B2F24'}},fill:{fgColor:{rgb:'F5EDD8'}},border:bd};
+  const sNet={font:{bold:true,sz:13,color:{rgb: net>=0?'006100':'9C0006'}},fill:{fgColor:{rgb: net>=0?'C6EFCE':'FFC7CE'}},alignment:{horizontal:'right'},border:bd};
+  const rows4=[];
+  rows4.push([cell('สรุปประมาณการรายเดือน',{font:{bold:true,sz:14,color:{rgb:'5B4636'}}})]);
+  rows4.push([cell('สมมติฐาน: ขาย '+biz.cupsPerDay+' แก้ว/วัน × '+biz.daysPerMonth+' วัน · ราคาเฉลี่ย '+biz.avgPrice+' ฿ · ต้นทุน/แก้ว '+biz.avgCost+' ฿',{font:{sz:10,color:{rgb:'8A8072'}}})]);
+  rows4.push([]);
+  rows4.push([cell('รายการ',sHead),cell('บาท/เดือน',sHead)]);
+  rows4.push([cell('ยอดขาย',sTxt),cell(r2(rev),sNumB,'#,##0')]);
+  rows4.push([cell('ต้นทุนวัตถุดิบ+แพ็กเกจ',sTxt),cell(-r2(cogs),sNum,'#,##0')]);
+  rows4.push([cell('กำไรขั้นต้น',sSec),cell(r2(rev-cogs),{...sSec,alignment:{horizontal:'right'}},'#,##0')]);
+  rows4.push([cell('พนักงาน',sSec),cell('',sSec)]);
+  (biz.staff||[]).forEach(p=>rows4.push([cell('    - '+p.name,sTxt),cell(-(p.pay||0),sNum,'#,##0')]));
+  rows4.push([cell('ต้นทุนคงที่อื่นๆ',sSec),cell('',sSec)]);
+  (biz.fixed||[]).forEach(p=>rows4.push([cell('    - '+p.name,sTxt),cell(-(p.amt||0),sNum,'#,##0')]));
+  rows4.push([cell('กำไรสุทธิ/เดือน',{...sSec,font:{bold:true,sz:12}}),cell(r2(net),sNet,'#,##0')]);
+  rows4.push([]);
+  rows4.push([cell('จุดคุ้มทุน (แก้ว/วัน)',sTxt),cell(Math.ceil(beC),sNumB,'#,##0')]);
+  rows4.push([cell('กำไรขั้นต้นต่อแก้ว (฿)',sTxt),cell(r2(marginC),sNumB,'#,##0.00')]);
+  rows4.push([cell('ค่าแรง % ของยอดขาย',sTxt),cell(rev>0?r2(staffT/rev*100)/100:0,sNumB,'0%')]);
+  const ws4=toSheet(rows4,[{s:{r:0,c:0},e:{r:0,c:1}},{s:{r:1,c:0},e:{r:1,c:1}}],[{wch:32},{wch:14}]);
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws1,'ต้นทุนเมนู');
+  XLSX.utils.book_append_sheet(wb,ws2,'วัตถุดิบ');
+  XLSX.utils.book_append_sheet(wb,ws3,'เบส');
+  XLSX.utils.book_append_sheet(wb,ws4,'สรุปรายเดือน');
+  return wb;
+}
+async function ocExportExcel(data){
+  try{ await ocLoadXlsx(); }
+  catch(e){ alert('โหลดตัวสร้าง Excel ไม่สำเร็จ — เช็คอินเทอร์เน็ตแล้วลองใหม่'); return; }
+  const wb=ocBuildWorkbook(data);
+  XLSX.writeFile(wb, 'owl-cost-'+new Date().toISOString().slice(0,10)+'.xlsx');
+}
 
 const ocFmt = (n, d=2) => (isFinite(n)? n : 0).toLocaleString('th-TH',{ minimumFractionDigits:d, maximumFractionDigits:d });
 const ocUid = () => Math.random().toString(36).slice(2,9);
@@ -1383,7 +1536,7 @@ function OCTabCost({ data, setData }){
               <div className="text-[13px] truncate">{r.m.name} {r.missing && <span style={{color:'var(--neg)'}}>❓</span>}</div>
               <div className="text-[11px]" style={{ color:'var(--muted)' }}>
                 ต้นทุน <b className="num">{ocFmt(r.total)}</b>
-                {r.m.sell>0 ? <span> / ขาย {r.m.sell} · กำไร <b className="num" style={{ color:'var(--pos)' }}>{ocFmt(r.profit)}</b></span> : ' · ยังไม่ใส่ราคาขาย'}
+                {r.m.sell>0 ? <span> / ขาย {r.m.sell} · กำไร <b className="num" style={{ color:'var(--pos)' }}>{ocFmt(r.profit)} ({ocFmt(100-r.pct,0)}%)</b></span> : ' · ยังไม่ใส่ราคาขาย'}
               </div>
             </div>
             {r.pct!==null
@@ -1397,6 +1550,97 @@ function OCTabCost({ data, setData }){
       <div className="text-[11px] mt-3" style={{ color:'var(--muted)' }}>
         %ต้นทุน = (วัตถุดิบ+แพ็กเกจ) ÷ ราคาขาย · เขียว ≤ เป้า · เหลือง เกินเล็กน้อย · แดง เกินมาก
         <br/>❓ = สูตรมีวัตถุดิบที่ยังไม่ใส่ราคา (เช่น โซดา, ผงลาวามันม่วง) — ไปกรอกที่แท็บวัตถุดิบ
+      </div>
+    </div>
+  );
+}
+
+function OCTabBiz({ data, setData }){
+  const biz = data.biz || OC_SEED_BIZ;
+  const setBiz = (patch)=> setData(d=>({ ...d, biz:{ ...(d.biz||OC_SEED_BIZ), ...patch } }));
+  const staffT = (biz.staff||[]).reduce((s,x)=>s+(x.pay||0),0);
+  const fixedT = (biz.fixed||[]).reduce((s,x)=>s+(x.amt||0),0);
+  const rev  = biz.cupsPerDay*biz.avgPrice*biz.daysPerMonth;
+  const cogs = biz.cupsPerDay*biz.avgCost*biz.daysPerMonth;
+  const gross = rev-cogs;
+  const net = gross-staffT-fixedT;
+  const laborPct = rev>0 ? staffT/rev*100 : 0;
+  const margin = biz.avgPrice-biz.avgCost;
+  const beCups = (margin>0 && biz.daysPerMonth>0) ? (staffT+fixedT)/biz.daysPerMonth/margin : 0;
+  const Row = ({label,val,bold,color})=>(
+    <div className="flex justify-between text-[13px] py-0.5">
+      <span style={{ color:'var(--muted)' }}>{label}</span>
+      <span className="num" style={{ fontWeight:bold?700:500, color:color||'var(--ink)' }}>{ocFmt(val,0)} ฿</span>
+    </div>
+  );
+  return (
+    <div className="px-1 pb-4 fade">
+      <div className="card p-3 my-3">
+        <div className="kanit text-[14px] mb-2">🎯 สมมติฐานยอดขาย</div>
+        <div className="flex items-center gap-1.5 flex-wrap text-[12px]" style={{ color:'var(--muted)' }}>
+          <span>ขาย</span><OCNumIn value={biz.cupsPerDay} onChange={v=>setBiz({cupsPerDay:v})} w="60px"/><span>แก้ว/วัน ·</span>
+          <span>ราคาเฉลี่ย</span><OCNumIn value={biz.avgPrice} onChange={v=>setBiz({avgPrice:v})} w="52px"/><span>฿ ·</span>
+          <span>ต้นทุน/แก้ว</span><OCNumIn value={biz.avgCost} onChange={v=>setBiz({avgCost:v})} w="52px"/><span>฿ ·</span>
+          <span>เปิด</span><OCNumIn value={biz.daysPerMonth} onChange={v=>setBiz({daysPerMonth:v})} w="46px"/><span>วัน/เดือน</span>
+        </div>
+      </div>
+      <div className="card p-3 mb-3">
+        <div className="flex items-center justify-between mb-1">
+          <div className="kanit text-[14px]">👥 พนักงาน (เดือนละ)</div>
+          <button className="press kanit text-[12px] px-2 py-1 rounded-lg" style={{ background:'var(--soft)', color:'var(--primary)', border:'none' }}
+            onClick={()=>setBiz({staff:[...(biz.staff||[]),{id:'st'+ocUid(),name:'พนักงานใหม่',pay:0}]})}>+ เพิ่มพนักงาน</button>
+        </div>
+        <div className="space-y-1.5">
+          {(biz.staff||[]).map((p,i)=>(
+            <div key={p.id} className="flex items-center gap-1.5">
+              <div className="flex-1 min-w-0"><OCTextIn value={p.name} onChange={v=>{ const c=[...biz.staff]; c[i]={...c[i],name:v}; setBiz({staff:c}); }}/></div>
+              <OCNumIn value={p.pay} onChange={v=>{ const c=[...biz.staff]; c[i]={...c[i],pay:v}; setBiz({staff:c}); }} w="78px"/>
+              <button className="press text-[13px] px-1" style={{ color:'var(--neg)', border:'none', background:'none' }}
+                onClick={()=>setBiz({staff:biz.staff.filter((_,j)=>j!==i)})}>✕</button>
+            </div>
+          ))}
+        </div>
+        <div className="flex justify-between mt-2 pt-2 text-[13px]" style={{ borderTop:'1px solid var(--line)' }}>
+          <span style={{ color:'var(--muted)' }}>รวมค่าแรง · {ocFmt(laborPct,0)}% ของยอดขาย</span>
+          <OCBadge ok={laborPct<=18} warn={laborPct>18 && laborPct<=22}>{ocFmt(staffT,0)} ฿</OCBadge>
+        </div>
+        <div className="text-[11px] mt-1" style={{ color:'var(--muted)' }}>เกณฑ์: ค่าแรงไม่ควรเกิน 15-18% ของยอดขาย</div>
+      </div>
+      <div className="card p-3 mb-3">
+        <div className="flex items-center justify-between mb-1">
+          <div className="kanit text-[14px]">🏪 ต้นทุนคงที่อื่นๆ (เดือนละ)</div>
+          <button className="press kanit text-[12px] px-2 py-1 rounded-lg" style={{ background:'var(--soft)', color:'var(--primary)', border:'none' }}
+            onClick={()=>setBiz({fixed:[...(biz.fixed||[]),{id:'fx'+ocUid(),name:'รายการใหม่',amt:0}]})}>+ เพิ่มรายการ</button>
+        </div>
+        <div className="space-y-1.5">
+          {(biz.fixed||[]).map((p,i)=>(
+            <div key={p.id} className="flex items-center gap-1.5">
+              <div className="flex-1 min-w-0"><OCTextIn value={p.name} onChange={v=>{ const c=[...biz.fixed]; c[i]={...c[i],name:v}; setBiz({fixed:c}); }}/></div>
+              <OCNumIn value={p.amt} onChange={v=>{ const c=[...biz.fixed]; c[i]={...c[i],amt:v}; setBiz({fixed:c}); }} w="78px"/>
+              <button className="press text-[13px] px-1" style={{ color:'var(--neg)', border:'none', background:'none' }}
+                onClick={()=>setBiz({fixed:biz.fixed.filter((_,j)=>j!==i)})}>✕</button>
+            </div>
+          ))}
+        </div>
+        <div className="flex justify-between mt-2 pt-2 text-[13px]" style={{ borderTop:'1px solid var(--line)' }}>
+          <span style={{ color:'var(--muted)' }}>รวมต้นทุนคงที่</span>
+          <span className="num" style={{ fontWeight:700 }}>{ocFmt(fixedT,0)} ฿</span>
+        </div>
+      </div>
+      <div className="card p-3 mb-3">
+        <div className="kanit text-[14px] mb-1">📈 สรุปต่อเดือน</div>
+        <Row label={'ยอดขาย ('+ocFmt(biz.cupsPerDay,0)+' แก้ว × '+biz.daysPerMonth+' วัน)'} val={rev}/>
+        <Row label="ต้นทุนวัตถุดิบ+แพ็ก" val={-cogs} color="var(--neg)"/>
+        <Row label="กำไรขั้นต้น" val={gross} bold/>
+        <Row label="ค่าแรงพนักงาน" val={-staffT} color="var(--neg)"/>
+        <Row label="ต้นทุนคงที่อื่นๆ" val={-fixedT} color="var(--neg)"/>
+        <div className="flex justify-between items-center mt-1 pt-2" style={{ borderTop:'1px solid var(--line)' }}>
+          <span className="kanit text-[14px]">กำไรสุทธิ/เดือน</span>
+          <span className="kanit num text-[20px]" style={{ fontWeight:700, color: net>=0?'var(--pos)':'var(--neg)' }}>{ocFmt(net,0)} ฿</span>
+        </div>
+        <div className="text-[12px] mt-2" style={{ color:'var(--muted)' }}>
+          ≈ กำไร {ocFmt(net/(biz.daysPerMonth||30),0)} ฿/วัน · จุดคุ้มทุน <b className="num" style={{ color:'var(--primary)' }}>{ocFmt(beCups,0)} แก้ว/วัน</b> (กำไรขั้นต้น {ocFmt(margin,0)} ฿/แก้ว)
+        </div>
       </div>
     </div>
   );
@@ -1416,7 +1660,7 @@ function CostPanel({toast}){
         if(db){
           const snap = await db.collection('owlCost').doc('data').get();
           if(cancelled) return;
-          if(snap.exists){ setData(snap.data()); }
+          if(snap.exists){ const d=snap.data(); if(!d.biz) d.biz=ocDeepCopy(OC_SEED_BIZ); setData(d); }
           else {
             const cached = localStorage.getItem('owlcost_data');
             setData(cached ? JSON.parse(cached) : ocDeepCopy(OC_SEED));
@@ -1460,6 +1704,7 @@ function CostPanel({toast}){
   const saveLabel = { idle:'', dirty:'· มีการแก้ไข', saving:'· กำลังบันทึก…', saved:'· ✓ บันทึกแล้ว', error:'· ⚠️ บันทึกไม่ได้' }[saveState];
   const SUBTABS = [
     { id:'cost', label:'📊 ต้นทุน' },
+    { id:'biz',  label:'🏢 รายเดือน' },
     { id:'menu', label:'🧋 เมนู' },
     { id:'base', label:'🧪 เบส' },
     { id:'ing',  label:'📦 วัตถุดิบ' },
@@ -1467,9 +1712,11 @@ function CostPanel({toast}){
 
   return (
     <div style={{ padding:'12px 14px 0' }}>
-      <div className="flex items-baseline gap-2">
+      <div className="flex items-center gap-2">
         <div className="kanit" style={{ fontSize:17, fontWeight:600, color:'var(--primary)' }}>🦉 ต้นทุนต่อแก้ว</div>
         <div className="text-[11px]" style={{ color:'var(--muted)' }}>{saveLabel}</div>
+        <button className="press kanit text-[12px] px-2.5 py-1 rounded-lg ml-auto text-white" style={{ background:'#1D6F42', border:'none' }}
+          onClick={()=>ocExportExcel(data)}>⬇ Excel</button>
       </div>
       <div className="flex gap-1.5 mt-2 overflow-x-auto hide-scroll">
         {SUBTABS.map(t=>(
@@ -1484,6 +1731,7 @@ function CostPanel({toast}){
       {sub==='base' && <OCTabBase data={data} setData={setData} />}
       {sub==='menu' && <OCTabMenu data={data} setData={setData} />}
       {sub==='cost' && <OCTabCost data={data} setData={setData} />}
+      {sub==='biz'  && <OCTabBiz  data={data} setData={setData} />}
     </div>
   );
 }
