@@ -974,6 +974,7 @@ const OC_SEED_ING = [
   { id:'milkMeiji',    name:'นมสด Meiji',                  price:230,  qty:5000, unit:'ml'   },
   { id:'cocoa',        name:'ผงโกโก้เข้ม Tulip',            price:197,  qty:500,  unit:'g'    },
   { id:'milo',         name:'ผงไมโล',                      price:185,  qty:900,  unit:'g'    },
+  { id:'ovaltineFlake',name:'โอวัลตินช็อคโกแลตเฟลค',       price:115,  qty:450,  unit:'g'    },
   { id:'syrLemon',     name:'ไซรัปมะนาว (ติ่งฟง)',          price:75,   qty:750,  unit:'ml'   },
   { id:'syrApple',     name:'ไซรัปแอปเปิ้ล (ติ่งฟง)',        price:75,   qty:750,  unit:'ml'   },
   { id:'syrBlueberry', name:'ไซรัปบลูเบอรี่ (ติ่งฟง)',       price:75,   qty:750,  unit:'ml'   },
@@ -1011,39 +1012,86 @@ const OC_SEED_BASE = [
     lines:[{ing:'water',qty:7000},{ing:'pearl',qty:1000},{ing:'sugar',qty:200}] },
 ];
 const OC_SEED_MENU = [
-  { id:'m01', name:'ชานม',                sell:0,  lines:[{ref:'b:baseMilkTea',qty:220},{ref:'b:syrup',qty:15}] },
-  { id:'m02', name:'ชานมคาราเมล',          sell:0,  lines:[{ref:'b:baseMilkTea',qty:220},{ref:'i:syrCaramel',qty:15}] },
-  { id:'m03', name:'ชานมเฮเซลนัท/มิ้นท์',    sell:0,  lines:[{ref:'b:baseMilkTea',qty:220},{ref:'i:syrHazelnut',qty:20}] },
-  { id:'m04', name:'ชานมมันม่วงลาวา',       sell:0,  lines:[{ref:'b:baseMilkTea',qty:220},{ref:'b:syrup',qty:15},{ref:'b:lavaPurple',qty:1}] },
-  { id:'m05', name:'ชานมไมโล',             sell:0,  lines:[{ref:'b:baseMilkTea',qty:220},{ref:'b:syrup',qty:15},{ref:'i:milo',qty:24}] },
-  { id:'m06', name:'ชานมโกโก้',            sell:0,  lines:[{ref:'b:baseMilkTea',qty:220},{ref:'b:syrup',qty:15},{ref:'i:cocoa',qty:12}] },
-  { id:'m07', name:'ชานมกาแฟ',             sell:0,  lines:[{ref:'b:baseMilkTea',qty:220},{ref:'b:syrup',qty:15},{ref:'i:coffeePow',qty:12}] },
-  { id:'m08', name:'ชาเขียวนม',            sell:0,  lines:[{ref:'b:baseMilkTea',qty:220},{ref:'b:syrup',qty:15},{ref:'i:greenMilkPow',qty:12}] },
-  { id:'m09', name:'บราวน์ชูการ์',          sell:44, lines:[{ref:'b:baseMilkTea',qty:220},{ref:'i:brownSugarSyr',qty:30}] },
-  { id:'m10', name:'ชาไทย',               sell:34, lines:[{ref:'b:baseThaiTea',qty:220},{ref:'b:syrup',qty:15}] },
-  { id:'m11', name:'ชาเขียวมะลิ',           sell:0,  lines:[{ref:'b:baseGreenTea',qty:220},{ref:'b:syrup',qty:15}] },
-  { id:'m12', name:'ชาเขียวผลไม้ (กลิ่นต่างๆ)',sell:0, lines:[{ref:'b:baseGreenTea',qty:220},{ref:'i:syrApple',qty:30}] },
-  { id:'m13', name:'ชาองุ่นไชน์มัสแคท',      sell:34, lines:[{ref:'b:baseGreenTea',qty:220},{ref:'i:syrShine',qty:30}] },
-  { id:'m14', name:'พรีเมี่ยมพีช',           sell:44, lines:[{ref:'b:baseGreenTea',qty:220},{ref:'i:syrPeach',qty:30},{ref:'i:peachDole',qty:1}] },
-  { id:'m15', name:'โซดาแดง/ผลไม้',         sell:0,  lines:[{ref:'i:soda',qty:1},{ref:'i:halesRed',qty:40}] },
-  { id:'m16', name:'แดงมะนาวโซดา',          sell:0,  lines:[{ref:'i:soda',qty:1},{ref:'i:halesRed',qty:60},{ref:'b:lemonJuice',qty:20}] },
-  { id:'m17', name:'นมชมพู',               sell:0,  lines:[{ref:'b:baseFreshMilk',qty:220},{ref:'i:halesRed',qty:30}] },
-  { id:'m18', name:'ฟรุ๊ตตี้มิลค์',           sell:0,  lines:[{ref:'b:baseFreshMilk',qty:220},{ref:'i:syrStrawb',qty:30}] },
-  { id:'m19', name:'นมสด',                sell:0,  lines:[{ref:'b:baseFreshMilk',qty:220},{ref:'b:syrup',qty:20}] },
-  { id:'m20', name:'นมสดคาราเมล/มิ้นท์',     sell:0,  lines:[{ref:'b:baseFreshMilk',qty:220},{ref:'i:syrCaramel',qty:25}] },
-  { id:'m21', name:'มัทฉะลาเต้',            sell:0,  lines:[{ref:'b:baseFreshMilk',qty:220},{ref:'b:syrup',qty:25},{ref:'i:matcha',qty:5}] },
-  { id:'m22', name:'มัทฉะเต้มะพร้าว',        sell:0,  lines:[{ref:'b:baseFreshMilk',qty:40},{ref:'i:coconutWater',qty:180},{ref:'b:syrup',qty:25},{ref:'i:matcha',qty:5}] },
-  { id:'m23', name:'นมสดโกโก้',            sell:0,  lines:[{ref:'b:baseFreshMilk',qty:220},{ref:'b:syrup',qty:25},{ref:'i:cocoa',qty:12}] },
-  { id:'m24', name:'นมสดไมโล',             sell:0,  lines:[{ref:'b:baseFreshMilk',qty:220},{ref:'b:syrup',qty:20},{ref:'i:milo',qty:24}] },
-  { id:'m25', name:'นมสดกาแฟ',             sell:0,  lines:[{ref:'b:baseFreshMilk',qty:220},{ref:'b:syrup',qty:20},{ref:'i:coffeePow',qty:12}] },
-  { id:'m26', name:'ดับเบิ้ลช็อค',           sell:0,  lines:[{ref:'b:baseFreshMilk',qty:220},{ref:'b:syrup',qty:25},{ref:'i:cocoa',qty:24}] },
-  { id:'m27', name:'ช็อคโก (Choco Owl)',    sell:39, lines:[{ref:'b:chocoLava',qty:1},{ref:'b:baseFreshMilk',qty:180}] },
-  { id:'t01', name:'+ ท็อปปิ้งไข่มุก',        sell:0,  lines:[{ref:'b:pearlBoiled',qty:1}], addon:true },
-  { id:'t02', name:'+ ท็อปปิ้งชีส (ฝาชีส)',   sell:0,  lines:[{ref:'b:cheeseFoam',qty:1},{ref:'i:cheeseLid',qty:1}], addon:true },
-  { id:'t03', name:'+ บุกขาวไข่มุก',         sell:0,  lines:[{ref:'i:konjac',qty:50}], addon:true },
+  /* ⭐ BEST SELLER */
+  { id:'b01', cat:'best', name:'ชาไทยชีส',                  sell:49, lines:[{ref:'b:baseThaiTea',qty:220},{ref:'b:syrup',qty:15},{ref:'b:cheeseFoam',qty:1},{ref:'i:cheeseLid',qty:1}] },
+  { id:'b02', cat:'best', name:'ชาองุ่นไชน์มัสแคทชีส',        sell:54, lines:[{ref:'b:baseGreenTea',qty:220},{ref:'i:syrShine',qty:30},{ref:'b:cheeseFoam',qty:1},{ref:'i:cheeseLid',qty:1}] },
+  { id:'b03', cat:'best', name:'ดับเบิ้ลช็อคชีสครันช์',        sell:64, lines:[{ref:'b:baseFreshMilk',qty:220},{ref:'b:syrup',qty:25},{ref:'i:cocoa',qty:24},{ref:'b:cheeseFoam',qty:1},{ref:'i:ovaltineFlake',qty:10},{ref:'i:cheeseLid',qty:1}] },
+  { id:'b04', cat:'best', name:'ชาพีชชีส',                   sell:64, lines:[{ref:'b:baseGreenTea',qty:220},{ref:'i:syrPeach',qty:30},{ref:'i:peachDole',qty:1},{ref:'b:cheeseFoam',qty:1},{ref:'i:cheeseLid',qty:1}] },
+  { id:'b05', cat:'best', name:'มัทฉะลาเต้มะพร้าว',           sell:49, lines:[{ref:'b:baseFreshMilk',qty:40},{ref:'i:coconutWater',qty:180},{ref:'b:syrup',qty:25},{ref:'i:matcha',qty:5}] },
+  { id:'b06', cat:'best', name:'มัทฉะลาเต้ (ชิซูโอกะ)',        sell:49, lines:[{ref:'b:baseFreshMilk',qty:220},{ref:'b:syrup',qty:25},{ref:'i:matcha',qty:5}] },
+  { id:'b07', cat:'best', name:'ชานมไข่มุกบราวน์ชูการ์',       sell:44, lines:[{ref:'b:baseMilkTea',qty:220},{ref:'i:brownSugarSyr',qty:30},{ref:'b:pearlBoiled',qty:1}] },
+  { id:'b08', cat:'best', name:'มัทฉะลาเต้มะพร้าวชีส',        sell:69, lines:[{ref:'b:baseFreshMilk',qty:40},{ref:'i:coconutWater',qty:180},{ref:'b:syrup',qty:25},{ref:'i:matcha',qty:5},{ref:'b:cheeseFoam',qty:1},{ref:'i:cheeseLid',qty:1}] },
+  { id:'b09', cat:'best', name:'นมสดมินท์ช็อคโกไข่มุก',        sell:54, lines:[{ref:'b:baseFreshMilk',qty:200},{ref:'i:syrMint',qty:15},{ref:'b:chocoLava',qty:1},{ref:'b:pearlBoiled',qty:1}] },
+  { id:'b10', cat:'best', name:'ชาเขียวมะลิชีส',              sell:39, lines:[{ref:'b:baseGreenTea',qty:220},{ref:'b:syrup',qty:15},{ref:'b:cheeseFoam',qty:1},{ref:'i:cheeseLid',qty:1}] },
+  { id:'b11', cat:'best', name:'นมสดบราวน์ชูการ์ไข่มุก',       sell:54, lines:[{ref:'b:baseFreshMilk',qty:220},{ref:'i:brownSugarSyr',qty:30},{ref:'b:pearlBoiled',qty:1}] },
+  /* 🍃 CLASSIC */
+  { id:'c01', cat:'classic', name:'ชาเขียวมะลิ',              sell:19, lines:[{ref:'b:baseGreenTea',qty:220},{ref:'b:syrup',qty:15}] },
+  { id:'c02', cat:'classic', name:'ชานมไต้หวัน',              sell:24, lines:[{ref:'b:baseMilkTea',qty:220},{ref:'b:syrup',qty:15}] },
+  { id:'c03', cat:'classic', name:'ชาแอปเปิ้ล',               sell:24, lines:[{ref:'b:baseGreenTea',qty:220},{ref:'i:syrApple',qty:30}] },
+  { id:'c04', cat:'classic', name:'ชามะนาว',                 sell:24, lines:[{ref:'b:baseGreenTea',qty:220},{ref:'i:syrLemon',qty:30}] },
+  { id:'c05', cat:'classic', name:'ชาสตรอว์เบอร์รี่',           sell:24, lines:[{ref:'b:baseGreenTea',qty:220},{ref:'i:syrStrawb',qty:30}] },
+  { id:'c06', cat:'classic', name:'ชาบลูเบอร์รี่',              sell:24, lines:[{ref:'b:baseGreenTea',qty:220},{ref:'i:syrBlueberry',qty:30}] },
+  { id:'c07', cat:'classic', name:'ชาเสาวรส',                sell:24, lines:[{ref:'b:baseGreenTea',qty:220},{ref:'i:syrPassion',qty:30}] },
+  { id:'c08', cat:'classic', name:'ชาลิ้นจี่',                  sell:24, lines:[{ref:'b:baseGreenTea',qty:220},{ref:'i:syrLychee',qty:30}] },
+  /* 💛 FAVOURITE */
+  { id:'f01', cat:'fav', name:'ชานมคาราเมล',                 sell:29, lines:[{ref:'b:baseMilkTea',qty:220},{ref:'i:syrCaramel',qty:15}] },
+  { id:'f02', cat:'fav', name:'ชานมมินท์',                   sell:29, lines:[{ref:'b:baseMilkTea',qty:220},{ref:'i:syrMint',qty:20}] },
+  { id:'f03', cat:'fav', name:'ชาไทย',                      sell:29, lines:[{ref:'b:baseThaiTea',qty:220},{ref:'b:syrup',qty:15}] },
+  { id:'f04', cat:'fav', name:'ชานมโกโก้',                   sell:29, lines:[{ref:'b:baseMilkTea',qty:220},{ref:'b:syrup',qty:15},{ref:'i:cocoa',qty:12}] },
+  { id:'f05', cat:'fav', name:'ชานมไมโล',                    sell:29, lines:[{ref:'b:baseMilkTea',qty:220},{ref:'b:syrup',qty:15},{ref:'i:milo',qty:24}] },
+  { id:'f06', cat:'fav', name:'ชานมกาแฟ',                    sell:29, lines:[{ref:'b:baseMilkTea',qty:220},{ref:'b:syrup',qty:15},{ref:'i:coffeePow',qty:12}] },
+  { id:'f07', cat:'fav', name:'ชาเขียวนม',                   sell:29, lines:[{ref:'b:baseMilkTea',qty:220},{ref:'b:syrup',qty:15},{ref:'i:greenMilkPow',qty:12}] },
+  /* 🥛 FRESH MILK */
+  { id:'n01', cat:'fresh', name:'นมสด',                     sell:34, lines:[{ref:'b:baseFreshMilk',qty:220},{ref:'b:syrup',qty:20}] },
+  { id:'n02', cat:'fresh', name:'ดับเบิ้ลช็อค',               sell:44, lines:[{ref:'b:baseFreshMilk',qty:220},{ref:'b:syrup',qty:25},{ref:'i:cocoa',qty:24}] },
+  { id:'n03', cat:'fresh', name:'นมสดชมพู',                  sell:34, lines:[{ref:'b:baseFreshMilk',qty:220},{ref:'i:halesRed',qty:30}] },
+  { id:'n04', cat:'fresh', name:'นมสดโกโก้',                 sell:39, lines:[{ref:'b:baseFreshMilk',qty:220},{ref:'b:syrup',qty:25},{ref:'i:cocoa',qty:12}] },
+  { id:'n05', cat:'fresh', name:'นมสดมินท์',                  sell:39, lines:[{ref:'b:baseFreshMilk',qty:220},{ref:'i:syrMint',qty:25}] },
+  { id:'n06', cat:'fresh', name:'นมสดกาแฟ',                  sell:39, lines:[{ref:'b:baseFreshMilk',qty:220},{ref:'b:syrup',qty:20},{ref:'i:coffeePow',qty:12}] },
+  { id:'n07', cat:'fresh', name:'นมสดคาราเมล',               sell:39, lines:[{ref:'b:baseFreshMilk',qty:220},{ref:'i:syrCaramel',qty:25}] },
+  { id:'n08', cat:'fresh', name:'นมสดชาเขียว',               sell:39, lines:[{ref:'b:baseFreshMilk',qty:220},{ref:'b:syrup',qty:15},{ref:'i:greenMilkPow',qty:12}] },
+  { id:'n09', cat:'fresh', name:'นมสดไมโล',                  sell:39, lines:[{ref:'b:baseFreshMilk',qty:220},{ref:'b:syrup',qty:20},{ref:'i:milo',qty:24}] },
+  /* 🍫 CHOCO OWL */
+  { id:'h01', cat:'choco', name:'นมสดคาราเมลช็อคโก',          sell:49, lines:[{ref:'b:chocoLava',qty:1},{ref:'b:baseFreshMilk',qty:180},{ref:'i:syrCaramel',qty:15}] },
+  { id:'h02', cat:'choco', name:'นมสดมินท์ช็อคโก',            sell:49, lines:[{ref:'b:chocoLava',qty:1},{ref:'b:baseFreshMilk',qty:180},{ref:'i:syrMint',qty:15}] },
+  { id:'h03', cat:'choco', name:'ชาไทยช็อคโก',               sell:39, lines:[{ref:'b:chocoLava',qty:1},{ref:'b:baseThaiTea',qty:180}] },
+  { id:'h04', cat:'choco', name:'ฟรุ๊ตตี้มิลค์แอปเปิ้ล',         sell:44, lines:[{ref:'b:baseFreshMilk',qty:220},{ref:'i:syrApple',qty:30}] },
+  { id:'h05', cat:'choco', name:'ฟรุ๊ตตี้มิลค์สตรอว์เบอร์รี่',     sell:44, lines:[{ref:'b:baseFreshMilk',qty:220},{ref:'i:syrStrawb',qty:30}] },
+  /* 🫧 SODA */
+  { id:'s01', cat:'soda', name:'สตรอว์เบอร์รี่โซดา',           sell:24, lines:[{ref:'i:soda',qty:1},{ref:'i:syrStrawb',qty:40}] },
+  { id:'s02', cat:'soda', name:'แอปเปิ้ลโซดา',               sell:24, lines:[{ref:'i:soda',qty:1},{ref:'i:syrApple',qty:40}] },
+  { id:'s03', cat:'soda', name:'ลิ้นจี่โซดา',                  sell:24, lines:[{ref:'i:soda',qty:1},{ref:'i:syrLychee',qty:40}] },
+  { id:'s04', cat:'soda', name:'เสาวรสโซดา',                sell:24, lines:[{ref:'i:soda',qty:1},{ref:'i:syrPassion',qty:40}] },
+  { id:'s05', cat:'soda', name:'มะนาวโซดา',                 sell:24, lines:[{ref:'i:soda',qty:1},{ref:'i:syrLemon',qty:40}] },
+  { id:'s06', cat:'soda', name:'บลูเบอร์รี่โซดา',              sell:24, lines:[{ref:'i:soda',qty:1},{ref:'i:syrBlueberry',qty:40}] },
+  { id:'s07', cat:'soda', name:'แดงโซดา (สละ)',              sell:24, lines:[{ref:'i:soda',qty:1},{ref:'i:halesRed',qty:40}] },
+  { id:'s08', cat:'soda', name:'แดงมะนาวโซดา',              sell:29, lines:[{ref:'i:soda',qty:1},{ref:'i:halesRed',qty:60},{ref:'b:lemonJuice',qty:20}] },
+  /* 🍑 PREMIUM FRUIT */
+  { id:'p01', cat:'premium', name:'ชาองุ่นไชน์มัสแคท',         sell:34, lines:[{ref:'b:baseGreenTea',qty:220},{ref:'i:syrShine',qty:30}] },
+  { id:'p02', cat:'premium', name:'ชาพีช',                   sell:44, lines:[{ref:'b:baseGreenTea',qty:220},{ref:'i:syrPeach',qty:30},{ref:'i:peachDole',qty:1}] },
+  { id:'p03', cat:'premium', name:'ชาพีชส้ม',                 sell:44, lines:[{ref:'b:baseGreenTea',qty:220},{ref:'i:syrPeach',qty:15},{ref:'i:syrOrange',qty:15},{ref:'i:peachDole',qty:1}] },
+  { id:'p04', cat:'premium', name:'ชาพีชเมลอน',              sell:44, lines:[{ref:'b:baseGreenTea',qty:220},{ref:'i:syrPeach',qty:15},{ref:'i:syrMelon',qty:15},{ref:'i:peachDole',qty:1}] },
+  { id:'p05', cat:'premium', name:'พีชโซดา',                 sell:44, lines:[{ref:'i:soda',qty:1},{ref:'i:syrPeach',qty:30},{ref:'i:peachDole',qty:1}] },
+  { id:'p06', cat:'premium', name:'พีชเมลอนโซดา',            sell:44, lines:[{ref:'i:soda',qty:1},{ref:'i:syrPeach',qty:15},{ref:'i:syrMelon',qty:15},{ref:'i:peachDole',qty:1}] },
+  { id:'p07', cat:'premium', name:'พีชส้มโซดา',               sell:44, lines:[{ref:'i:soda',qty:1},{ref:'i:syrPeach',qty:15},{ref:'i:syrOrange',qty:15},{ref:'i:peachDole',qty:1}] },
+  /* 🧀 TOPPINGS (Home made) */
+  { id:'t01', cat:'top', name:'ชีสครันช์',                    sell:25, lines:[{ref:'b:cheeseFoam',qty:1},{ref:'i:ovaltineFlake',qty:10}], addon:true },
+  { id:'t02', cat:'top', name:'ชีส',                         sell:20, lines:[{ref:'b:cheeseFoam',qty:1},{ref:'i:cheeseLid',qty:1}], addon:true },
+  { id:'t03', cat:'top', name:'ไข่มุก',                       sell:5,  lines:[{ref:'b:pearlBoiled',qty:1}], addon:true },
+  { id:'t04', cat:'top', name:'ไข่มุกบุก',                     sell:10, lines:[{ref:'i:konjac',qty:50}], addon:true },
+  { id:'t05', cat:'top', name:'คริสตัลใส',                    sell:10, lines:[{ref:'i:crystalClear',qty:50}], addon:true },
+  { id:'t06', cat:'top', name:'คริสตัลบราวน์ชูการ์',            sell:10, lines:[{ref:'i:crystalBrown',qty:50}], addon:true },
+  { id:'t07', cat:'top', name:'เรนโบว์เยลลี่',                  sell:5,  lines:[{ref:'i:jelly',qty:50}], addon:true },
 ];
 const OC_SEED_SETTINGS = { targetPct:35, pack:[ {ing:'cup',qty:1}, {ing:'lidSeal',qty:1}, {ing:'strawSmall',qty:1} ] };
 const OC_SEED = { ing:OC_SEED_ING, bases:OC_SEED_BASE, menus:OC_SEED_MENU, settings:OC_SEED_SETTINGS };
+const OC_CATS = [
+  ['best','⭐ Best Seller'],['classic','🍃 Classic'],['fav','💛 Favourite'],['fresh','🥛 Fresh Milk'],
+  ['choco','🍫 Choco Owl'],['soda','🫧 Soda'],['premium','🍑 Premium Fruit'],['top','🧀 Toppings'],['other','📌 อื่นๆ']
+];
+const ocCatKey = (m)=> (m.cat && OC_CATS.some(x=>x[0]===m.cat)) ? m.cat : 'other';
+const ocCatLabel = (c)=>{ const f=OC_CATS.find(x=>x[0]===c); return f?f[1]:'📌 อื่นๆ'; };
+const ocSortMenus = (menus)=>{ const ord=OC_CATS.map(x=>x[0]); return [...menus].sort((a,b)=> ord.indexOf(ocCatKey(a)) - ord.indexOf(ocCatKey(b))); };
 
 const ocFmt = (n, d=2) => (isFinite(n)? n : 0).toLocaleString('th-TH',{ minimumFractionDigits:d, maximumFractionDigits:d });
 const ocUid = () => Math.random().toString(36).slice(2,9);
@@ -1242,12 +1290,15 @@ function OCTabMenu({ data, setData }){
         <button onClick={add} className="press kanit text-[13px] px-3 py-1.5 rounded-xl text-white" style={{ background:'var(--primary)', border:'none' }}>+ เพิ่ม</button>
       </div>
       <div className="space-y-2">
-        {data.menus.map(m=>{
+        {(()=>{ let lastCat=null; return ocSortMenus(data.menus).map(m=>{
+          const catK = ocCatKey(m); const showHead = catK!==lastCat; lastCat = catK;
           const c = ocMenuCost(m, ingMap, baseMap);
           const totalWithPack = c.total + (m.addon?0:pk);
           const isOpen = open===m.id;
           return (
-            <div key={m.id} className="card p-2.5">
+            <React.Fragment key={m.id}>
+            {showHead && <div className="kanit text-[12px] mt-3" style={{ color:'var(--muted)' }}>{ocCatLabel(catK)}</div>}
+            <div className="card p-2.5">
               <div className="flex items-center gap-2 press" onClick={()=>setOpen(isOpen?null:m.id)}>
                 <div className="flex-1 min-w-0">
                   <div className="kanit text-[14px] truncate">{m.name} {c.missing && <span style={{color:'var(--neg)'}}>❓</span>}</div>
@@ -1269,13 +1320,21 @@ function OCTabMenu({ data, setData }){
                       <input type="checkbox" checked={!!m.addon} onChange={e=>upd(m.id,{addon:e.target.checked})} /> ท็อปปิ้ง (ไม่คิดแพ็ก)
                     </label>
                   </div>
+                  <div className="flex items-center gap-1.5 mb-2">
+                    <span className="text-[12px]" style={{ color:'var(--muted)' }}>หมวด</span>
+                    <select value={ocCatKey(m)} onChange={e=>upd(m.id,{cat:e.target.value})}
+                      className="border rounded-lg px-1 py-1 text-[12px]" style={{ borderColor:'var(--line)' }}>
+                      {OC_CATS.map(c=><option key={c[0]} value={c[0]}>{c[1]}</option>)}
+                    </select>
+                  </div>
                   <OCLineEditor lines={m.lines} options={opts} onSet={ls=>upd(m.id,{lines:ls})} unitOf={unitOf} />
                   <button className="press kanit text-[12px] mt-2" style={{ color:'var(--neg)', border:'none', background:'none' }} onClick={()=>del(m.id)}>ลบเมนูนี้</button>
                 </div>
               )}
             </div>
+            </React.Fragment>
           );
-        })}
+        }); })()}
       </div>
     </div>
   );
@@ -1287,7 +1346,7 @@ function OCTabCost({ data, setData }){
   const pk = ocPackCost(data.settings, ingMap);
   const target = data.settings.targetPct || 35;
   const ingOpts = data.ing.map(g=>({ v:g.id, label:g.name }));
-  const rows = data.menus.map(m=>{
+  const rows = ocSortMenus(data.menus).map(m=>{
     const c = ocMenuCost(m, ingMap, baseMap);
     const total = c.total + (m.addon?0:pk);
     const pct = m.sell>0 ? total/m.sell*100 : null;
@@ -1308,10 +1367,18 @@ function OCTabCost({ data, setData }){
         <OCLineEditor lines={data.settings.pack||[]} options={ingOpts}
           onSet={ls=>setSet({pack:ls})}
           unitOf={l=>{ const g=ingMap[l.ing]; return g?g.unit:''; }} />
+        <button className="press kanit text-[12px] px-2 py-1 rounded-lg mt-2" style={{ background:'#FEF3C7', color:'#92400E', border:'none' }}
+          onClick={()=>{ if(confirm('โหลดเมนู/สูตร/ราคาตั้งต้นเวอร์ชันล่าสุด (ตามเมนูบอร์ด)?\n\n⚠️ ข้อมูลที่แก้ไว้ในแอปจะถูกแทนที่ทั้งหมด')) setData(ocDeepCopy(OC_SEED)); }}>
+          ↻ โหลดเมนูบอร์ด/สูตรตั้งต้นล่าสุด
+        </button>
       </div>
       <div className="space-y-1.5">
-        {rows.map(r=>(
-          <div key={r.m.id} className="card px-3 py-2 flex items-center gap-2">
+        {(()=>{ let lastCat=null; return rows.map(r=>{
+          const catK = ocCatKey(r.m); const showHead = catK!==lastCat; lastCat = catK;
+          return (
+          <React.Fragment key={r.m.id}>
+          {showHead && <div className="kanit text-[12px] mt-3" style={{ color:'var(--muted)' }}>{ocCatLabel(catK)}</div>}
+          <div className="card px-3 py-2 flex items-center gap-2">
             <div className="flex-1 min-w-0">
               <div className="text-[13px] truncate">{r.m.name} {r.missing && <span style={{color:'var(--neg)'}}>❓</span>}</div>
               <div className="text-[11px]" style={{ color:'var(--muted)' }}>
@@ -1323,7 +1390,9 @@ function OCTabCost({ data, setData }){
               ? <OCBadge ok={r.pct<=target} warn={r.pct>target && r.pct<=target+10}>{ocFmt(r.pct,0)}%</OCBadge>
               : <OCBadge warn>—</OCBadge>}
           </div>
-        ))}
+          </React.Fragment>
+          );
+        }); })()}
       </div>
       <div className="text-[11px] mt-3" style={{ color:'var(--muted)' }}>
         %ต้นทุน = (วัตถุดิบ+แพ็กเกจ) ÷ ราคาขาย · เขียว ≤ เป้า · เหลือง เกินเล็กน้อย · แดง เกินมาก
