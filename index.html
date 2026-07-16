@@ -1688,18 +1688,52 @@ function OCShareQR({ toast }){
   }catch(e){}
 })();
 
-/* ================ 🖨️ PRINT PANEL (Owl Cha ทุก role) ================ */
+/* ================ 🖨️ PRINT PANEL (Owl Cha ทุก role · แก้สูตรได้เฉพาะ admin) ================ */
 const OP_BASES = ['เบสชานม','เบสชาไทย','เบสชาเขียวใส','น้ำเชื่อม','ไข่มุก','เบสนมสด'];
 const OP_SIZES = ['22','30','45','60','68','90','100'];
+const OP_SEED_RECIPES = [
+  { id:'rMilkTea', name:'เบสชานม', sizes:[{label:'22 แก้ว',factor:1},{label:'45 แก้ว',factor:2},{label:'68 แก้ว',factor:3},{label:'90 แก้ว',factor:4}],
+    items:[{name:'น้ำสะอาด',qty:5,unit:'ลิตร'},{name:'ใบชาแดง',qty:120,unit:'g'},{name:'น้ำตาล',qty:100,unit:'g'},{name:'ครีมเทียม',qty:400,unit:'g'},{name:'ครีมเทียมข้นจืด',qty:1,unit:'ป๋องใหญ่'},{name:'ครีมเทียมข้นหวาน',qty:1,unit:'ป๋องเล็ก'}],
+    steps:'1. ต้มน้ำให้เดือด ใส่น้ำตาล คนให้ละลาย\n2. ปิดไฟ ยกหม้อลงจากเตาทันที\n3. ใส่ใบชา ใช้ตะกร้อขยี้ใบชาให้ทั่ว 2 นาที\n4. ปิดฝาหม้อ อบชา 30 นาที\n5. กรองชาด้วยที่กรอง (ห้ามบีบชา)\n6. ใส่ครีมเทียม รอจม ค่อยคนละลาย แล้วใส่ข้นจืด+ข้นหวาน คนอีกรอบ\n7. **ใช้เครื่องปั่นชา ปั่นในหม้อ 2 นาที จนฟองเยอะ**\n8. พักให้คลายร้อน ~4 ชม. แล้วเทใส่ถุงเย็น มัดแน่น น็อคในถังน้ำแข็ง (ใช้วันถัดไป กลิ่นชัดสุด)\n📌 เก็บตู้เย็นได้ 3 วัน' },
+  { id:'rThaiTea', name:'เบสชาไทย', sizes:[{label:'22 แก้ว',factor:1},{label:'45 แก้ว',factor:2},{label:'68 แก้ว',factor:3},{label:'90 แก้ว',factor:4}],
+    items:[{name:'น้ำสะอาด',qty:5,unit:'ลิตร'},{name:'ใบชาไทย',qty:200,unit:'g'},{name:'ครีมเทียม',qty:400,unit:'g'},{name:'ครีมเทียมข้นจืด',qty:2,unit:'ป๋องใหญ่'},{name:'ครีมเทียมข้นหวาน',qty:2,unit:'ป๋องเล็ก'}],
+    steps:'1. ต้มน้ำเดือด ปิดไฟ ยกหม้อลงทันที\n2. ใส่ใบชา ขยี้ตะกร้อให้ทั่ว 2 นาที\n3. ปิดฝาหม้อ อบชา 15 นาที\n4. กรองชา (ห้ามบีบ)\n5. ใส่ครีมเทียม รอจม คนละลาย + ข้นจืด/ข้นหวาน คนเข้ากัน\n6. **ปั่นในหม้อ 2 นาที จนฟองเยอะ**\n7. พักคลายร้อน ~4 ชม. → ถุงเย็น → น็อคถังน้ำแข็ง\n📌 เก็บตู้เย็นได้ 3 วัน' },
+  { id:'rGreenTea', name:'เบสชาเขียวใส', sizes:[{label:'22 แก้ว',factor:1},{label:'45 แก้ว',factor:2},{label:'68 แก้ว',factor:3},{label:'90 แก้ว',factor:4}],
+    items:[{name:'น้ำสะอาด',qty:5,unit:'ลิตร'},{name:'ใบชาเขียว',qty:50,unit:'g'},{name:'น้ำตาล',qty:200,unit:'g'}],
+    steps:'1. ต้มน้ำเดือด ใส่น้ำตาล คนละลาย\n2. ปิดไฟ ยกหม้อลงทันที\n3. ใส่ใบชา ขยี้ตะกร้อ 2 นาที\n4. ปิดฝา อบชา 15 นาที\n5. กรองชา ไม่บีบ\n6. พักคลายร้อน ~4 ชม. → ถุงเย็น → น็อคถังน้ำแข็ง\n📌 ตู้เย็น 3 วัน (ไม่ควรเกิน 1 วัน ชาจะขมขึ้น)' },
+  { id:'rFreshMilk', name:'เบสนมสด', sizes:[{label:'10 แก้ว',factor:1},{label:'20 แก้ว',factor:2},{label:'30 แก้ว',factor:3},{label:'40 แก้ว',factor:4}],
+    items:[{name:'นมจืด Meiji',qty:2,unit:'ลิตร'},{name:'ครีมเทียมข้นจืด',qty:1,unit:'ป๋องใหญ่'}],
+    steps:'1. เทครีมเทียมข้นจืดผสมกับนมจืด Meiji\n2. คนผสมให้เข้ากัน\n📌 ผสมแล้วต้องแช่ตู้เย็นเท่านั้น ไม่เกิน 3 วัน (ดูวันหมดอายุนม)' },
+  { id:'rSyrup', name:'น้ำเชื่อม', sizes:[{label:'100 แก้ว',factor:1},{label:'250 แก้ว',factor:2.5},{label:'400 แก้ว',factor:4}],
+    items:[{name:'น้ำสะอาด',qty:2,unit:'ลิตร'},{name:'น้ำตาล',qty:2,unit:'กก.'}],
+    steps:'1. ต้มน้ำให้เดือด\n2. ใส่น้ำตาล คนให้ละลายจนหมด\n3. ปิดไฟ เปิดฝาหม้อรอจนเย็นตัว\n📌 นอกร้าน 1 อาทิตย์ · ในห้อง 2 อาทิตย์ · ตู้เย็น 1 เดือน' },
+  { id:'rPearl', name:'ต้มไข่มุก', sizes:[{label:'30 แก้ว',factor:1},{label:'60 แก้ว',factor:2},{label:'90 แก้ว',factor:3}],
+    items:[{name:'น้ำสะอาด',qty:7,unit:'ลิตร'},{name:'ไข่มุก',qty:1,unit:'กก.'},{name:'น้ำเชื่อม',qty:250,unit:'ml'}],
+    steps:'1. ต้มน้ำเดือดจัด แล้วเบาไฟเหลือ 1800-2000 วัตต์ ค่อยๆใส่ไข่มุก ใช้ตะกร้อคนกันติดหม้อ\n2. ไข่มุกลอยแล้ว จับเวลา 30 นาที เปิดฝา คอยคนเป็นระยะ\n3. ครบเวลา ปิดไฟ ยกหม้อออกทันที\n4. อบต่อ 25 นาที เปิดฝาหม้อ\n5. กรอง ล้างน้ำไหลผ่านจนหมดเมือก\n6. แช่น้ำเย็นจัด คน 10 วินาที ให้ไข่มุกเด้ง\n7. สะเด็ดน้ำ คลุกน้ำเชื่อม (อุณหภูมิปกติเท่านั้น)\n8. เก็บภาชนะสแตนเลสปิดฝา\n📌 ห้ามแช่ตู้เย็น อยู่ได้ 4 ชม. ต้มใหม่วันต่อวัน\n(สูตรบริษัท: 60 แก้วใช้น้ำ 12L · 90 แก้ว 18L)' },
+  { id:'rCheese', name:'โฟมครีมชีส', sizes:[{label:'14 ส่วน',factor:1},{label:'28 ส่วน',factor:2},{label:'56 ส่วน',factor:4},{label:'84 ส่วน',factor:6}],
+    items:[{name:'ผงชีส 1',qty:175,unit:'g'},{name:'ผงชีส 2',qty:50,unit:'g'},{name:'นม Meiji แช่เย็นจัด',qty:500,unit:'ml'}],
+    steps:'1. เทผงชีส 2 ชนิดลงหม้อ คนให้เข้ากัน\n2. เทนมสดเย็นจัดตามลงไป (ห้ามใส่น้ำแข็ง)\n3. ตีด้วยเครื่องตีแป้ง ~8 นาที ยิ่งตีนานยิ่งฟู\n📌 ตู้เย็น 2-3 วัน · ถ้าข้นไป เติมนมทีละนิดแล้วคนใหม่\n⚠️ เสิร์ฟด้วยฝาชีสปิด ยกแก้วดื่ม ห้ามเขย่าเด็ดขาด' },
+  { id:'rChoco', name:'ช็อคโก้ลาวา', sizes:[{label:'8-10 แก้ว',factor:1},{label:'16-20 แก้ว',factor:2},{label:'24-30 แก้ว',factor:3}],
+    items:[{name:'น้ำร้อน',qty:140,unit:'ml'},{name:'ผงโกโก้',qty:70,unit:'g'},{name:'นมข้นหวาน',qty:60,unit:'g'}],
+    steps:'1. เทน้ำร้อน + ผงโกโก้ + นมข้นหวาน ลงภาชนะ\n2. คนให้ละลายเข้ากันทั้งหมด\n3. พักไว้ให้หายร้อน (อุณหภูมิปกติ) ก่อนใช้เป็นท็อปปิ้ง\n📌 ตู้เย็น 2-3 วัน · ถ้าหนืดเกิน เติมน้ำเปล่าทีละนิด' },
+  { id:'rPurple', name:'ลาวามันม่วง', sizes:[{label:'8 แก้ว',factor:1},{label:'16 แก้ว',factor:2},{label:'32 แก้ว',factor:4}],
+    items:[{name:'น้ำสะอาด',qty:550,unit:'ml'},{name:'ผงลาวามันม่วง',qty:170,unit:'g'},{name:'น้ำเชื่อม',qty:10,unit:'ml'}],
+    steps:'1. เทผงลาวาลงหม้อ ตามด้วยน้ำสะอาด และน้ำเชื่อม\n2. ตีด้วยเครื่องตีแป้ง ~3 นาทีจนเข้ากัน\n📌 ตู้เย็น 1-2 วัน · ถ้าสีกลายเป็นชมพู = เสียแล้ว' },
+  { id:'rLemon', name:'น้ำมะนาว', sizes:[{label:'10 แก้ว',factor:1},{label:'20 แก้ว',factor:2},{label:'30 แก้ว',factor:3}],
+    items:[{name:'น้ำสะอาด (อุณหภูมิห้อง)',qty:200,unit:'ml'},{name:'ผงมะนาว',qty:67,unit:'g'}],
+    steps:'1. เทน้ำสะอาด และผงมะนาว ลงภาชนะ\n2. คนส่วนผสมทั้งหมดให้ละลาย\n📌 ตู้เย็น 2-3 วัน' },
+];
 function opThDate(iso){
   const d = iso ? new Date(iso+'T00:00:00') : new Date();
   const days = ['อาทิตย์','จันทร์','อังคาร','พุธ','พฤหัส','ศุกร์','เสาร์'];
   return d.getDate()+'/'+(d.getMonth()+1)+'/'+(d.getFullYear()+543)+' ('+days[d.getDay()]+')';
 }
 function opEscapeHtml(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function opQty(n){ const v=Math.round(n*100)/100; return v.toLocaleString('th-TH',{maximumFractionDigits:2}); }
 
-function PrintPanel(){
+function PrintPanel({ user }){
   const saved = (()=>{ try{ return JSON.parse(localStorage.getItem('owlprint')||'null')||{}; }catch(e){ return {}; } })();
+  const isAdmin = user && user.role==='admin';
   const [mode,setMode] = useState('form');
   const [plines,setPlines] = useState((saved.lines&&saved.lines.length)?saved.lines:[
     { base:'เบสชานม', size:'45', qty:4 },
@@ -1711,11 +1745,48 @@ function PrintPanel(){
   const [dateStr,setDateStr] = useState(()=>{ const t=new Date(); return t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0'); });
   const [boxes,setBoxes] = useState(true);
   const [result,setResult] = useState(window.__passprnt||null);
+  const [recipes,setRecipes] = useState(null);
+  const [selR,setSelR] = useState('');
+  const [selS,setSelS] = useState(0);
+  const [editing,setEditing] = useState(false);
 
   useEffect(()=>{ localStorage.setItem('owlprint', JSON.stringify({ lines:plines, free })); },[plines,free]);
 
+  useEffect(()=>{
+    if(mode!=='recipe' || recipes) return;
+    let cancelled=false;
+    (async()=>{
+      let rs=null;
+      try{
+        if(db){ const s=await db.collection('owlCost').doc('print').get(); if(s.exists && s.data().recipes) rs=s.data().recipes; }
+      }catch(e){ console.error(e); }
+      if(!rs){ try{ rs=JSON.parse(localStorage.getItem('owlrecipes')||'null'); }catch(e){} }
+      if(!rs) rs=ocDeepCopy(OP_SEED_RECIPES);
+      if(!cancelled){ setRecipes(rs); if(rs.length) setSelR(rs[0].id); }
+    })();
+    return ()=>{ cancelled=true; };
+  },[mode]);
+
+  const saveRecipes = async (rs)=>{
+    setRecipes(rs);
+    localStorage.setItem('owlrecipes', JSON.stringify(rs));
+    try{ if(db) await db.collection('owlCost').doc('print').set({ recipes:rs }); }catch(e){ console.error(e); }
+  };
+  const curR = (recipes||[]).find(r=>r.id===selR) || null;
+  const curSize = curR && curR.sizes[Math.min(selS, curR.sizes.length-1)];
+  const updR = (patch)=> saveRecipes(recipes.map(r=>r.id===selR?{...r,...patch}:r));
+
   const buildTextLines = ()=>{
     if(mode==='free'){ const t=free.trim(); return t? t.split('\n') : []; }
+    if(mode==='recipe'){
+      if(!curR || !curSize) return [];
+      const out=[curR.name, 'สูตร '+curSize.label+' (x'+curSize.factor+')', 'พิมพ์ '+opThDate(''), '--------------------'];
+      curR.items.forEach(it=>{ out.push(it.name+'  '+opQty(it.qty*curSize.factor)+' '+it.unit); });
+      out.push('--------------------');
+      out.push('วิธีทำ:');
+      (curR.steps||'').split('\n').forEach(s=>{ if(s.trim()) out.push(s); });
+      return out;
+    }
     const out=['*** ต้มชา ***', opThDate(dateStr), '--------------------'];
     let total=0;
     plines.forEach(l=>{
@@ -1734,10 +1805,11 @@ function PrintPanel(){
     if(!tls.length){ alert('ยังไม่มีข้อความให้พิมพ์'); return; }
     let body='';
     tls.forEach((t,i)=>{
-      const big = (mode==='form' && i===0);
-      const fs = big?46:30;
-      const fw = (big||t.indexOf('รวมทั้งหมด')===0)?700:500;
-      body += '<div style="font-size:'+fs+'px;font-weight:'+fw+';text-align:'+(big?'center':'left')+';line-height:1.45;">'+(opEscapeHtml(t)||'&nbsp;')+'</div>';
+      const big = (mode!=='free' && i===0);
+      const sub = (mode==='recipe' && i===1);
+      const fs = big?44:(sub?34:(mode==='recipe'?27:30));
+      const bold = big || sub || t.indexOf('รวมทั้งหมด')===0 || t==='วิธีทำ:';
+      body += '<div style="font-size:'+fs+'px;font-weight:'+(bold?700:500)+';text-align:'+(big||sub?'center':'left')+';line-height:1.45;">'+(opEscapeHtml(t)||'&nbsp;')+'</div>';
     });
     const htmlDoc = '<!DOCTYPE html><html><head><meta charset="utf-8"></head>'+
       '<body style="width:560px;margin:0;padding:8px 4px;font-family:sans-serif;color:#000;">'+body+
@@ -1760,16 +1832,17 @@ function PrintPanel(){
           <button className="press" style={{ float:'right', border:'none', background:'none', color:'var(--muted)' }} onClick={()=>{ setResult(null); window.__passprnt=null; }}>✕</button>
         </div>
       )}
-      <div className="flex gap-1.5 mt-2 mb-3">
-        {[['form','🍵 ต้มชา'],['free','✏️ ข้อความอิสระ']].map(t=>(
+      <div className="flex gap-1.5 mt-2 mb-3 overflow-x-auto hide-scroll">
+        {[['form','🍵 ต้มชา'],['recipe','📖 สูตร'],['free','✏️ อิสระ']].map(t=>(
           <button key={t[0]} onClick={()=>setMode(t[0])}
-            className="press kanit text-[13px] px-3 py-1.5 rounded-full"
+            className="press kanit text-[13px] px-3 py-1.5 rounded-full whitespace-nowrap"
             style={ mode===t[0] ? { background:'var(--primary)', color:'#fff', border:'none' } : { background:'var(--soft)', color:'var(--primary)', border:'none' } }>
             {t[1]}
           </button>
         ))}
       </div>
-      {mode==='form' ? (
+
+      {mode==='form' && (
         <div className="card p-3 mb-3">
           <div className="flex items-center gap-2 mb-2">
             <span className="text-[12px]" style={{ color:'var(--muted)' }}>วันที่</span>
@@ -1797,12 +1870,71 @@ function PrintPanel(){
             <input type="checkbox" checked={boxes} onChange={e=>setBoxes(e.target.checked)}/> พิมพ์ช่อง ☐ ให้ติ๊กตอนใช้ถุง
           </label>
         </div>
-      ) : (
+      )}
+
+      {mode==='recipe' && (
+        <div className="card p-3 mb-3">
+          {!recipes ? <div className="text-[13px]" style={{ color:'var(--muted)' }}>กำลังโหลดสูตร…</div> : (
+            <div>
+              <div className="flex items-center gap-1.5 mb-2">
+                <select value={selR} onChange={e=>{ setSelR(e.target.value); setSelS(0); setEditing(false); }} style={{ ...selSt, flex:1, minWidth:0 }}>
+                  {recipes.map(r=><option key={r.id} value={r.id}>{r.name}</option>)}
+                </select>
+                <select value={selS} onChange={e=>setSelS(parseInt(e.target.value))} style={{ ...selSt, width:110 }}>
+                  {(curR?curR.sizes:[]).map((s,i)=><option key={i} value={i}>{s.label}</option>)}
+                </select>
+              </div>
+              {isAdmin && (
+                <div className="flex gap-1.5 mb-1">
+                  <button className="press kanit text-[12px] px-2 py-1 rounded-lg" style={{ background:'var(--soft)', color:'var(--primary)', border:'none' }}
+                    onClick={()=>setEditing(!editing)}>{editing?'✓ เสร็จสิ้น':'✏️ แก้สูตรนี้'}</button>
+                  <button className="press kanit text-[12px] px-2 py-1 rounded-lg" style={{ background:'var(--soft)', color:'var(--primary)', border:'none' }}
+                    onClick={()=>{ const id='rx'+ocUid(); saveRecipes([...recipes,{ id, name:'สูตรใหม่', sizes:[{label:'1 เท่า',factor:1}], items:[], steps:'' }]); setSelR(id); setSelS(0); setEditing(true); }}>+ เพิ่มสูตร</button>
+                  {editing && <button className="press kanit text-[12px] px-2 py-1 rounded-lg" style={{ background:'#FEE2E2', color:'var(--neg)', border:'none' }}
+                    onClick={()=>{ if(confirm('ลบสูตร "'+(curR&&curR.name)+'" ?')){ const rs=recipes.filter(r=>r.id!==selR); saveRecipes(rs); setSelR(rs.length?rs[0].id:''); setSelS(0); setEditing(false); } }}>ลบ</button>}
+                </div>
+              )}
+              {editing && curR && (
+                <div className="mt-2 pt-2" style={{ borderTop:'1px solid var(--line)' }}>
+                  <input type="text" value={curR.name} onChange={e=>updR({name:e.target.value})} style={{ ...selSt, width:'100%', marginBottom:8 }}/>
+                  <div className="text-[12px] mb-1" style={{ color:'var(--muted)' }}>ส่วนผสม (ปริมาณของขนาดแรก ×1):</div>
+                  {curR.items.map((it,i)=>(
+                    <div key={i} className="flex items-center gap-1.5 mb-1.5">
+                      <input type="text" value={it.name} onChange={e=>{ const c=[...curR.items]; c[i]={...c[i],name:e.target.value}; updR({items:c}); }} style={{ ...selSt, flex:1, minWidth:0 }}/>
+                      <input type="number" inputMode="decimal" value={it.qty} onChange={e=>{ const c=[...curR.items]; c[i]={...c[i],qty:parseFloat(e.target.value)||0}; updR({items:c}); }} className="num" style={{ ...selSt, width:64, textAlign:'right' }}/>
+                      <input type="text" value={it.unit} onChange={e=>{ const c=[...curR.items]; c[i]={...c[i],unit:e.target.value}; updR({items:c}); }} style={{ ...selSt, width:70 }}/>
+                      <button className="press" style={{ border:'none', background:'none', color:'var(--neg)' }} onClick={()=>updR({items:curR.items.filter((_,j)=>j!==i)})}>✕</button>
+                    </div>
+                  ))}
+                  <button className="press kanit text-[12px] px-2 py-1 rounded-lg mb-2" style={{ background:'var(--soft)', color:'var(--primary)', border:'none' }}
+                    onClick={()=>updR({items:[...curR.items,{name:'วัตถุดิบ',qty:0,unit:'g'}]})}>+ เพิ่มส่วนผสม</button>
+                  <div className="text-[12px] mb-1" style={{ color:'var(--muted)' }}>ขนาดหม้อ (ป้ายชื่อ + ตัวคูณ):</div>
+                  {curR.sizes.map((s,i)=>(
+                    <div key={i} className="flex items-center gap-1.5 mb-1.5">
+                      <input type="text" value={s.label} onChange={e=>{ const c=[...curR.sizes]; c[i]={...c[i],label:e.target.value}; updR({sizes:c}); }} style={{ ...selSt, flex:1 }}/>
+                      <span className="text-[11px]" style={{ color:'var(--muted)' }}>×</span>
+                      <input type="number" inputMode="decimal" value={s.factor} onChange={e=>{ const c=[...curR.sizes]; c[i]={...c[i],factor:parseFloat(e.target.value)||1}; updR({sizes:c}); }} className="num" style={{ ...selSt, width:60, textAlign:'right' }}/>
+                      <button className="press" style={{ border:'none', background:'none', color:'var(--neg)' }} onClick={()=>updR({sizes:curR.sizes.filter((_,j)=>j!==i)})}>✕</button>
+                    </div>
+                  ))}
+                  <button className="press kanit text-[12px] px-2 py-1 rounded-lg mb-2" style={{ background:'var(--soft)', color:'var(--primary)', border:'none' }}
+                    onClick={()=>updR({sizes:[...curR.sizes,{label:'ขนาดใหม่',factor:1}]})}>+ เพิ่มขนาด</button>
+                  <div className="text-[12px] mb-1" style={{ color:'var(--muted)' }}>วิธีทำ (บรรทัดละขั้น):</div>
+                  <textarea value={curR.steps||''} onChange={e=>updR({steps:e.target.value})} style={{ ...selSt, width:'100%', minHeight:130, fontSize:13 }}/>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {mode==='free' && (
         <div className="card p-3 mb-3">
           <textarea value={free} onChange={e=>setFree(e.target.value)} placeholder="พิมพ์ข้อความที่ต้องการ..."
             style={{ ...selSt, width:'100%', minHeight:120, fontSize:15 }}/>
         </div>
       )}
+
       <div className="card p-3 mb-3">
         <div className="kanit text-[13px] mb-2">👀 ตัวอย่างก่อนพิมพ์</div>
         <div className="kanit" style={{ border:'1px dashed var(--line)', borderRadius:12, padding:12, whiteSpace:'pre-wrap', fontSize:14, lineHeight:1.55 }}>
@@ -1952,7 +2084,7 @@ function Main({shop,user,canSwitch,onSwitch,logout}){
         {tab==='txns' && <TxnBrowser shop={shop} user={user} toast={toast}/>}
         {tab==='orders' && <OwlOrdersPanel/>}
         {tab==='stamp' && <StampPanel shop={shop} user={user} toast={toast}/>}
-        {tab==='print' && <PrintPanel/>}
+        {tab==='print' && <PrintPanel user={user}/>}
         {tab==='cost' && <CostPanel toast={toast}/>}
         {tab==='settings' && <Settings shop={shop} user={user} logout={logout} toast={toast}/>}
       </div>
