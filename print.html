@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>🖨️ Owl Print — พิมพ์ป้ายต้มชา</title>
+<link href="https://fonts.googleapis.com/css2?family=Kanit:wght@400;500;600;700&family=Noto+Sans+Thai:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{ --primary:#5B4636; --accent:#C9A227; --bg:#F7F4EE; --card:#fff; --ink:#2B2622; --muted:#8A8072; --line:#E7E1D6; --neg:#DC2626; --pos:#16A34A; }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body{ margin:0; background:var(--bg); font-family:'Noto Sans Thai',sans-serif; color:var(--ink); }
+  .kanit{ font-family:'Kanit',sans-serif; }
+  .shell{ max-width:480px; margin:0 auto; padding:14px 14px 40px; }
+  .card{ background:var(--card); border-radius:16px; box-shadow:0 1px 3px rgba(16,24,40,.06); padding:14px; margin-bottom:12px; }
+  .row{ display:flex; gap:6px; align-items:center; margin-bottom:8px; }
+  select,input,textarea{ font-family:inherit; font-size:14px; border:1px solid var(--line); border-radius:10px; padding:8px; outline:none; background:#fff; }
+  select{ flex:1; min-width:0; }
+  .qty{ width:56px; text-align:center; }
+  .btn{ font-family:'Kanit',sans-serif; border:none; border-radius:12px; padding:10px 14px; font-size:15px; cursor:pointer; }
+  .btn:active{ transform:scale(.97); }
+  .btn-main{ background:var(--primary); color:#fff; width:100%; padding:14px; font-size:18px; }
+  .btn-soft{ background:#EFE9DE; color:var(--primary); font-size:13px; padding:8px 12px; }
+  .btn-x{ background:none; color:var(--neg); font-size:15px; padding:4px 6px; }
+  .tabbar{ display:flex; gap:6px; margin-bottom:12px; }
+  .tab{ flex:1; text-align:center; padding:9px; border-radius:999px; background:#EFE9DE; color:var(--primary); font-family:'Kanit',sans-serif; font-size:14px; cursor:pointer; }
+  .tab.on{ background:var(--primary); color:#fff; }
+  .preview{ background:#fff; border:1px dashed var(--line); border-radius:12px; padding:12px; font-family:'Kanit',sans-serif; white-space:pre-wrap; font-size:14px; line-height:1.55; }
+  .hint{ font-size:12px; color:var(--muted); line-height:1.6; }
+  .ok{ color:var(--pos); font-weight:600; } .err{ color:var(--neg); font-weight:600; }
+  textarea{ width:100%; min-height:130px; font-size:15px; }
+  h1{ font-size:19px; margin:0 0 2px; color:var(--primary); font-family:'Kanit',sans-serif; }
+</style>
+</head>
+<body>
+<div class="shell">
+  <h1>🖨️ Owl Print</h1>
+  <div class="hint" style="margin-bottom:12px;">พิมพ์ป้ายออกเครื่อง Star TSP100III ผ่านแอป Star PassPRNT</div>
+  <div id="printResult"></div>
+
+  <div class="tabbar">
+    <div class="tab on" id="tabForm" onclick="setMode('form')">🍵 ต้มชา</div>
+    <div class="tab" id="tabFree" onclick="setMode('free')">✏️ ข้อความอิสระ</div>
+  </div>
+
+  <div id="paneForm">
+    <div class="card">
+      <div class="row">
+        <span style="font-size:13px;color:var(--muted);">วันที่</span>
+        <input type="date" id="fDate" style="flex:1;">
+      </div>
+      <div id="lines"></div>
+      <button class="btn btn-soft" onclick="addLine()">+ เพิ่มรายการ</button>
+      <div class="row" style="margin-top:10px;">
+        <label style="font-size:13px;color:var(--muted);display:flex;align-items:center;gap:6px;">
+          <input type="checkbox" id="fBoxes" checked onchange="refresh()"> พิมพ์ช่อง ☐ ให้ติ๊กตอนใช้ถุง
+        </label>
+      </div>
+    </div>
+  </div>
+
+  <div id="paneFree" style="display:none;">
+    <div class="card">
+      <textarea id="freeText" placeholder="พิมพ์ข้อความที่ต้องการ..." oninput="refresh()"></textarea>
+      <div class="hint">ขึ้นบรรทัดใหม่ได้ตามปกติ ตัวหนังสือจะพิมพ์ออกมาขนาดใหญ่อ่านง่าย</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="kanit" style="font-size:14px;margin-bottom:8px;">👀 ตัวอย่างก่อนพิมพ์</div>
+    <div class="preview" id="preview"></div>
+  </div>
+
+  <button class="btn btn-main" onclick="doPrint()">🖨️ พิมพ์</button>
+
+  <div class="card" style="margin-top:12px;">
+    <div class="kanit" style="font-size:14px;margin-bottom:6px;">⚙️ ตั้งค่าครั้งแรก (ทำครั้งเดียว)</div>
+    <div class="hint">
+      1. ติดตั้งแอป <b>"Star PassPRNT"</b> (ฟรี — Google Play / App Store)<br>
+      2. เปิดแอป PassPRNT → Search printer → เลือกเครื่อง TSP100III ของร้าน<br>
+      &nbsp;&nbsp;&nbsp;• รุ่น <b>LAN/WLAN</b>: มือถือต้องต่อ WiFi วงเดียวกับเครื่องพิมพ์<br>
+      &nbsp;&nbsp;&nbsp;• รุ่น <b>Bluetooth</b>: จับคู่บลูทูธก่อน<br>
+      &nbsp;&nbsp;&nbsp;• รุ่น <b>U (สาย Lightning ต่อ iPad)</b>: ให้เปิดหน้านี้บน iPad แล้วพิมพ์จาก iPad แทน<br>
+      3. กลับมาหน้านี้ → กดพิมพ์ → ระบบจะเด้งไป PassPRNT แล้วพิมพ์อัตโนมัติ<br>
+      💡 ดูรุ่นได้จากสติกเกอร์ใต้เครื่อง (TSP143III <b>LAN / W / BI / U</b>)
+    </div>
+  </div>
+</div>
+
+<script>
+const BASES = ['เบสชานม','เบสชาไทย','เบสชาเขียวใส','น้ำเชื่อม','ไข่มุก','เบสนมสด'];
+const SIZES = ['22','30','45','60','68','90','100'];
+let mode = 'form';
+let lines = [
+  { base:'เบสชานม',    size:'45', qty:4 },
+  { base:'เบสชาไทย',   size:'45', qty:2 },
+  { base:'เบสชาเขียวใส', size:'68', qty:1 },
+  { base:'เบสชาเขียวใส', size:'45', qty:1 },
+];
+
+function thDate(iso){
+  const d = iso ? new Date(iso+'T00:00:00') : new Date();
+  const days = ['อาทิตย์','จันทร์','อังคาร','พุธ','พฤหัส','ศุกร์','เสาร์'];
+  return d.getDate()+'/'+(d.getMonth()+1)+'/'+(d.getFullYear()+543)+' ('+days[d.getDay()]+')';
+}
+
+function setMode(m){
+  mode = m;
+  document.getElementById('tabForm').className = 'tab'+(m==='form'?' on':'');
+  document.getElementById('tabFree').className = 'tab'+(m==='free'?' on':'');
+  document.getElementById('paneForm').style.display = m==='form'?'':'none';
+  document.getElementById('paneFree').style.display = m==='free'?'':'none';
+  refresh();
+}
+
+function renderLines(){
+  const wrap = document.getElementById('lines');
+  wrap.innerHTML = '';
+  lines.forEach((l,i)=>{
+    const row = document.createElement('div');
+    row.className = 'row';
+    const selBase = document.createElement('select');
+    BASES.forEach(b=>{ const o=document.createElement('option'); o.value=b; o.textContent=b; if(b===l.base)o.selected=true; selBase.appendChild(o); });
+    selBase.onchange = e=>{ lines[i].base=e.target.value; refresh(); };
+    const selSize = document.createElement('select');
+    selSize.style.maxWidth = '110px';
+    SIZES.forEach(s=>{ const o=document.createElement('option'); o.value=s; o.textContent='สูตร '+s+' แก้ว'; if(s===l.size)o.selected=true; selSize.appendChild(o); });
+    selSize.onchange = e=>{ lines[i].size=e.target.value; refresh(); };
+    const inQty = document.createElement('input');
+    inQty.type='number'; inQty.inputMode='numeric'; inQty.className='qty'; inQty.value=l.qty; inQty.min=1;
+    inQty.oninput = e=>{ lines[i].qty=parseInt(e.target.value)||1; refresh(); };
+    const unit = document.createElement('span');
+    unit.style.cssText='font-size:12px;color:var(--muted);'; unit.textContent='ถุง';
+    const del = document.createElement('button');
+    del.className='btn btn-x'; del.textContent='✕';
+    del.onclick = ()=>{ lines.splice(i,1); renderLines(); refresh(); };
+    row.appendChild(selBase); row.appendChild(selSize); row.appendChild(inQty); row.appendChild(unit); row.appendChild(del);
+    wrap.appendChild(row);
+  });
+}
+
+function addLine(){ lines.push({ base:'เบสชานม', size:'45', qty:1 }); renderLines(); refresh(); }
+
+function buildTextLines(){
+  const out = [];
+  if(mode==='free'){
+    const t = document.getElementById('freeText').value.trim();
+    return t ? t.split('\n') : [];
+  }
+  const showBoxes = document.getElementById('fBoxes').checked;
+  out.push('*** ต้มชา ***');
+  out.push(thDate(document.getElementById('fDate').value));
+  out.push('--------------------');
+  let total = 0;
+  lines.forEach(l=>{
+    out.push(l.base+' สูตร '+l.size+' แก้ว');
+    let q = 'จำนวน '+l.qty+' ถุง';
+    if(showBoxes) q += '  '+'☐'.repeat(Math.min(l.qty,10));
+    out.push(q);
+    out.push('');
+    total += l.qty;
+  });
+  out.push('--------------------');
+  out.push('รวมทั้งหมด '+total+' ถุง');
+  return out;
+}
+
+function refresh(){
+  localStorage.setItem('owlprint', JSON.stringify({ lines, free:document.getElementById('freeText').value }));
+  document.getElementById('preview').textContent = buildTextLines().join('\n');
+}
+
+function escapeHtml(s){
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function doPrint(){
+  const tls = buildTextLines();
+  if(!tls.length){ alert('ยังไม่มีข้อความให้พิมพ์'); return; }
+  let body = '';
+  tls.forEach((t,i)=>{
+    const big = (mode==='form' && i===0);
+    const fs = big ? 46 : 30;
+    const fw = big || t.indexOf('รวมทั้งหมด')===0 ? 700 : 500;
+    const align = big ? 'center' : 'left';
+    body += '<div style="font-size:'+fs+'px;font-weight:'+fw+';text-align:'+align+';line-height:1.45;">'+(escapeHtml(t)||'&nbsp;')+'</div>';
+  });
+  const html = '<!DOCTYPE html><html><head><meta charset="utf-8"></head>'+
+    '<body style="width:560px;margin:0;padding:8px 4px;font-family:sans-serif;color:#000;">'+body+
+    '<div style="height:20px;"></div></body></html>';
+  const backUrl = location.origin + location.pathname;
+  const uri = 'starpassprnt://v1/print/nopreview?back=' + encodeURIComponent(backUrl) +
+              '&html=' + encodeURIComponent(html);
+  location.href = uri;
+}
+
+/* แสดงผลลัพธ์เมื่อ PassPRNT ส่งกลับ */
+(function init(){
+  const p = new URLSearchParams(location.search);
+  if(p.has('passprnt_code')){
+    const ok = p.get('passprnt_code')==='0';
+    document.getElementById('printResult').innerHTML =
+      '<div class="card" style="padding:10px 14px;"><span class="'+(ok?'ok':'err')+'">'+
+      (ok ? '✓ พิมพ์สำเร็จ' : '✗ พิมพ์ไม่สำเร็จ: '+escapeHtml(p.get('passprnt_message')||'')) +
+      '</span></div>';
+    history.replaceState(null,'',location.pathname);
+  }
+  const today = new Date();
+  document.getElementById('fDate').value =
+    today.getFullYear()+'-'+String(today.getMonth()+1).padStart(2,'0')+'-'+String(today.getDate()).padStart(2,'0');
+  try{
+    const saved = JSON.parse(localStorage.getItem('owlprint')||'null');
+    if(saved && Array.isArray(saved.lines) && saved.lines.length) lines = saved.lines;
+    if(saved && saved.free) document.getElementById('freeText').value = saved.free;
+  }catch(e){}
+  renderLines();
+  refresh();
+})();
+</script>
+</body>
+</html>
