@@ -1893,10 +1893,13 @@ function PrintPanel({ user }){
               <select value={l.size} onChange={e=>updLine(i,{size:e.target.value})} style={{ ...selSt, width:92 }}>
                 {OP_SIZES.map(s=><option key={s} value={s}>{s} แก้ว</option>)}
               </select>
-              <input type="number" inputMode="numeric" min="1" value={l.qty}
-                onChange={e=>updLine(i,{qty:parseInt(e.target.value)||1})}
-                className="num" style={{ ...selSt, width:52, textAlign:'center' }}/>
-              <span className="text-[11px]" style={{ color:'var(--muted)' }}>ถุง</span>
+              <div className="flex items-center" style={{ border:'1px solid var(--line)', borderRadius:10, overflow:'hidden', background:'#fff', flexShrink:0 }}>
+                <button className="press" style={{ border:'none', background:'var(--soft)', color:'var(--primary)', width:32, height:36, fontSize:18, fontWeight:700 }}
+                  onClick={()=>updLine(i,{qty:Math.max(1,(l.qty||1)-1)})}>−</button>
+                <div className="num" style={{ width:34, textAlign:'center', fontSize:15, fontWeight:600 }}>{l.qty||1}</div>
+                <button className="press" style={{ border:'none', background:'var(--soft)', color:'var(--primary)', width:32, height:36, fontSize:18, fontWeight:700 }}
+                  onClick={()=>updLine(i,{qty:(l.qty||1)+1})}>＋</button>
+              </div>
               <button className="press" style={{ border:'none', background:'none', color:'var(--neg)', fontSize:14 }}
                 onClick={()=>setPlines(plines.filter((_,j)=>j!==i))}>✕</button>
             </div>
@@ -2097,7 +2100,6 @@ function Main({shop,user,canSwitch,onSwitch,logout}){
     ...(shop.id==='owlcha' ? [{k:'orders',label:'ออเดอร์',icon:I.cup},{k:'stamp',label:'แต้ม',icon:I.stamp},{k:'print',label:'พิมพ์',icon:I.printer},{k:'cost',label:'ต้นทุน',icon:I.calc}] : []),
     {k:'settings',label:'ตั้งค่า',icon:I.gear},
   ];
-  /* perms กำหนดรายคนได้ทุกบทบาท: ติ๊กอย่างน้อย 1 เมนู = เห็นเฉพาะที่ติ๊ก / ไม่ติ๊ก = ค่าเริ่มต้นตามบทบาท */
   const customPerms = (user.perms && Object.keys(user.perms).some(k=>user.perms[k])) ? user.perms : null;
   const tabs = ALL_NAV.filter(x=>{
     if(x.k==='settings') return true;
