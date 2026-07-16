@@ -1744,6 +1744,7 @@ function PrintPanel({ user }){
   const [free,setFree] = useState(saved.free||'');
   const [dateStr,setDateStr] = useState(()=>{ const t=new Date(); return t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0'); });
   const [boxes,setBoxes] = useState(true);
+  const [showRecipe,setShowRecipe] = useState(true);
   const [result,setResult] = useState(window.__passprnt||null);
   const [recipes,setRecipes] = useState(null);
   const [selR,setSelR] = useState('');
@@ -1753,7 +1754,7 @@ function PrintPanel({ user }){
   useEffect(()=>{ localStorage.setItem('owlprint', JSON.stringify({ lines:plines, free })); },[plines,free]);
 
   useEffect(()=>{
-    if(mode!=='recipe' || recipes) return;
+    if(recipes) return;
     let cancelled=false;
     (async()=>{
       let rs=null;
@@ -1765,7 +1766,7 @@ function PrintPanel({ user }){
       if(!cancelled){ setRecipes(rs); if(rs.length) setSelR(rs[0].id); }
     })();
     return ()=>{ cancelled=true; };
-  },[mode]);
+  },[]);
 
   const saveRecipes = async (rs)=>{
     setRecipes(rs);
@@ -1775,6 +1776,23 @@ function PrintPanel({ user }){
   const curR = (recipes||[]).find(r=>r.id===selR) || null;
   const curSize = curR && curR.sizes[Math.min(selS, curR.sizes.length-1)];
   const updR = (patch)=> saveRecipes(recipes.map(r=>r.id===selR?{...r,...patch}:r));
+
+  const recipeFor = (baseName, sizeStr)=>{
+    const srcList = recipes || OP_SEED_RECIPES;
+    const r = srcList.find(x=>x.name===baseName)
+      || srcList.find(x=>x.name.indexOf(baseName)>=0 || baseName.indexOf(x.name)>=0);
+    if(!r || !r.items || !r.items.length) return null;
+    let f = null;
+    const hit = (r.sizes||[]).find(s=>parseFloat(s.label)===parseFloat(sizeStr));
+    if(hit){ f = hit.factor; }
+    else {
+      const b0 = r.sizes && r.sizes[0];
+      const bNum = b0 ? parseFloat(b0.label) : 0;
+      if(bNum>0) f = parseFloat(sizeStr)/bNum*(b0.factor||1);
+    }
+    if(!f || !isFinite(f)) return null;
+    return r.items.map(it=>it.name+' '+opQty(it.qty*f)+' '+it.unit);
+  };
 
   const buildTextLines = ()=>{
     if(mode==='free'){ const t=free.trim(); return t? t.split('\n') : []; }
@@ -1793,7 +1811,12 @@ function PrintPanel({ user }){
       out.push(l.base+' สูตร '+l.size+' แก้ว');
       let q='จำนวน '+l.qty+' ถุง';
       if(boxes) q += '  '+'☐'.repeat(Math.min(l.qty,10));
-      out.push(q); out.push('');
+      out.push(q);
+      if(showRecipe){
+        const rec = recipeFor(l.base, l.size);
+        if(rec) rec.forEach(x=>out.push('• '+x));
+      }
+      out.push('');
       total += (l.qty||0);
     });
     out.push('--------------------'); out.push('รวมทั้งหมด '+total+' ถุง');
@@ -1807,7 +1830,8 @@ function PrintPanel({ user }){
     tls.forEach((t,i)=>{
       const big = (mode!=='free' && i===0);
       const sub = (mode==='recipe' && i===1);
-      const fs = big?44:(sub?34:(mode==='recipe'?27:30));
+      const isDetail = t.indexOf('• ')===0;
+      const fs = big?44:(sub?34:(isDetail?24:(mode==='recipe'?27:30)));
       const bold = big || sub || t.indexOf('รวมทั้งหมด')===0 || t==='วิธีทำ:';
       body += '<div style="font-size:'+fs+'px;font-weight:'+(bold?700:500)+';text-align:'+(big||sub?'center':'left')+';line-height:1.45;">'+(opEscapeHtml(t)||'&nbsp;')+'</div>';
     });
@@ -1868,6 +1892,9 @@ function PrintPanel({ user }){
             onClick={()=>setPlines([...plines,{ base:'เบสชานม', size:'45', qty:1 }])}>+ เพิ่มรายการ</button>
           <label className="flex items-center gap-1.5 mt-2 text-[12px]" style={{ color:'var(--muted)' }}>
             <input type="checkbox" checked={boxes} onChange={e=>setBoxes(e.target.checked)}/> พิมพ์ช่อง ☐ ให้ติ๊กตอนใช้ถุง
+          </label>
+          <label className="flex items-center gap-1.5 mt-1 text-[12px]" style={{ color:'var(--muted)' }}>
+            <input type="checkbox" checked={showRecipe} onChange={e=>setShowRecipe(e.target.checked)}/> พิมพ์สูตร (วัตถุดิบ+ปริมาณ) ใต้แต่ละรายการ
           </label>
         </div>
       )}
