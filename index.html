@@ -935,6 +935,19 @@ function OwlOrdersPanel(){
   );
 }
 
+const NAV_PERMS = [
+  ['home','หน้าแรก'],
+  ['record','บันทึกรายรับ-รายจ่าย'],
+  ['analyze','วิเคราะห์'],
+  ['referral','แนะนำเพื่อน'],
+  ['capital','ทุน'],
+  ['txns','รายการ (ดู/แก้ทุกรายการ)'],
+  ['orders','ออเดอร์สั่งล่วงหน้า (Owl Cha)'],
+  ['stamp','แต้มลูกค้า (Owl Cha)'],
+  ['print','พิมพ์ป้าย/สูตร (Owl Cha)'],
+  ['cost','ต้นทุนต่อแก้ว (Owl Cha · ข้อมูลกำไร)'],
+];
+
 /* ================================================================
    💰 OWL COST — ต้นทุนต่อแก้ว (เฉพาะ Owl Cha · admin)
    ข้อมูลอยู่ Firestore: owlCost/data (แชร์กับ cost.html standalone)
@@ -2074,19 +2087,26 @@ function Main({shop,user,canSwitch,onSwitch,logout}){
   const readOnly = user.role==='partner';
   const [toast,toastNode]=useToast();
 
-  const tabs=[
+  const ALL_NAV=[
     {k:'home',label:'หน้าแรก',icon:I.home},
     {k:'record',label:'บันทึก',icon:I.receipt},
     {k:'analyze',label:'วิเคราะห์',icon:I.chart},
     {k:'referral',label:'แนะนำ',icon:I.users},
     {k:'capital',label:'ทุน',icon:I.wallet},
-    ...(user.role==='admin' ? [{k:'txns',label:'รายการ',icon:I.table}] : []),
-    ...(shop.id==='owlcha' ? [{k:'orders',label:'ออเดอร์',icon:I.cup},{k:'stamp',label:'แต้ม',icon:I.stamp}] : []),
-    ...(shop.id==='owlcha' ? [{k:'print',label:'พิมพ์',icon:I.printer}] : []),
-    ...(shop.id==='owlcha' && user.role==='admin' ? [{k:'cost',label:'ต้นทุน',icon:I.calc}] : []),
+    {k:'txns',label:'รายการ',icon:I.table},
+    ...(shop.id==='owlcha' ? [{k:'orders',label:'ออเดอร์',icon:I.cup},{k:'stamp',label:'แต้ม',icon:I.stamp},{k:'print',label:'พิมพ์',icon:I.printer},{k:'cost',label:'ต้นทุน',icon:I.calc}] : []),
     {k:'settings',label:'ตั้งค่า',icon:I.gear},
-  ].filter(x=> !(user.role==='staff' && (x.k==='capital'||x.k==='analyze'||x.k==='referral')))
-   .filter(x=> !(user.role==='front' && x.k!=='settings' && !(user.perms&&user.perms[x.k])));
+  ];
+  /* perms กำหนดรายคนได้ทุกบทบาท: ติ๊กอย่างน้อย 1 เมนู = เห็นเฉพาะที่ติ๊ก / ไม่ติ๊ก = ค่าเริ่มต้นตามบทบาท */
+  const customPerms = (user.perms && Object.keys(user.perms).some(k=>user.perms[k])) ? user.perms : null;
+  const tabs = ALL_NAV.filter(x=>{
+    if(x.k==='settings') return true;
+    if(customPerms) return !!customPerms[x.k];
+    if((x.k==='txns'||x.k==='cost') && user.role!=='admin') return false;
+    if(user.role==='staff' && (x.k==='capital'||x.k==='analyze'||x.k==='referral')) return false;
+    if(user.role==='front') return false;
+    return true;
+  });
   useEffect(()=>{ if(!tabs.some(t=>t.k===tab)) setTab(tabs[0] ? tabs[0].k : 'settings'); },[user.id,shop.id]);
 
   return (
@@ -3128,7 +3148,7 @@ function UserSheet({editUser, currentUserId, actor, onClose, onSaved, onDeleted,
   const [pin,setPin]=useState(editUser?.pin||'');
   const [shopIds,setShopIds]=useState(editUser && editUser.shopIds!=='all' ? (editUser.shopIds||[]) : []);
   const [busy,setBusy]=useState(false);
-  const [perms,setPerms]=useState((isEdit&&editUser.perms)||{record:true,stamp:true});
+  const [perms,setPerms]=useState((isEdit&&editUser.perms)||{});
   const togglePerm=(k)=> setPerms(p=>({...p,[k]:!p[k]}));
   const toggleShop=(id)=> setShopIds(p=> p.includes(id)? p.filter(x=>x!==id):[...p,id]);
 
@@ -3137,8 +3157,8 @@ function UserSheet({editUser, currentUserId, actor, onClose, onSaved, onDeleted,
     if(role!=='admin' && shopIds.length===0){ toast('เลือกร้านอย่างน้อย 1 ร้าน','err'); return; }
     setBusy(true);
     try{
-      if(role==='front' && !FRONT_PERMS.some(([k])=>perms[k])){ toast('เลือกฟังก์ชันให้พนักงานอย่างน้อย 1 อย่าง','err'); setBusy(false); return; }
-      const data={name:name.trim(),role,pin,shopIds: role==='admin'?'all':shopIds, perms: role==='front'?perms:{}};
+      if(role==='front' && !NAV_PERMS.some(([k])=>perms[k])){ toast('พนง.หน้าร้าน ต้องติ๊กเมนูอย่างน้อย 1 อัน','err'); setBusy(false); return; }
+      const data={name:name.trim(),role,pin,shopIds: role==='admin'?'all':shopIds, perms: perms||{}};
       if(isEdit){
         await updateUser(editUser.id,data,actor);
       } else { await addUser(data,actor); }
@@ -3182,18 +3202,18 @@ function UserSheet({editUser, currentUserId, actor, onClose, onSaved, onDeleted,
         </div>
       </>)}
 
-      {role==='front' && (<>
-        <label style={lbl}>ฟังก์ชันที่ใช้ได้ (ตั้งรายคน)</label>
-        <div style={{display:'flex',flexDirection:'column',gap:8,marginBottom:16}}>
-          {FRONT_PERMS.map(([k,label])=>{ const on=!!perms[k]; return (
-            <button key={k} onClick={()=>togglePerm(k)} className="press" style={{display:'flex',alignItems:'center',gap:11,padding:'11px 13px',borderRadius:12,border:`1.5px solid ${on?'#7C3AED':'var(--line)'}`,background:on?'#F3EDFF':'#fff',textAlign:'left'}}>
-              <div style={{width:21,height:21,borderRadius:6,flexShrink:0,border:`1.5px solid ${on?'#7C3AED':'var(--line)'}`,background:on?'#7C3AED':'#fff',color:'#fff',fontSize:13,textAlign:'center',lineHeight:'20px'}}>{on?'✓':''}</div>
-              <div style={{fontSize:14}}>{label}</div>
-            </button>
-          );})}
-          <div style={{fontSize:11.5,color:'var(--muted)'}}>แท็บตั้งค่าเปิดให้เสมอ (มีแค่ออกจากระบบ ส่วนจัดการผู้ใช้เห็นเฉพาะแอดมิน)</div>
-        </div>
-      </>)}
+      <label style={lbl}>สิทธิ์เข้าถึงเมนู (นาวิ) — ตั้งรายคนได้ทุกบทบาท</label>
+      <div style={{fontSize:11.5,color:'var(--muted)',marginBottom:8}}>ไม่ติ๊กเลย = ใช้ค่าเริ่มต้นตามบทบาท · ติ๊กอย่างน้อย 1 อัน = เห็นเฉพาะเมนูที่ติ๊ก</div>
+      <div style={{display:'flex',flexDirection:'column',gap:8,marginBottom:8}}>
+        {NAV_PERMS.map(([k,label])=>{ const on=!!perms[k]; return (
+          <button key={k} onClick={()=>togglePerm(k)} className="press" style={{display:'flex',alignItems:'center',gap:11,padding:'11px 13px',borderRadius:12,border:`1.5px solid ${on?'var(--primary)':'var(--line)'}`,background:on?'var(--soft)':'#fff',textAlign:'left'}}>
+            <div style={{width:21,height:21,borderRadius:6,flexShrink:0,border:`1.5px solid ${on?'var(--primary)':'var(--line)'}`,background:on?'var(--primary)':'#fff',color:'#fff',fontSize:13,textAlign:'center',lineHeight:'20px'}}>{on?'✓':''}</div>
+            <div style={{fontSize:14}}>{label}</div>
+          </button>
+        );})}
+      </div>
+      <button onClick={()=>setPerms({})} className="press kanit" style={{width:'100%',padding:'10px',border:'1.5px solid var(--line)',borderRadius:12,background:'#fff',color:'var(--muted)',fontSize:13,marginBottom:6}}>ล้างติ๊กทั้งหมด (กลับไปใช้ค่าตามบทบาท)</button>
+      <div style={{fontSize:11.5,color:'var(--muted)',marginBottom:16}}>แท็บตั้งค่าเปิดให้เสมอ (ส่วนจัดการผู้ใช้/การเงิน เห็นเฉพาะแอดมิน) · เมนู Owl Cha โผล่เฉพาะตอนอยู่ร้าน Owl Cha</div>
 
       <button onClick={save} disabled={busy} className="press kanit" style={{width:'100%',padding:'15px',border:'none',borderRadius:14,background:'var(--primary)',color:'#fff',fontSize:16,fontWeight:600,opacity:busy?.6:1}}>{busy?'กำลังบันทึก...':(isEdit?'บันทึกการแก้ไข':'บันทึกผู้ใช้')}</button>
 
