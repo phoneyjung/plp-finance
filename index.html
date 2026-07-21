@@ -1993,7 +1993,7 @@ function PrintPanel({ user }){
   );
 }
 
-function CostPanel({toast}){
+function CostPanel({toast,user}){
   const [data,setData] = useState(null);
   const [sub,setSub] = useState('cost');
   const [saveState,setSaveState] = useState('idle');
@@ -2052,6 +2052,7 @@ function CostPanel({toast}){
   const SUBTABS = [
     { id:'cost', label:'📊 ต้นทุน' },
     { id:'biz',  label:'🏢 รายเดือน' },
+    ...(user && user.role==='admin' ? [{ id:'pay', label:'💰 เงินเดือน' }] : []),
     { id:'menu', label:'🧋 เมนู' },
     { id:'base', label:'🧪 เบส' },
     { id:'ing',  label:'📦 วัตถุดิบ' },
@@ -2079,9 +2080,368 @@ function CostPanel({toast}){
       {sub==='menu' && <OCTabMenu data={data} setData={setData} />}
       {sub==='cost' && <OCTabCost data={data} setData={setData} />}
       {sub==='biz'  && <OCTabBiz  data={data} setData={setData} />}
+      {sub==='pay'  && <OCTabPay toast={toast} />}
     </div>
   );
 }
+
+/* ================ 💰 OWL PAY — เงินเดือนพนักงาน ================
+   Firestore: owlCost/payroll · แท็บย่อยในต้นทุน (แอดมินเท่านั้น)
+   ฐานตามเฟส ÷ ตัวหาร × วันเข้า · คอมกองกลางรายวัน ÷ คนเข้ากะ
+   OT = ชม. × (ฐาน÷30÷ชม.กะ) × ตัวคูณ · เบี้ยขยันเปิด/ปิดรายคน
+   ================================================================ */
+const OC_PAY_MONTHS=['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
+const OC_PAY_SEED={
+  cfg:{ base1:11200, base2:11500, base3:12000, dilig:500, divisor:26, avgPrice:36, otMult:2, shiftHrs:10,
+        tiers:[{min:250,pool:150},{min:350,pool:300},{min:450,pool:450},{min:550,pool:600},{min:700,pool:800}] },
+  staff:[ {id:'p1',name:'แซ็ค',phase:1,custom:0},{id:'p2',name:'เบส',phase:1,custom:0},{id:'p3',name:'อี๊ฟ',phase:1,custom:0},{id:'p4',name:'พ่อ',phase:1,custom:0} ],
+  months:{}
+};
+const ocPayDays=(ym)=>{ const y=+ym.slice(0,4), m=+ym.slice(5,7); return new Date(y,m,0).getDate(); };
+const ocPayLabel=(ym)=> OC_PAY_MONTHS[+ym.slice(5,7)-1]+' '+(+ym.slice(0,4)+543);
+const ocPayShift=(ym,dir)=>{ const y=+ym.slice(0,4), m=+ym.slice(5,7)-1+dir; const d=new Date(y,m,1); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); };
+function ocPayPool(cups,tiers){ let p=0; (tiers||[]).forEach(t=>{ if(cups>=t.min) p=t.pool; }); return p; }
+function ocPayBaseOf(st,cfg){ return (st.custom>0)? st.custom : (st.phase===3?cfg.base3: st.phase===2?cfg.base2: cfg.base1); }
+function ocPayCalc(pay,ym){
+  const cfg=pay.cfg, m=pay.months[ym]||{};
+  const cups=m.cups||{}, att=m.att||{}, ot=m.ot||{}, bonus=m.bonus||{}, dg=m.dilig||{};
+  const nDays=ocPayDays(ym);
+  const perDay={}; let cupsT=0;
+  for(let d=1;d<=nDays;d++){
+    const c=Number(cups[d])||0; cupsT+=c;
+    const ids=(att[d]||[]).filter(id=>pay.staff.some(s=>s.id===id));
+    const pool=c>0? ocPayPool(c,cfg.tiers) : 0;
+    perDay[d]={ pool, head:ids.length, each: ids.length? pool/ids.length : 0, ids };
+  }
+  const rows=pay.staff.map(st=>{
+    let days=0, com=0;
+    for(let d=1;d<=nDays;d++){ if(perDay[d].ids.indexOf(st.id)>=0){ days++; com+=perDay[d].each; } }
+    com=Math.round(com);
+    const baseUsed=ocPayBaseOf(st,cfg);
+    const base=Math.round(baseUsed/(cfg.divisor||26)*days);
+    const otH=Number(ot[st.id])||0;
+    const otB=Math.round(otH*baseUsed/30/(cfg.shiftHrs||10)*(cfg.otMult||2));
+    const dl=(dg[st.id]===0)? 0 : (cfg.dilig||0);
+    const bn=Number(bonus[st.id])||0;
+    return { st, days, baseUsed, base, com, otH, otB, dl, bn, net: base+com+otB+dl+bn };
+  });
+  const total=rows.reduce((s,r)=>s+r.net,0);
+  const rev=cupsT*(cfg.avgPrice||0);
+  return { perDay, rows, nDays, cupsT, rev, total, laborPct: rev>0? total/rev*100 : 0 };
+}
+function ocPayBuildWorkbook(pay,ym){
+  const cfg=pay.cfg, calc=ocPayCalc(pay,ym);
+  const thin={style:'thin',color:{rgb:'D8D0C4'}};
+  const bd={top:thin,bottom:thin,left:thin,right:thin};
+  const sHead={font:{bold:true,color:{rgb:'FFFFFF'},sz:11},fill:{fgColor:{rgb:'5B4636'}},alignment:{horizontal:'center',vertical:'center',wrapText:true},border:bd};
+  const sTxt={border:bd,alignment:{vertical:'center'}};
+  const sNum={border:bd,alignment:{horizontal:'right'}};
+  const sNumB={border:bd,alignment:{horizontal:'right'},font:{bold:true}};
+  const sYel={border:bd,alignment:{horizontal:'right'},fill:{fgColor:{rgb:'FFF2CC'}}};
+  const sSec={font:{bold:true,color:{rgb:'3B2F24'}},fill:{fgColor:{rgb:'F5EDD8'}},border:bd};
+  const sTitle={font:{bold:true,sz:14,color:{rgb:'5B4636'}}};
+  const sNote={font:{sz:10,color:{rgb:'8A8072'}}};
+  const cell=(v,s,z)=>{ const c={v:v,t:(typeof v==='number'?'n':'s'),s:s||{}}; if(z)c.z=z; return c; };
+  const toSheet=(rows,merges,cols)=>{
+    const ws={}; let maxC=0;
+    rows.forEach((row,R)=>row.forEach((c,C)=>{ if(c==null)return; ws[XLSX.utils.encode_cell({r:R,c:C})]=c; if(C>maxC)maxC=C; }));
+    ws['!ref']=XLSX.utils.encode_range({s:{r:0,c:0},e:{r:Math.max(rows.length-1,0),c:maxC}});
+    if(merges) ws['!merges']=merges;
+    if(cols) ws['!cols']=cols;
+    return ws;
+  };
+  /* ---- Sheet 1: Settings ---- */
+  const r1=[];
+  r1.push([cell('ตั้งค่าระบบเงินเดือน Owl Cha',sTitle)]);
+  r1.push([cell('คอมทีมรายวัน = กองกลาง ÷ จำนวนคนที่เข้ากะวันนั้น',sNote)]);
+  r1.push([]);
+  r1.push([cell('ยอดขั้นต่ำ (แก้ว/วัน)',sHead),cell('กองกลาง ฿/วัน',sHead)]);
+  (cfg.tiers||[]).forEach(t=>r1.push([cell(t.min,sNum,'#,##0'),cell(t.pool,sYel,'#,##0')]));
+  r1.push([]);
+  r1.push([cell('เบี้ยขยัน (฿/เดือน ไม่ขาด-ไม่สาย)',sTxt),cell(cfg.dilig,sYel,'#,##0')]);
+  r1.push([cell('ตัวหารวันทำงาน/เดือน',sTxt),cell(cfg.divisor,sYel,'#,##0')]);
+  r1.push([cell('ราคาขายเฉลี่ย/แก้ว (฿)',sTxt),cell(cfg.avgPrice,sYel,'#,##0')]);
+  r1.push([cell('OT: คิดกี่เท่าของค่าแรง/ชม.',sTxt),cell(cfg.otMult,sYel,'#,##0.0')]);
+  r1.push([cell('ชม.ทำงาน/กะ (ตัวหารค่าแรง/ชม.)',sTxt),cell(cfg.shiftHrs,sYel,'#,##0')]);
+  r1.push([]);
+  r1.push([cell('ฐานเฟส 1 · เดือน 1-3',sTxt),cell(cfg.base1,sYel,'#,##0')]);
+  r1.push([cell('ฐานเฟส 2 · เดือน 4-12',sTxt),cell(cfg.base2,sYel,'#,##0')]);
+  r1.push([cell('ฐานเฟส 3 · ปี 2 ขึ้นไป',sTxt),cell(cfg.base3,sYel,'#,##0')]);
+  const ws1=toSheet(r1,[{s:{r:0,c:0},e:{r:0,c:1}},{s:{r:1,c:0},e:{r:1,c:1}}],[{wch:34},{wch:14}]);
+  /* ---- Sheet 2: Staff ---- */
+  const r2=[];
+  r2.push([cell('รายชื่อพนักงาน',sTitle)]);
+  r2.push([]);
+  r2.push(['ชื่อ','เฟส','ฐานกำหนดเอง (0=อัตโนมัติ)','ฐานที่ใช้ (฿)','เบี้ยขยัน (฿)'].map(h=>cell(h,sHead)));
+  pay.staff.forEach(st=>{
+    const row=calc.rows.find(r=>r.st.id===st.id)||{};
+    r2.push([cell(st.name,sTxt),cell(st.phase,{...sNum,alignment:{horizontal:'center'}}),cell(st.custom||0,sYel,'#,##0'),cell(ocPayBaseOf(st,cfg),sNumB,'#,##0'),cell(row.dl!=null?row.dl:cfg.dilig,sNum,'#,##0')]);
+  });
+  const ws2=toSheet(r2,[{s:{r:0,c:0},e:{r:0,c:4}}],[{wch:16},{wch:6},{wch:20},{wch:12},{wch:12}]);
+  /* ---- Sheet 3: Attendance ---- */
+  const r3=[];
+  r3.push([cell('เข้างาน · เดือน '+ocPayLabel(ym),sTitle)]);
+  r3.push([cell('1 = เข้ากะวันนั้น · คอม ฿/คน = กองกลาง ÷ จำนวนคนเข้า',sNote)]);
+  r3.push([]);
+  r3.push(['วันที่','ยอดขาย (แก้ว)','กองกลาง (฿)','คอม ฿/คน'].concat(pay.staff.map(s=>s.name)).map(h=>cell(h,sHead)));
+  const mAtt=(pay.months[ym]||{}).att||{}, mCups=(pay.months[ym]||{}).cups||{};
+  for(let d=1;d<=calc.nDays;d++){
+    const pd=calc.perDay[d];
+    const row=[cell(d,{...sNum,alignment:{horizontal:'center'}}), cell(Number(mCups[d])||0,sYel,'#,##0'), cell(pd.pool,sNum,'#,##0'), cell(Math.round(pd.each*100)/100,sNum,'#,##0.00')];
+    pay.staff.forEach(s=>row.push(pd.ids.indexOf(s.id)>=0? cell(1,{...sNum,alignment:{horizontal:'center'}}) : cell('',sTxt)));
+    r3.push(row);
+  }
+  const totRow=[cell('รวมวันเข้า',sSec),cell(calc.cupsT,{...sSec,alignment:{horizontal:'right'}},'#,##0'),cell('',sSec),cell('',sSec)];
+  pay.staff.forEach(s=>{ const rr=calc.rows.find(r=>r.st.id===s.id); totRow.push(cell(rr?rr.days:0,{...sSec,alignment:{horizontal:'center'}},'#,##0')); });
+  r3.push(totRow);
+  const comRow=[cell('รวมคอม (฿)',sSec),cell('',sSec),cell('',sSec),cell('',sSec)];
+  pay.staff.forEach(s=>{ const rr=calc.rows.find(r=>r.st.id===s.id); comRow.push(cell(rr?rr.com:0,{...sSec,alignment:{horizontal:'right'}},'#,##0')); });
+  r3.push(comRow);
+  const ws3=toSheet(r3,[{s:{r:0,c:0},e:{r:0,c:3+pay.staff.length}},{s:{r:1,c:0},e:{r:1,c:3+pay.staff.length}}],[{wch:7},{wch:11},{wch:10},{wch:10}].concat(pay.staff.map(()=>({wch:9}))));
+  /* ---- Sheet 4: Payroll ---- */
+  const r4=[];
+  r4.push([cell('สรุปเงินเดือน · '+ocPayLabel(ym),sTitle)]);
+  r4.push([]);
+  r4.push(['ชื่อ','วันเข้า','ฐานตามวันเข้า (฿)','คอมรวม (฿)','OT (ชม.)','OT (฿)','เบี้ยขยัน (฿)','โบนัส/หัก (฿)','รวมสุทธิ (฿)'].map(h=>cell(h,sHead)));
+  calc.rows.forEach(r=>{
+    r4.push([cell(r.st.name,sTxt),cell(r.days,{...sNum,alignment:{horizontal:'center'}}),cell(r.base,sNum,'#,##0'),cell(r.com,sNum,'#,##0'),cell(r.otH,sYel,'#,##0.0'),cell(r.otB,sNum,'#,##0'),cell(r.dl,sNum,'#,##0'),cell(r.bn,sYel,'#,##0'),cell(r.net,sNumB,'#,##0')]);
+  });
+  r4.push([cell('รวมทั้งร้าน',sSec),cell('',sSec),cell('',sSec),cell('',sSec),cell('',sSec),cell('',sSec),cell('',sSec),cell('',sSec),cell(calc.total,{...sSec,alignment:{horizontal:'right'},font:{bold:true,sz:12}},'#,##0')]);
+  r4.push([]);
+  r4.push([cell('ยอดขายรวมเดือนนี้ (แก้ว)',sTxt),cell(calc.cupsT,sNumB,'#,##0')]);
+  r4.push([cell('ประเมินยอดขาย (฿) = แก้ว × ราคาเฉลี่ย',sTxt),cell(Math.round(calc.rev),sNumB,'#,##0')]);
+  r4.push([cell('%ค่าแรงต่อยอดขาย (เป้าไม่เกิน 18%)',sTxt),cell(calc.rev>0? Math.round(calc.laborPct*100)/10000 : 0,sNumB,'0.0%')]);
+  const ws4=toSheet(r4,[{s:{r:0,c:0},e:{r:0,c:8}}],[{wch:16},{wch:8},{wch:14},{wch:11},{wch:9},{wch:9},{wch:11},{wch:12},{wch:12}]);
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws1,'Settings');
+  XLSX.utils.book_append_sheet(wb,ws2,'Staff');
+  XLSX.utils.book_append_sheet(wb,ws3,'Attendance');
+  XLSX.utils.book_append_sheet(wb,ws4,'Payroll');
+  return wb;
+}
+async function ocPayExport(pay,ym){
+  try{ await ocLoadXlsx(); }
+  catch(e){ alert('โหลดตัวสร้าง Excel ไม่สำเร็จ — เช็คอินเทอร์เน็ตแล้วลองใหม่'); return; }
+  const wb=ocPayBuildWorkbook(pay,ym);
+  XLSX.writeFile(wb,'payroll-owlcha-'+ym+'.xlsx');
+}
+function OCPayIn({value,onChange,w,ph}){
+  return (
+    <input type="number" inputMode="decimal" step="any" value={value==null?'':value} placeholder={ph||''}
+      onChange={e=>onChange(e.target.value)}
+      className="num text-right border rounded-lg px-1 py-0.5 text-[12px]"
+      style={{ width:w||'52px', borderColor:'var(--line)' }} />
+  );
+}
+function OCTabPay({ toast }){
+  const [pay,setPay]=useState(null);
+  const [ym,setYm]=useState(ymOf(today()));
+  const [showCfg,setShowCfg]=useState(false);
+  const [saveState,setSaveState]=useState('idle');
+  const saveTimer=useRef(null);
+  const loadedRef=useRef(false);
+
+  useEffect(()=>{
+    let stop=false;
+    (async()=>{
+      try{
+        if(db){
+          const s=await db.collection('owlCost').doc('payroll').get();
+          if(stop) return;
+          if(s.exists){
+            const d=s.data();
+            if(!d.cfg) d.cfg=ocDeepCopy(OC_PAY_SEED.cfg);
+            if(!d.cfg.tiers) d.cfg.tiers=ocDeepCopy(OC_PAY_SEED.cfg.tiers);
+            if(!d.staff) d.staff=[];
+            if(!d.months) d.months={};
+            setPay(d);
+          } else {
+            const c=localStorage.getItem('owlpay_data');
+            setPay(c? JSON.parse(c) : ocDeepCopy(OC_PAY_SEED));
+          }
+        } else {
+          const c=localStorage.getItem('owlpay_data');
+          setPay(c? JSON.parse(c) : ocDeepCopy(OC_PAY_SEED));
+        }
+      }catch(e){
+        console.error(e);
+        if(!stop){ const c=localStorage.getItem('owlpay_data'); setPay(c? JSON.parse(c) : ocDeepCopy(OC_PAY_SEED)); setSaveState('error'); }
+      }
+      loadedRef.current=true;
+    })();
+    return ()=>{ stop=true; };
+  },[]);
+
+  useEffect(()=>{
+    if(!pay || !loadedRef.current) return;
+    localStorage.setItem('owlpay_data', JSON.stringify(pay));
+    setSaveState('dirty');
+    if(saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current=setTimeout(async()=>{
+      if(!db){ setSaveState('error'); return; }
+      try{
+        setSaveState('saving');
+        await db.collection('owlCost').doc('payroll').set(pay);
+        setSaveState('saved');
+        setTimeout(()=>setSaveState(s=>s==='saved'?'idle':s),1600);
+      }catch(e){ console.error(e); setSaveState('error'); }
+    },1200);
+  },[pay]);
+
+  if(!pay) return <div className="p-6 text-center text-[13px]" style={{color:'var(--muted)'}}>กำลังโหลด…</div>;
+
+  const cfg=pay.cfg, calc=ocPayCalc(pay,ym);
+  const mo=pay.months[ym]||{};
+  const upd=(fn)=>setPay(p=>{ const c=JSON.parse(JSON.stringify(p)); fn(c); return c; });
+  const setMon=(fn)=>upd(p=>{ const m=p.months[ym]||(p.months[ym]={}); fn(m); });
+  const setCfg=(k,v)=>upd(p=>{ p.cfg[k]= v===''?0:(parseFloat(v)||0); });
+  const setCups=(d,v)=>setMon(m=>{ const c=m.cups||(m.cups={}); if(v===''||v==null) delete c[d]; else c[d]=parseFloat(v)||0; });
+  const togAtt=(d,id)=>setMon(m=>{ const a=m.att||(m.att={}); const arr=a[d]||(a[d]=[]); const i=arr.indexOf(id); if(i>=0) arr.splice(i,1); else arr.push(id); });
+  const setOt=(id,v)=>setMon(m=>{ const o=m.ot||(m.ot={}); if(v===''||v==null) delete o[id]; else o[id]=parseFloat(v)||0; });
+  const setBonus=(id,v)=>setMon(m=>{ const b=m.bonus||(m.bonus={}); if(v===''||v==null) delete b[id]; else b[id]=parseFloat(v)||0; });
+  const togDilig=(id)=>setMon(m=>{ const g=m.dilig||(m.dilig={}); g[id]=(g[id]===0)?1:0; });
+
+  const pull=async()=>{
+    if(!db){ toast('ออฟไลน์ ดึงยอดไม่ได้','err'); return; }
+    try{
+      const tx=await monthTxns('owlcha', ym);
+      const byDay={};
+      tx.forEach(t=>{ if(t.kind==='income' && t.date) { const d=parseInt(t.date.slice(8,10),10); if(d) byDay[d]=(byDay[d]||0)+(Number(t.amount)||0); } });
+      const cur=mo.cups||{}, fills={};
+      Object.keys(byDay).forEach(d=>{ if(cur[d]==null) fills[d]=Math.round(byDay[d]/(cfg.avgPrice||36)); });
+      const n=Object.keys(fills).length;
+      if(n) setMon(m=>{ m.cups=Object.assign({}, m.cups||{}, fills); });
+      toast(n? 'เติมยอดแก้วโดยประมาณ '+n+' วัน (รายรับ ÷ ราคาเฉลี่ย '+(cfg.avgPrice||36)+'฿)' : 'ไม่มีวันว่างให้เติม หรือไม่มีรายรับเดือนนี้');
+    }catch(e){ console.error(e); toast('ดึงข้อมูลไม่สำเร็จ','err'); }
+  };
+
+  const saveLabel={ idle:'', dirty:'· แก้ไข', saving:'· กำลังบันทึก…', saved:'· ✓ บันทึกแล้ว', error:'· ⚠️ บันทึกไม่ได้' }[saveState];
+  const chipS=(on)=>({ fontSize:10.5, padding:'3px 7px', borderRadius:8, border:'none', background:on?'var(--primary)':'var(--soft)', color:on?'#fff':'var(--muted)' });
+
+  return (
+    <div className="px-1 pb-4 fade">
+      <div className="card p-3 my-3">
+        <div className="flex items-center justify-between">
+          <button className="press kanit text-[15px] px-2.5 py-1 rounded-lg" style={{background:'var(--soft)',border:'none',color:'var(--primary)'}} onClick={()=>setYm(ocPayShift(ym,-1))}>‹</button>
+          <div className="kanit text-[15px]" style={{fontWeight:600,color:'var(--primary)'}}>💰 {ocPayLabel(ym)} <span className="text-[10.5]" style={{fontWeight:400,color:'var(--muted)'}}>{saveLabel}</span></div>
+          <button className="press kanit text-[15px] px-2.5 py-1 rounded-lg" style={{background:'var(--soft)',border:'none',color:'var(--primary)'}} onClick={()=>setYm(ocPayShift(ym,1))}>›</button>
+        </div>
+        <div className="flex items-center justify-between mt-2 text-[12px]" style={{color:'var(--muted)'}}>
+          <span>แก้วรวม <b className="num" style={{color:'var(--ink)'}}>{ocFmt(calc.cupsT,0)}</b></span>
+          <span>จ่ายรวม <b className="num" style={{color:'var(--ink)'}}>{ocFmt(calc.total,0)} ฿</b></span>
+          <OCBadge ok={calc.laborPct<=18} warn={calc.laborPct>18 && calc.laborPct<=22}>ค่าแรง {ocFmt(calc.laborPct,1)}%</OCBadge>
+        </div>
+        <div className="flex gap-2 mt-2.5">
+          <button className="press kanit text-[12px] flex-1 py-1.5 rounded-lg" style={{background:'var(--soft)',color:'var(--primary)',border:'none'}} onClick={pull}>⇣ ดึงยอดแก้วจากรายรับ</button>
+          <button className="press kanit text-[12px] flex-1 py-1.5 rounded-lg text-white" style={{background:'#1D6F42',border:'none'}} onClick={()=>ocPayExport(pay,ym)}>⬇ Excel เงินเดือน</button>
+        </div>
+      </div>
+
+      <div className="card p-3 mb-3">
+        <div className="kanit text-[14px] mb-0.5">📅 เข้างานรายวัน</div>
+        <div className="text-[11px] mb-2" style={{color:'var(--muted)'}}>กรอกยอดแก้ว + แตะชื่อคนที่เข้ากะ · คอม/คน = กองกลาง ÷ คนเข้า</div>
+        <div className="flex items-center gap-1 text-[10.5px] pb-1" style={{color:'var(--muted)',borderBottom:'1px solid var(--line)'}}>
+          <span style={{width:18,textAlign:'right'}}>วัน</span>
+          <span style={{width:52,textAlign:'center'}}>แก้ว</span>
+          <span style={{width:38,textAlign:'right'}}>฿/คน</span>
+          <span className="flex-1 pl-1">คนเข้ากะ</span>
+        </div>
+        {Array.from({length:calc.nDays},(_,i)=>i+1).map(d=>{
+          const pd=calc.perDay[d];
+          return (
+            <div key={d} className="flex items-center gap-1" style={{padding:'2.5px 0', borderBottom:'1px solid var(--soft)'}}>
+              <span className="num text-[12px]" style={{width:18,textAlign:'right',color:'var(--muted)'}}>{d}</span>
+              <OCPayIn value={(mo.cups||{})[d]} onChange={v=>setCups(d,v)} w="52px"/>
+              <span className="num text-[11px]" style={{width:38,textAlign:'right',color: pd.each>0?'var(--pos)':'var(--muted)'}}>{pd.each>0? ocFmt(pd.each,0) : '–'}</span>
+              <div className="flex gap-1 flex-1 flex-wrap pl-1">
+                {pay.staff.map(st=>(
+                  <button key={st.id} className="press kanit" style={chipS(pd.ids.indexOf(st.id)>=0)} onClick={()=>togAtt(d,st.id)}>{st.name.slice(0,4)}</button>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="card p-3 mb-3">
+        <div className="kanit text-[14px] mb-1">🧾 สรุปรายคน</div>
+        {calc.rows.map(r=>(
+          <div key={r.st.id} className="py-2" style={{borderBottom:'1px solid var(--soft)'}}>
+            <div className="flex items-center justify-between">
+              <div className="kanit text-[14px]">{r.st.name} <span className="text-[11px]" style={{fontWeight:400,color:'var(--muted)'}}>เฟส {r.st.phase} · เข้า {r.days} วัน</span></div>
+              <div className="kanit num text-[16px]" style={{fontWeight:700,color:'var(--primary)'}}>{ocFmt(r.net,0)} ฿</div>
+            </div>
+            <div className="flex items-center gap-x-2 gap-y-1 flex-wrap text-[12px] mt-1" style={{color:'var(--muted)'}}>
+              <span>ฐาน <b className="num">{ocFmt(r.base,0)}</b></span>
+              <span>คอม <b className="num">{ocFmt(r.com,0)}</b></span>
+              <span className="flex items-center gap-1">OT <OCPayIn value={(mo.ot||{})[r.st.id]} onChange={v=>setOt(r.st.id,v)} w="44px" ph="ชม."/> = <b className="num">{ocFmt(r.otB,0)}</b></span>
+              <button className="press kanit" style={chipS(r.dl>0)} onClick={()=>togDilig(r.st.id)}>เบี้ยขยัน {r.dl>0? ocFmt(r.dl,0) : '✗'}</button>
+              <span className="flex items-center gap-1">โบนัส/หัก <OCPayIn value={(mo.bonus||{})[r.st.id]} onChange={v=>setBonus(r.st.id,v)} w="56px" ph="0"/></span>
+            </div>
+          </div>
+        ))}
+        <div className="flex justify-between items-center mt-2 pt-2" style={{borderTop:'1px solid var(--line)'}}>
+          <span className="kanit text-[14px]">รวมทั้งร้าน</span>
+          <span className="kanit num text-[18px]" style={{fontWeight:700,color:'var(--primary)'}}>{ocFmt(calc.total,0)} ฿</span>
+        </div>
+        <div className="text-[11.5px] mt-1" style={{color:'var(--muted)'}}>ประเมินยอดขาย {ocFmt(calc.rev,0)} ฿ (แก้ว × {cfg.avgPrice}฿) · ค่าแรง {ocFmt(calc.laborPct,1)}% ของยอด (เป้า ≤18%)</div>
+      </div>
+
+      <div className="card p-3 mb-3">
+        <button className="press kanit text-[13px] w-full text-left" style={{border:'none',background:'none',color:'var(--primary)',padding:0}} onClick={()=>setShowCfg(!showCfg)}>⚙️ พนักงาน & โครงสร้างเงินเดือน {showCfg?'▴':'▾'}</button>
+        {showCfg && (
+          <div className="mt-2">
+            <div className="flex items-center justify-between mb-1">
+              <div className="kanit text-[13px]">👥 พนักงาน (เฟส 1-3 · ฐานเอง 0=อัตโนมัติ)</div>
+              {pay.staff.length<10 && <button className="press kanit text-[12px] px-2 py-1 rounded-lg" style={{background:'var(--soft)',color:'var(--primary)',border:'none'}}
+                onClick={()=>upd(p=>{ p.staff.push({id:'p'+ocUid(),name:'พนักงานใหม่',phase:1,custom:0}); })}>+ เพิ่ม</button>}
+            </div>
+            <div className="space-y-1.5 mb-3">
+              {pay.staff.map((st,i)=>(
+                <div key={st.id} className="flex items-center gap-1.5">
+                  <div className="flex-1 min-w-0"><OCTextIn value={st.name} onChange={v=>upd(p=>{ p.staff[i].name=v; })}/></div>
+                  <select value={st.phase} onChange={e=>upd(p=>{ p.staff[i].phase=parseInt(e.target.value,10); })}
+                    className="border rounded-lg px-1 py-1 text-[12px]" style={{borderColor:'var(--line)'}}>
+                    <option value={1}>เฟส 1</option><option value={2}>เฟส 2</option><option value={3}>เฟส 3</option>
+                  </select>
+                  <OCPayIn value={st.custom||0} onChange={v=>upd(p=>{ p.staff[i].custom= v===''?0:(parseFloat(v)||0); })} w="62px"/>
+                  <button className="press text-[13px] px-1" style={{color:'var(--neg)',border:'none',background:'none'}}
+                    onClick={()=>{ if(confirm('ลบ '+st.name+'?')) upd(p=>{ p.staff.splice(i,1); }); }}>✕</button>
+                </div>
+              ))}
+            </div>
+            <div className="kanit text-[13px] mb-1">💵 ฐานเงินเดือนตามเฟส</div>
+            <div className="flex items-center gap-1.5 flex-wrap text-[12px] mb-3" style={{color:'var(--muted)'}}>
+              <span>เฟส1</span><OCPayIn value={cfg.base1} onChange={v=>setCfg('base1',v)} w="64px"/>
+              <span>เฟส2</span><OCPayIn value={cfg.base2} onChange={v=>setCfg('base2',v)} w="64px"/>
+              <span>เฟส3</span><OCPayIn value={cfg.base3} onChange={v=>setCfg('base3',v)} w="64px"/>
+            </div>
+            <div className="kanit text-[13px] mb-1">🎯 คอมกองกลางรายวัน (÷ คนเข้ากะ)</div>
+            <div className="space-y-1 mb-3">
+              {(cfg.tiers||[]).map((t,i)=>(
+                <div key={i} className="flex items-center gap-1.5 text-[12px]" style={{color:'var(--muted)'}}>
+                  <span>ยอด ≥</span><OCPayIn value={t.min} onChange={v=>upd(p=>{ p.cfg.tiers[i].min= v===''?0:(parseFloat(v)||0); })} w="58px"/>
+                  <span>แก้ว → กอง</span><OCPayIn value={t.pool} onChange={v=>upd(p=>{ p.cfg.tiers[i].pool= v===''?0:(parseFloat(v)||0); })} w="58px"/>
+                  <span>฿/วัน</span>
+                </div>
+              ))}
+            </div>
+            <div className="kanit text-[13px] mb-1">⚙️ อื่นๆ</div>
+            <div className="flex items-center gap-x-2 gap-y-1.5 flex-wrap text-[12px]" style={{color:'var(--muted)'}}>
+              <span>เบี้ยขยัน</span><OCPayIn value={cfg.dilig} onChange={v=>setCfg('dilig',v)} w="56px"/>
+              <span>ตัวหารวัน</span><OCPayIn value={cfg.divisor} onChange={v=>setCfg('divisor',v)} w="44px"/>
+              <span>ราคาเฉลี่ย</span><OCPayIn value={cfg.avgPrice} onChange={v=>setCfg('avgPrice',v)} w="48px"/>
+              <span>OT ×</span><OCPayIn value={cfg.otMult} onChange={v=>setCfg('otMult',v)} w="40px"/>
+              <span>ชม./กะ</span><OCPayIn value={cfg.shiftHrs} onChange={v=>setCfg('shiftHrs',v)} w="40px"/>
+            </div>
+            <div className="text-[11px] mt-2" style={{color:'var(--muted)'}}>OT ฿/ชม. = ฐาน ÷ 30 ÷ ชม.กะ × ตัวคูณ (เฟส1 ≈ {ocFmt(cfg.base1/30/(cfg.shiftHrs||10)*(cfg.otMult||2),1)} ฿/ชม.) · ฐานคิดตามวันเข้า = ฐาน ÷ ตัวหาร × วันเข้า</div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /* ================ END OWL COST ================ */
 
 
@@ -2134,7 +2494,7 @@ function Main({shop,user,canSwitch,onSwitch,logout}){
         {tab==='orders' && <OwlOrdersPanel/>}
         {tab==='stamp' && <StampPanel shop={shop} user={user} toast={toast}/>}
         {tab==='print' && <PrintPanel user={user}/>}
-        {tab==='cost' && <CostPanel toast={toast}/>}
+        {tab==='cost' && <CostPanel toast={toast} user={user}/>}
         {tab==='settings' && <Settings shop={shop} user={user} logout={logout} toast={toast}/>}
       </div>
 
