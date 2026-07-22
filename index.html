@@ -1993,7 +1993,7 @@ function PrintPanel({ user }){
   );
 }
 
-function CostPanel({toast,user}){
+function CostPanel({toast}){
   const [data,setData] = useState(null);
   const [sub,setSub] = useState('cost');
   const [saveState,setSaveState] = useState('idle');
@@ -2052,7 +2052,7 @@ function CostPanel({toast,user}){
   const SUBTABS = [
     { id:'cost', label:'📊 ต้นทุน' },
     { id:'biz',  label:'🏢 รายเดือน' },
-    ...(user && user.role==='admin' ? [{ id:'pay', label:'💰 เงินเดือน' }] : []),
+    { id:'pay',  label:'💰 เงินเดือน' },
     { id:'menu', label:'🧋 เมนู' },
     { id:'base', label:'🧪 เบส' },
     { id:'ing',  label:'📦 วัตถุดิบ' },
@@ -2494,7 +2494,7 @@ function Main({shop,user,canSwitch,onSwitch,logout}){
         {tab==='orders' && <OwlOrdersPanel/>}
         {tab==='stamp' && <StampPanel shop={shop} user={user} toast={toast}/>}
         {tab==='print' && <PrintPanel user={user}/>}
-        {tab==='cost' && <CostPanel toast={toast} user={user}/>}
+        {tab==='cost' && <CostPanel toast={toast}/>}
         {tab==='settings' && <Settings shop={shop} user={user} logout={logout} toast={toast}/>}
       </div>
 
