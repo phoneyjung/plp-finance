@@ -863,7 +863,7 @@ function owlPrintJob(o){
   else { b+='<div style="border:4px solid #000;border-radius:8px;padding:8px 4px;text-align:center;font-size:38px;font-weight:800;">ยังไม่ชำระ · เก็บ '+(o.total||0)+' บาท</div>'; }
   hr();
   items.forEach((it,i)=>{
-    line((i+1)+'. '+esc(it.name||'')+'  x'+(it.qty||1),36,800);
+    line((i+1)+'. '+esc(it.nameTh||it.name||'')+'  x'+(it.qty||1),36,800);
     const opts=[OWL_SW[it.sweetness],OWL_IC[it.ice]].filter(Boolean).join(' · ');
     if(opts) line('&nbsp;&nbsp;&raquo; '+esc(opts),29,700);
     const tp=(it.toppings&&it.toppings.length)?it.toppings.map(t=>t.name+(t.n>1?' x'+t.n:'')).join(', '):'';
@@ -905,7 +905,7 @@ function OwlOrderCard({o,now,onDone,onUndo,onPaid}){
       </div>
       {(o.items||[]).map((it,i)=>(
         <div key={i} style={{display:'flex',justifyContent:'space-between',gap:8,padding:'6px 10px',background:'var(--soft)',borderRadius:10,marginBottom:6,fontSize:14}}>
-          <div>🧋 {it.name} <span style={{color:'var(--muted)'}}>{optTxt(it)}</span></div>
+          <div>🧋 {it.nameTh||it.name} <span style={{color:'var(--muted)'}}>{optTxt(it)}</span></div>
           <div style={{fontWeight:600,flexShrink:0}}>×{it.qty}</div>
         </div>
       ))}
