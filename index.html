@@ -846,6 +846,41 @@ function owlTone(t0,f,dur,vol,type){ const o=owlAC.createOscillator(),g=owlAC.cr
 function owlBeep(){ try{ if(!owlAC) return; owlTone(0,880,0.3,0.7); owlTone(0.35,880,0.3,0.7); }catch(e){} }
 function owlBeepMake(){ try{ if(!owlAC) return; owlTone(0,440,0.22,0.7,'square'); owlTone(0.28,550,0.22,0.7,'square'); owlTone(0.56,700,0.5,0.7,'square'); }catch(e){} }
 
+function owlPrintJob(o){
+  const esc=opEscapeHtml;
+  const items=o.items||[];
+  const cups=items.reduce((s,it)=>s+(Number(it.qty)||0),0);
+  let b='';
+  const line=(t,fs,w,al)=>{ b+='<div style="font-size:'+fs+'px;font-weight:'+(w||500)+';text-align:'+(al||'left')+';line-height:1.4;">'+t+'</div>'; };
+  const hr=()=>{ b+='<div style="border-top:3px dashed #000;margin:10px 0;"></div>'; };
+  line('OWL CHA - ใบงานพรีออเดอร์'+(o.test?' (ทดสอบ)':''),24,500,'center');
+  line(esc(String(o.orderNo||'-')),76,800,'center');
+  line('รับ '+owlHM(o.pickupAt),46,800,'center');
+  if(o.customer&&(o.customer.name||o.customer.phone))
+    line('คุณ'+esc(o.customer.name||'')+(o.customer.phone?' · '+esc(o.customer.phone):''),27,500,'center');
+  hr();
+  if(o.paid){ line('ชำระแล้ว · '+(o.total||0)+' บาท',30,700,'center'); }
+  else { b+='<div style="border:4px solid #000;border-radius:8px;padding:8px 4px;text-align:center;font-size:38px;font-weight:800;">ยังไม่ชำระ · เก็บ '+(o.total||0)+' บาท</div>'; }
+  hr();
+  items.forEach((it,i)=>{
+    line((i+1)+'. '+esc(it.name||'')+'  x'+(it.qty||1),36,800);
+    const opts=[OWL_SW[it.sweetness],OWL_IC[it.ice]].filter(Boolean).join(' · ');
+    if(opts) line('&nbsp;&nbsp;&raquo; '+esc(opts),29,700);
+    const tp=(it.toppings&&it.toppings.length)?it.toppings.map(t=>t.name+(t.n>1?' x'+t.n:'')).join(', '):'';
+    if(tp) line('&nbsp;&nbsp;+ '+esc(tp),29,700);
+    if(it.note) line('&nbsp;&nbsp;โน้ต: '+esc(String(it.note)),27,700);
+    b+='<div style="height:8px;"></div>';
+  });
+  hr();
+  line('รวม '+cups+' แก้ว · '+(o.total||0)+' บาท',32,800);
+  if(o.note) line('โน้ตออเดอร์: '+esc(String(o.note)),28,700);
+  line('สั่ง '+owlHM(o.createdAt)+' · เริ่มทำได้ '+owlHM(o.startAt),23,500);
+  const htmlDoc='<!DOCTYPE html><html><head><meta charset="utf-8"></head>'+
+    '<body style="width:560px;margin:0;padding:8px 4px;font-family:sans-serif;color:#000;">'+b+
+    '<div style="height:24px;"></div></body></html>';
+  const backUrl=location.origin+location.pathname;
+  location.href='starpassprnt://v1/print/nopreview?back='+encodeURIComponent(backUrl)+'&html='+encodeURIComponent(htmlDoc);
+}
 function OwlOrderCard({o,now,onDone,onUndo,onPaid}){
   const start=o.startAt?new Date(o.startAt):null;
   const pickup=o.pickupAt?new Date(o.pickupAt):null;
@@ -862,7 +897,7 @@ function OwlOrderCard({o,now,onDone,onUndo,onPaid}){
           {o.test?'🧪 ':''}{o.orderNo?o.orderNo+' · ':''}รับ {owlHM(o.pickupAt)} · คุณ{o.customer&&o.customer.name}
           <span style={{fontSize:12,fontWeight:600,marginLeft:8,padding:'2px 8px',borderRadius:999,background:o.paid?'rgba(46,158,107,.12)':'rgba(225,91,78,.12)',color:o.paid?'#2E9E6B':'#E15B4E'}}>{o.paid?'💰 ชำระแล้ว':'💸 รอชำระ'}</span>
         </div>
-        <div style={{fontSize:12.5,fontWeight:600,color:badge.c}}>{badge.t}</div>
+        <div style={{display:'flex',alignItems:'center',gap:8}}><div style={{fontSize:12.5,fontWeight:600,color:badge.c}}>{badge.t}</div><button className="press" onClick={()=>owlPrintJob(o)} style={{border:'1px solid var(--line)',borderRadius:10,padding:'6px 10px',background:'#fff',fontSize:13,fontFamily:'inherit'}}>🖨️ ใบงาน</button></div>
       </div>
       <div style={{fontSize:12.5,color:'var(--muted)',margin:'2px 0 8px'}}>
         เริ่มทำได้ตั้งแต่ <b style={{color:'var(--ink)'}}>{owlHM(o.startAt)}</b> · สั่ง {owlHM(o.createdAt)}
