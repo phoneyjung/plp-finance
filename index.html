@@ -2135,11 +2135,12 @@ const OC_PAY_SEED={
 const ocPayDays=(ym)=>{ const y=+ym.slice(0,4), m=+ym.slice(5,7); return new Date(y,m,0).getDate(); };
 const ocPayLabel=(ym)=> OC_PAY_MONTHS[+ym.slice(5,7)-1]+' '+(+ym.slice(0,4)+543);
 const ocPayShift=(ym,dir)=>{ const y=+ym.slice(0,4), m=+ym.slice(5,7)-1+dir; const d=new Date(y,m,1); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); };
+const ocPayMin=(s)=>{ if(!s) return null; const p=String(s).split(':'); const h=parseInt(p[0],10), mn=parseInt(p[1]||'0',10); return isNaN(h)?null:h*60+(isNaN(mn)?0:mn); };
 function ocPayPool(cups,tiers){ let p=0; (tiers||[]).forEach(t=>{ if(cups>=t.min) p=t.pool; }); return p; }
 function ocPayBaseOf(st,cfg){ return (st.custom>0)? st.custom : (st.phase===3?cfg.base3: st.phase===2?cfg.base2: cfg.base1); }
 function ocPayCalc(pay,ym){
   const cfg=pay.cfg, m=pay.months[ym]||{};
-  const cups=m.cups||{}, att=m.att||{}, ot=m.ot||{}, bonus=m.bonus||{}, dg=m.dilig||{};
+  const cups=m.cups||{}, att=m.att||{}, ot=m.ot||{}, bonus=m.bonus||{}, dg=m.dilig||{}, times=m.times||{};
   const nDays=ocPayDays(ym);
   const perDay={}; let cupsT=0;
   for(let d=1;d<=nDays;d++){
@@ -2154,11 +2155,24 @@ function ocPayCalc(pay,ym){
     com=Math.round(com);
     const baseUsed=ocPayBaseOf(st,cfg);
     const base=Math.round(baseUsed/(cfg.divisor||26)*days);
-    const otH=Number(ot[st.id])||0;
+    let otAuto=0;
+    for(let d=1;d<=nDays;d++){
+      if(perDay[d].ids.indexOf(st.id)<0) continue;
+      const tt=(times[d]||{})[st.id];
+      if(tt&&tt.i&&tt.o){
+        const mi=ocPayMin(tt.i), mo2=ocPayMin(tt.o);
+        if(mi!=null&&mo2!=null){
+          let hrs=(mo2-mi)/60; if(hrs<0) hrs+=24;
+          otAuto+=Math.floor(Math.max(0,hrs-(cfg.shiftHrs||10))*2)/2;
+        }
+      }
+    }
+    const otMan=Number(ot[st.id])||0;
+    const otH=Math.round((otAuto+otMan)*100)/100;
     const otB=Math.round(otH*baseUsed/30/(cfg.shiftHrs||10)*(cfg.otMult||2));
     const dl=(dg[st.id]===0)? 0 : (cfg.dilig||0);
     const bn=Number(bonus[st.id])||0;
-    return { st, days, baseUsed, base, com, otH, otB, dl, bn, net: base+com+otB+dl+bn };
+    return { st, days, baseUsed, base, com, otAuto, otMan, otH, otB, dl, bn, net: base+com+otB+dl+bn };
   });
   const total=rows.reduce((s,r)=>s+r.net,0);
   const rev=cupsT*(cfg.avgPrice||0);
@@ -2272,6 +2286,7 @@ function OCTabPay({ toast }){
   const [pay,setPay]=useState(null);
   const [ym,setYm]=useState(ymOf(today()));
   const [showCfg,setShowCfg]=useState(false);
+  const [expDay,setExpDay]=useState(null);
   const [saveState,setSaveState]=useState('idle');
   const saveTimer=useRef(null);
   const loadedRef=useRef(false);
@@ -2335,6 +2350,8 @@ function OCTabPay({ toast }){
   const setOt=(id,v)=>setMon(m=>{ const o=m.ot||(m.ot={}); if(v===''||v==null) delete o[id]; else o[id]=parseFloat(v)||0; });
   const setBonus=(id,v)=>setMon(m=>{ const b=m.bonus||(m.bonus={}); if(v===''||v==null) delete b[id]; else b[id]=parseFloat(v)||0; });
   const togDilig=(id)=>setMon(m=>{ const g=m.dilig||(m.dilig={}); g[id]=(g[id]===0)?1:0; });
+  const setTime=(d,id,k,v)=>setMon(m=>{ const t=m.times||(m.times={}); const dd=t[d]||(t[d]={}); const e=dd[id]||(dd[id]={}); if(v) e[k]=v; else delete e[k]; });
+  const clearTime=(d,id)=>setMon(m=>{ const t=m.times||(m.times={}); if(t[d]) delete t[d][id]; });
 
   const pull=async()=>{
     if(!db){ toast('ออฟไลน์ ดึงยอดไม่ได้','err'); return; }
@@ -2383,16 +2400,43 @@ function OCTabPay({ toast }){
         </div>
         {Array.from({length:calc.nDays},(_,i)=>i+1).map(d=>{
           const pd=calc.perDay[d];
+          const tms=((mo.times||{})[d])||{};
+          const hasT=pd.ids.some(id=>tms[id]&&tms[id].i&&tms[id].o);
           return (
-            <div key={d} className="flex items-center gap-1" style={{padding:'2.5px 0', borderBottom:'1px solid var(--soft)'}}>
-              <span className="num text-[12px]" style={{width:18,textAlign:'right',color:'var(--muted)'}}>{d}</span>
-              <OCPayIn value={(mo.cups||{})[d]} onChange={v=>setCups(d,v)} w="52px"/>
-              <span className="num text-[11px]" style={{width:38,textAlign:'right',color: pd.each>0?'var(--pos)':'var(--muted)'}}>{pd.each>0? ocFmt(pd.each,0) : '–'}</span>
-              <div className="flex gap-1 flex-1 flex-wrap pl-1">
-                {pay.staff.map(st=>(
-                  <button key={st.id} className="press kanit" style={chipS(pd.ids.indexOf(st.id)>=0)} onClick={()=>togAtt(d,st.id)}>{st.name.slice(0,4)}</button>
-                ))}
+            <div key={d} style={{borderBottom:'1px solid var(--soft)'}}>
+              <div className="flex items-center gap-1" style={{padding:'2.5px 0'}}>
+                <span className="num text-[12px]" style={{width:18,textAlign:'right',color:'var(--muted)'}}>{d}</span>
+                <OCPayIn value={(mo.cups||{})[d]} onChange={v=>setCups(d,v)} w="52px"/>
+                <span className="num text-[11px]" style={{width:38,textAlign:'right',color: pd.each>0?'var(--pos)':'var(--muted)'}}>{pd.each>0? ocFmt(pd.each,0) : '–'}</span>
+                <button className="press" onClick={()=>setExpDay(expDay===d?null:d)} style={{border:'none',background:'none',fontSize:13,padding:'0 2px',opacity:(hasT||expDay===d)?1:0.35}}>⏱</button>
+                <div className="flex gap-1 flex-1 flex-wrap pl-0.5">
+                  {pay.staff.map(st=>(
+                    <button key={st.id} className="press kanit" style={chipS(pd.ids.indexOf(st.id)>=0)} onClick={()=>togAtt(d,st.id)}>{st.name.slice(0,4)}</button>
+                  ))}
+                </div>
               </div>
+              {expDay===d && (
+                <div className="rounded-lg p-2 mb-1.5" style={{background:'var(--soft)'}}>
+                  <div className="text-[11px] mb-1" style={{color:'var(--muted)'}}>⏱ เวลาเข้า-ออก · ไม่กรอก = ไม่คิด OT · เกิน {cfg.shiftHrs} ชม. คิด OT อัตโนมัติ (ปัดลงขั้นครึ่งชม.)</div>
+                  {pd.ids.length===0 && <div className="text-[11.5px]" style={{color:'var(--muted)'}}>แตะชื่อคนเข้ากะก่อนครับ</div>}
+                  {pd.ids.map(id=>{
+                    const st=pay.staff.find(s=>s.id===id); if(!st) return null;
+                    const tt=tms[id]||{};
+                    let info='';
+                    if(tt.i&&tt.o){ const mi=ocPayMin(tt.i), mo2=ocPayMin(tt.o); if(mi!=null&&mo2!=null){ let h=(mo2-mi)/60; if(h<0)h+=24; const ex=Math.floor(Math.max(0,h-(cfg.shiftHrs||10))*2)/2; info=ocFmt(h,1)+' ชม.'+(ex>0?' · OT '+ocFmt(ex,1):''); } }
+                    return (
+                      <div key={id} className="flex items-center gap-1.5 py-0.5 text-[12px] flex-wrap">
+                        <span className="kanit" style={{width:44}}>{st.name.slice(0,5)}</span>
+                        <input type="time" value={tt.i||''} onChange={e=>setTime(d,id,'i',e.target.value)} className="border rounded-lg px-1 py-0.5 text-[12px]" style={{borderColor:'var(--line)'}}/>
+                        <span style={{color:'var(--muted)'}}>–</span>
+                        <input type="time" value={tt.o||''} onChange={e=>setTime(d,id,'o',e.target.value)} className="border rounded-lg px-1 py-0.5 text-[12px]" style={{borderColor:'var(--line)'}}/>
+                        <span className="num text-[11px]" style={{color: info.indexOf('OT')>=0?'var(--pos)':'var(--muted)'}}>{info}</span>
+                        {(tt.i||tt.o) ? <button className="press" style={{border:'none',background:'none',color:'var(--neg)',fontSize:12}} onClick={()=>clearTime(d,id)}>✕</button> : null}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           );
         })}
@@ -2409,7 +2453,7 @@ function OCTabPay({ toast }){
             <div className="flex items-center gap-x-2 gap-y-1 flex-wrap text-[12px] mt-1" style={{color:'var(--muted)'}}>
               <span>ฐาน <b className="num">{ocFmt(r.base,0)}</b></span>
               <span>คอม <b className="num">{ocFmt(r.com,0)}</b></span>
-              <span className="flex items-center gap-1">OT <OCPayIn value={(mo.ot||{})[r.st.id]} onChange={v=>setOt(r.st.id,v)} w="44px" ph="ชม."/> = <b className="num">{ocFmt(r.otB,0)}</b></span>
+              <span className="flex items-center gap-1">OT{r.otAuto>0? <span className="num"> {ocFmt(r.otAuto,1)}+</span>:null} <OCPayIn value={(mo.ot||{})[r.st.id]} onChange={v=>setOt(r.st.id,v)} w="44px" ph="เพิ่ม"/> <span>= <b className="num">{ocFmt(r.otH,1)}ชม. · {ocFmt(r.otB,0)}฿</b></span></span>
               <button className="press kanit" style={chipS(r.dl>0)} onClick={()=>togDilig(r.st.id)}>เบี้ยขยัน {r.dl>0? ocFmt(r.dl,0) : '✗'}</button>
               <span className="flex items-center gap-1">โบนัส/หัก <OCPayIn value={(mo.bonus||{})[r.st.id]} onChange={v=>setBonus(r.st.id,v)} w="56px" ph="0"/></span>
             </div>
