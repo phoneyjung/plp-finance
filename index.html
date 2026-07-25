@@ -2282,6 +2282,24 @@ function OCPayIn({value,onChange,w,ph}){
       style={{ width:w||'52px', borderColor:'var(--line)' }} />
   );
 }
+function OCPayTime({value,onChange}){
+  const p=(value||'').split(':');
+  const hh=p[0]||'', mm=p[1]||'00';
+  const set=(h,m)=>{ if(h==='') onChange(''); else onChange(h+':'+(h==='24'?'00':(m||'00'))); };
+  const sel={borderColor:'var(--line)',background:'#fff'};
+  return (
+    <span className="flex items-center" style={{gap:2}}>
+      <select value={hh} onChange={e=>set(e.target.value,mm)} className="border rounded-lg px-1 py-0.5 text-[12px] num" style={sel}>
+        <option value="">--</option>
+        {Array.from({length:25},(_,i)=>String(i).padStart(2,'0')).map(h=><option key={h} value={h}>{h}</option>)}
+      </select>
+      <span style={{color:'var(--muted)'}}>:</span>
+      <select value={hh==='24'?'00':mm} onChange={e=>set(hh,e.target.value)} disabled={hh===''||hh==='24'} className="border rounded-lg px-1 py-0.5 text-[12px] num" style={sel}>
+        {['00','15','30','45'].map(m=><option key={m} value={m}>{m}</option>)}
+      </select>
+    </span>
+  );
+}
 function OCTabPay({ toast }){
   const [pay,setPay]=useState(null);
   const [ym,setYm]=useState(ymOf(today()));
@@ -2427,9 +2445,9 @@ function OCTabPay({ toast }){
                     return (
                       <div key={id} className="flex items-center gap-1.5 py-0.5 text-[12px] flex-wrap">
                         <span className="kanit" style={{width:44}}>{st.name.slice(0,5)}</span>
-                        <input type="time" value={tt.i||''} onChange={e=>setTime(d,id,'i',e.target.value)} className="border rounded-lg px-1 py-0.5 text-[12px]" style={{borderColor:'var(--line)'}}/>
+                        <OCPayTime value={tt.i||''} onChange={v=>setTime(d,id,'i',v)}/>
                         <span style={{color:'var(--muted)'}}>–</span>
-                        <input type="time" value={tt.o||''} onChange={e=>setTime(d,id,'o',e.target.value)} className="border rounded-lg px-1 py-0.5 text-[12px]" style={{borderColor:'var(--line)'}}/>
+                        <OCPayTime value={tt.o||''} onChange={v=>setTime(d,id,'o',v)}/>
                         <span className="num text-[11px]" style={{color: info.indexOf('OT')>=0?'var(--pos)':'var(--muted)'}}>{info}</span>
                         {(tt.i||tt.o) ? <button className="press" style={{border:'none',background:'none',color:'var(--neg)',fontSize:12}} onClick={()=>clearTime(d,id)}>✕</button> : null}
                       </div>
