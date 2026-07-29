@@ -2163,13 +2163,13 @@ function ocPayCalc(pay,ym){
         const mi=ocPayMin(tt.i), mo2=ocPayMin(tt.o);
         if(mi!=null&&mo2!=null){
           let hrs=(mo2-mi)/60; if(hrs<0) hrs+=24;
-          otAuto+=Math.floor(Math.max(0,hrs-(cfg.shiftHrs||10))*2)/2;
+          otAuto+=Math.floor(Math.max(0,hrs-(cfg.shiftHrs||10)));
         }
       }
     }
     const otMan=Number(ot[st.id])||0;
     const otH=Math.round((otAuto+otMan)*100)/100;
-    const otB=Math.round(otH*baseUsed/30/(cfg.shiftHrs||10)*(cfg.otMult||2));
+    const otB=Math.round(otH*baseUsed/(cfg.divisor||26)/(cfg.shiftHrs||10)*(cfg.otMult||2));
     const dl=(dg[st.id]===0)? 0 : (cfg.dilig||0);
     const bn=Number(bonus[st.id])||0;
     return { st, days, baseUsed, base, com, otAuto, otMan, otH, otB, dl, bn, net: base+com+otB+dl+bn };
@@ -2435,13 +2435,13 @@ function OCTabPay({ toast }){
               </div>
               {expDay===d && (
                 <div className="rounded-lg p-2 mb-1.5" style={{background:'var(--soft)'}}>
-                  <div className="text-[11px] mb-1" style={{color:'var(--muted)'}}>⏱ เวลาเข้า-ออก · ไม่กรอก = ไม่คิด OT · เกิน {cfg.shiftHrs} ชม. คิด OT อัตโนมัติ (ปัดลงขั้นครึ่งชม.)</div>
+                  <div className="text-[11px] mb-1" style={{color:'var(--muted)'}}>⏱ เวลาเข้า-ออก · ไม่กรอก = ไม่คิด OT · เกิน {cfg.shiftHrs} ชม. คิด OT อัตโนมัติ (นับเฉพาะชั่วโมงเต็ม)</div>
                   {pd.ids.length===0 && <div className="text-[11.5px]" style={{color:'var(--muted)'}}>แตะชื่อคนเข้ากะก่อนครับ</div>}
                   {pd.ids.map(id=>{
                     const st=pay.staff.find(s=>s.id===id); if(!st) return null;
                     const tt=tms[id]||{};
                     let info='';
-                    if(tt.i&&tt.o){ const mi=ocPayMin(tt.i), mo2=ocPayMin(tt.o); if(mi!=null&&mo2!=null){ let h=(mo2-mi)/60; if(h<0)h+=24; const ex=Math.floor(Math.max(0,h-(cfg.shiftHrs||10))*2)/2; info=ocFmt(h,1)+' ชม.'+(ex>0?' · OT '+ocFmt(ex,1):''); } }
+                    if(tt.i&&tt.o){ const mi=ocPayMin(tt.i), mo2=ocPayMin(tt.o); if(mi!=null&&mo2!=null){ let h=(mo2-mi)/60; if(h<0)h+=24; const ex=Math.floor(Math.max(0,h-(cfg.shiftHrs||10))); info=ocFmt(h,1)+' ชม.'+(ex>0?' · OT '+ocFmt(ex,1):''); } }
                     return (
                       <div key={id} className="flex items-center gap-1.5 py-0.5 text-[12px] flex-wrap">
                         <span className="kanit" style={{width:44}}>{st.name.slice(0,5)}</span>
@@ -2531,7 +2531,7 @@ function OCTabPay({ toast }){
               <span>OT ×</span><OCPayIn value={cfg.otMult} onChange={v=>setCfg('otMult',v)} w="40px"/>
               <span>ชม./กะ</span><OCPayIn value={cfg.shiftHrs} onChange={v=>setCfg('shiftHrs',v)} w="40px"/>
             </div>
-            <div className="text-[11px] mt-2" style={{color:'var(--muted)'}}>OT ฿/ชม. = ฐาน ÷ 30 ÷ ชม.กะ × ตัวคูณ (เฟส1 ≈ {ocFmt(cfg.base1/30/(cfg.shiftHrs||10)*(cfg.otMult||2),1)} ฿/ชม.) · ฐานคิดตามวันเข้า = ฐาน ÷ ตัวหาร × วันเข้า</div>
+            <div className="text-[11px] mt-2" style={{color:'var(--muted)'}}>OT ฿/ชม. = ฐาน ÷ ตัวหารวัน ÷ ชม.กะ × ตัวคูณ (เฟส1 ≈ {ocFmt(cfg.base1/(cfg.divisor||26)/(cfg.shiftHrs||10)*(cfg.otMult||2),1)} ฿/ชม.) · ฐานคิดตามวันเข้า = ฐาน ÷ ตัวหาร × วันเข้า</div>
           </div>
         )}
       </div>
