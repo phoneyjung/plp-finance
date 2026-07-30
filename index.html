@@ -2146,12 +2146,17 @@ function ocPayCalc(pay,ym){
   for(let d=1;d<=nDays;d++){
     const c=Number(cups[d])||0; cupsT+=c;
     const ids=(att[d]||[]).filter(id=>pay.staff.some(s=>s.id===id));
+    const comIds=ids.filter(id=>{ const s=pay.staff.find(x=>x.id===id); return s && s.kind!=='maid'; });
     const pool=c>0? ocPayPool(c,cfg.tiers) : 0;
-    perDay[d]={ pool, head:ids.length, each: ids.length? pool/ids.length : 0, ids };
+    perDay[d]={ pool, head:comIds.length, each: comIds.length? pool/comIds.length : 0, ids, comIds };
   }
   const rows=pay.staff.map(st=>{
+    const isMaid = st.kind==='maid';
     let days=0, com=0;
-    for(let d=1;d<=nDays;d++){ if(perDay[d].ids.indexOf(st.id)>=0){ days++; com+=perDay[d].each; } }
+    for(let d=1;d<=nDays;d++){
+      if(perDay[d].ids.indexOf(st.id)>=0) days++;
+      if(perDay[d].comIds.indexOf(st.id)>=0) com+=perDay[d].each;
+    }
     com=Math.round(com);
     const baseUsed=ocPayBaseOf(st,cfg);
     const base=Math.round(baseUsed/(cfg.divisor||26)*days);
@@ -2168,11 +2173,12 @@ function ocPayCalc(pay,ym){
       }
     }
     const otMan=Number(ot[st.id])||0;
-    const otH=Math.round((otAuto+otMan)*100)/100;
-    const otB=Math.round(otH*baseUsed/(cfg.divisor||26)/(cfg.shiftHrs||10)*(cfg.otMult||2));
-    const dl=(dg[st.id]===0)? 0 : (cfg.dilig||0);
+    let otH=Math.round((otAuto+otMan)*100)/100;
+    let otB=Math.round(otH*baseUsed/(cfg.divisor||26)/(cfg.shiftHrs||10)*(cfg.otMult||2));
+    let dl=(dg[st.id]===0)? 0 : (cfg.dilig||0);
+    if(isMaid){ otAuto=0; otH=0; otB=0; dl=0; }
     const bn=Number(bonus[st.id])||0;
-    return { st, days, baseUsed, base, com, otAuto, otMan, otH, otB, dl, bn, net: base+com+otB+dl+bn };
+    return { st, isMaid, days, baseUsed, base, com, otAuto, otMan, otH, otB, dl, bn, net: base+com+otB+dl+bn };
   });
   const total=rows.reduce((s,r)=>s+r.net,0);
   const rev=cupsT*(cfg.avgPrice||0);
@@ -2221,10 +2227,10 @@ function ocPayBuildWorkbook(pay,ym){
   const r2=[];
   r2.push([cell('รายชื่อพนักงาน',sTitle)]);
   r2.push([]);
-  r2.push(['ชื่อ','เฟส','ฐานกำหนดเอง (0=อัตโนมัติ)','ฐานที่ใช้ (฿)','เบี้ยขยัน (฿)'].map(h=>cell(h,sHead)));
+  r2.push(['ชื่อ','ประเภท','เฟส','ฐานกำหนดเอง (0=อัตโนมัติ)','ฐานที่ใช้ (฿)','เบี้ยขยัน (฿)'].map(h=>cell(h,sHead)));
   pay.staff.forEach(st=>{
     const row=calc.rows.find(r=>r.st.id===st.id)||{};
-    r2.push([cell(st.name,sTxt),cell(st.phase,{...sNum,alignment:{horizontal:'center'}}),cell(st.custom||0,sYel,'#,##0'),cell(ocPayBaseOf(st,cfg),sNumB,'#,##0'),cell(row.dl!=null?row.dl:cfg.dilig,sNum,'#,##0')]);
+    r2.push([cell(st.name,sTxt),cell(st.kind==='maid'?'แม่บ้าน':'พนักงาน',{...sTxt,alignment:{horizontal:'center'}}),cell(st.phase,{...sNum,alignment:{horizontal:'center'}}),cell(st.custom||0,sYel,'#,##0'),cell(ocPayBaseOf(st,cfg),sNumB,'#,##0'),cell(row.dl!=null?row.dl:cfg.dilig,sNum,'#,##0')]);
   });
   const ws2=toSheet(r2,[{s:{r:0,c:0},e:{r:0,c:4}}],[{wch:16},{wch:6},{wch:20},{wch:12},{wch:12}]);
   /* ---- Sheet 3: Attendance ---- */
@@ -2465,14 +2471,14 @@ function OCTabPay({ toast }){
         {calc.rows.map(r=>(
           <div key={r.st.id} className="py-2" style={{borderBottom:'1px solid var(--soft)'}}>
             <div className="flex items-center justify-between">
-              <div className="kanit text-[14px]">{r.st.name} <span className="text-[11px]" style={{fontWeight:400,color:'var(--muted)'}}>เฟส {r.st.phase} · เข้า {r.days} วัน</span></div>
+              <div className="kanit text-[14px]">{r.isMaid?'🧹 ':''}{r.st.name} <span className="text-[11px]" style={{fontWeight:400,color:'var(--muted)'}}>{r.isMaid?'แม่บ้าน':'เฟส '+r.st.phase} · เข้า {r.days} วัน</span></div>
               <div className="kanit num text-[16px]" style={{fontWeight:700,color:'var(--primary)'}}>{ocFmt(r.net,0)} ฿</div>
             </div>
             <div className="flex items-center gap-x-2 gap-y-1 flex-wrap text-[12px] mt-1" style={{color:'var(--muted)'}}>
               <span>ฐาน <b className="num">{ocFmt(r.base,0)}</b></span>
-              <span>คอม <b className="num">{ocFmt(r.com,0)}</b></span>
-              <span className="flex items-center gap-1">OT{r.otAuto>0? <span className="num"> {ocFmt(r.otAuto,1)}+</span>:null} <OCPayIn value={(mo.ot||{})[r.st.id]} onChange={v=>setOt(r.st.id,v)} w="44px" ph="เพิ่ม"/> <span>= <b className="num">{ocFmt(r.otH,1)}ชม. · {ocFmt(r.otB,0)}฿</b></span></span>
-              <button className="press kanit" style={chipS(r.dl>0)} onClick={()=>togDilig(r.st.id)}>เบี้ยขยัน {r.dl>0? ocFmt(r.dl,0) : '✗'}</button>
+              {!r.isMaid && <span>คอม <b className="num">{ocFmt(r.com,0)}</b></span>}
+              {!r.isMaid && <span className="flex items-center gap-1">OT{r.otAuto>0? <span className="num"> {ocFmt(r.otAuto,1)}+</span>:null} <OCPayIn value={(mo.ot||{})[r.st.id]} onChange={v=>setOt(r.st.id,v)} w="44px" ph="เพิ่ม"/> <span>= <b className="num">{ocFmt(r.otH,1)}ชม. · {ocFmt(r.otB,0)}฿</b></span></span>}
+              {!r.isMaid && <button className="press kanit" style={chipS(r.dl>0)} onClick={()=>togDilig(r.st.id)}>เบี้ยขยัน {r.dl>0? ocFmt(r.dl,0) : '✗'}</button>}
               <span className="flex items-center gap-1">โบนัส/หัก <OCPayIn value={(mo.bonus||{})[r.st.id]} onChange={v=>setBonus(r.st.id,v)} w="56px" ph="0"/></span>
             </div>
           </div>
@@ -2489,14 +2495,15 @@ function OCTabPay({ toast }){
         {showCfg && (
           <div className="mt-2">
             <div className="flex items-center justify-between mb-1">
-              <div className="kanit text-[13px]">👥 พนักงาน (เฟส 1-3 · ฐานเอง 0=อัตโนมัติ)</div>
+              <div className="kanit text-[13px]">👥 พนักงาน (เฟส 1-3 · ฐานเอง 0=อัตโนมัติ · 🧹=แม่บ้าน รับฐาน+โบนัสเท่านั้น ไม่หารคอม)</div>
               {pay.staff.length<10 && <button className="press kanit text-[12px] px-2 py-1 rounded-lg" style={{background:'var(--soft)',color:'var(--primary)',border:'none'}}
                 onClick={()=>upd(p=>{ p.staff.push({id:'p'+ocUid(),name:'พนักงานใหม่',phase:1,custom:0}); })}>+ เพิ่ม</button>}
             </div>
             <div className="space-y-1.5 mb-3">
               {pay.staff.map((st,i)=>(
-                <div key={st.id} className="flex items-center gap-1.5">
-                  <div className="flex-1 min-w-0"><OCTextIn value={st.name} onChange={v=>upd(p=>{ p.staff[i].name=v; })}/></div>
+                <div key={st.id} className="flex items-center gap-1.5 flex-wrap">
+                  <div className="flex-1 min-w-0" style={{minWidth:110}}><OCTextIn value={st.name} onChange={v=>upd(p=>{ p.staff[i].name=v; })}/></div>
+                  <button className="press kanit" style={chipS(st.kind==='maid')} onClick={()=>upd(p=>{ p.staff[i].kind = p.staff[i].kind==='maid' ? 'staff' : 'maid'; })}>🧹</button>
                   <select value={st.phase} onChange={e=>upd(p=>{ p.staff[i].phase=parseInt(e.target.value,10); })}
                     className="border rounded-lg px-1 py-1 text-[12px]" style={{borderColor:'var(--line)'}}>
                     <option value={1}>เฟส 1</option><option value={2}>เฟส 2</option><option value={3}>เฟส 3</option>
