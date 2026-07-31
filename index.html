@@ -2287,6 +2287,8 @@ function ocPayBuildWorkbook(pay,ym){
     if(!(r.days>0||r.holDays>0||r.net>0)) return;
     const rr=[];
     rr.push([cell('สลิปเงินเดือน · '+r.st.name+(r.isMaid?' (แม่บ้าน)':' · เฟส '+r.st.phase)+' · '+ocPayLabel(ym),sTitle)]);
+    const abE=ocPayAbsent(pay,ym,r.st.id);
+    rr.push([cell('ทำงาน '+(r.days+r.holDays)+' วัน · หยุด '+abE.n+' วัน: '+abE.text,{...sTxt,font:{sz:11,color:{rgb:'8A8072'}}})]);
     rr.push([]);
     rr.push(['วันที่','แก้วทั้งร้าน','คอมที่ได้ (฿)','เวลาเข้า','เวลาออก','ชม.ทำงาน','OT (ชม.)','วันหยุด×2'].map(h=>cell(h,sHead)));
     ocPayPersonDays(pay,ym,r.st.id).forEach(o=>{
@@ -2313,6 +2315,20 @@ async function ocPayExport(pay,ym){
 }
 
 
+function ocPayRanges(list){
+  if(!list.length) return '–';
+  const out=[]; let s=list[0], p=list[0];
+  for(let i=1;i<=list.length;i++){ const v=list[i];
+    if(v===p+1){ p=v; continue; }
+    out.push(s===p? String(s) : s+'-'+p); if(v!=null){ s=v; p=v; }
+  }
+  return out.join(', ');
+}
+function ocPayAbsent(pay,ym,stId){
+  const calc=ocPayCalc(pay,ym); const abs=[];
+  for(let d=1;d<=calc.nDays;d++){ const pd=calc.perDay[d]; if(!pd||pd.ids.indexOf(stId)<0) abs.push(d); }
+  return { n:abs.length, text:ocPayRanges(abs) };
+}
 function ocPayPersonDays(pay,ym,stId){
   const m=pay.months[ym]||{}; const cups=m.cups||{}, times=m.times||{}, hol=m.hol||{};
   const cfg=pay.cfg; const calc=ocPayCalc(pay,ym); const out=[];
@@ -2332,7 +2348,7 @@ async function ocPayPersonImage(pay,ym,stId){
   const calc=ocPayCalc(pay,ym); const r=calc.rows.find(x=>x.st.id===stId); if(!r) return;
   const days=ocPayPersonDays(pay,ym,stId);
   const idx=calc.rows.indexOf(r)+1;
-  const W=900, headH=112, sumH=96, colH=42, rowH=38, footH=112;
+  const W=900, headH=142, sumH=96, colH=42, rowH=38, footH=112;
   const H=headH+sumH+colH+Math.max(1,days.length)*rowH+footH;
   const cv=document.createElement('canvas'); cv.width=W*2; cv.height=H*2;
   const g=cv.getContext('2d'); g.scale(2,2);
@@ -2343,7 +2359,9 @@ async function ocPayPersonImage(pay,ym,stId){
   g.fillStyle='#FFFFFF'; g.font=F(700,26); g.textAlign='left';
   g.fillText('สลิปเงินเดือน · '+r.st.name+(r.isMaid?' 🧹':''),32,44);
   g.font=F(400,17); g.fillStyle='#E8DCC8';
-  g.fillText('Owl Cha · '+ocPayLabel(ym)+(r.isMaid?' · แม่บ้าน':' · เฟส '+r.st.phase)+' · เข้า '+r.days+' วัน'+(r.holDays?(' +วันหยุด '+r.holDays):''),32,76);
+  g.fillText('Owl Cha · '+ocPayLabel(ym)+(r.isMaid?' · แม่บ้าน':' · เฟส '+r.st.phase),32,76);
+  const ab=ocPayAbsent(pay,ym,stId);
+  g.fillText('ทำงาน '+(r.days+r.holDays)+' วัน'+(r.holDays?(' (วันหยุด×2 '+r.holDays+' วัน)'):'')+' · หยุด '+ab.n+' วัน: '+ab.text,32,106);
   const chips=[['ฐาน',r.base],['คอม',r.com],['OT '+(r.otH||0)+' ชม.',r.otB],['หยุด×2',r.holPay],['เบี้ยขยัน',r.dl],['โบนัส/หัก',r.bn]];
   chips.forEach((c,k)=>{
     const x=32+k*142;
