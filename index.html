@@ -2192,7 +2192,8 @@ function ocPayCalc(pay,ym){
     const advList=(adv[st.id]||[]);
     const advT=advList.reduce((s,e)=>s+(Number(e.amt)||0),0);
     const bn=Number(bonus[st.id])||0;
-    return { st, isMaid, days, holDays, holPay, baseUsed, base, com, otAuto, otMan, otH, otB, dl, bn, missH, missB, advT, advList, net: base+com+otB+dl+bn+holPay-missB-advT };
+    const net = base+com+otB+dl+bn+holPay-missB;
+    return { st, isMaid, days, holDays, holPay, baseUsed, base, com, otAuto, otMan, otH, otB, dl, bn, missH, missB, advT, advList, net, toPay: net-advT };
   });
   const total=rows.reduce((s,r)=>s+r.net,0);
   const rev=cupsT*(cfg.avgPrice||0);
@@ -2271,20 +2272,21 @@ function ocPayBuildWorkbook(pay,ym){
   const r4=[];
   r4.push([cell('สรุปเงินเดือน · '+ocPayLabel(ym),sTitle)]);
   r4.push([]);
-  r4.push(['ชื่อ','วันเข้า','ฐานตามวันเข้า (฿)','คอมรวม (฿)','OT (ชม.)','OT (฿)','วันหยุด×2 (฿)','เบี้ยขยัน (฿)','โบนัส/หัก (฿)','หักขาด+เบิก (฿)','รวมสุทธิ (฿)'].map(h=>cell(h,sHead)));
+  r4.push(['ชื่อ','วันเข้า','ฐานตามวันเข้า (฿)','คอมรวม (฿)','OT (ชม.)','OT (฿)','วันหยุด×2 (฿)','เบี้ยขยัน (฿)','โบนัส/หัก (฿)','หักชม.ขาด (฿)','ค่าจ้างรวม (฿)','เบิกแล้ว (฿)','คงเหลือจ่าย (฿)'].map(h=>cell(h,sHead)));
   calc.rows.forEach((r,ri)=>{
     const band= ri%2? {fgColor:{rgb:'F6F0E2'}} : null;
     const bT= band? {...sTxt, fill:band} : sTxt;
     const bN= band? {...sNum, fill:band} : sNum;
     const nm=(r.isMaid?'🧹 ':'')+r.st.name;
-    r4.push([cell(nm,bT),cell(r.days,{...bN,alignment:{horizontal:'center'}}),cell(r.base,bN,'#,##0'),cell(r.com,bN,'#,##0'),cell(r.otH,sYel,'#,##0.0'),cell(r.otB,bN,'#,##0'),cell(r.holPay,bN,'#,##0'),cell(r.dl,bN,'#,##0'),cell(r.bn,sYel,'#,##0'),cell((r.missB||r.advT)?-(r.missB+r.advT):0,{...bN,font:{color:{rgb:'B0483C'}}},'#,##0'),cell(r.net,{...sNumB, fill:{fgColor:{rgb:'F1E6C8'}}},'#,##0')]);
+    r4.push([cell(nm,bT),cell(r.days,{...bN,alignment:{horizontal:'center'}}),cell(r.base,bN,'#,##0'),cell(r.com,bN,'#,##0'),cell(r.otH,sYel,'#,##0.0'),cell(r.otB,bN,'#,##0'),cell(r.holPay,bN,'#,##0'),cell(r.dl,bN,'#,##0'),cell(r.bn,sYel,'#,##0'),cell(r.missB?-r.missB:0,{...bN,font:{color:{rgb:'B0483C'}}},'#,##0'),cell(r.net,{...sNumB, fill:{fgColor:{rgb:'F1E6C8'}}},'#,##0'),cell(r.advT?-r.advT:0,{...bN,font:{color:{rgb:'B0483C'}}},'#,##0'),cell(r.toPay,{...sNumB, fill:{fgColor:{rgb:'E8F0E2'}}},'#,##0')]);
   });
-  r4.push([cell('รวมทั้งร้าน',sSec),cell('',sSec),cell('',sSec),cell('',sSec),cell('',sSec),cell('',sSec),cell('',sSec),cell('',sSec),cell('',sSec),cell('',sSec),cell(calc.total,{...sSec,alignment:{horizontal:'right'},font:{bold:true,sz:12}},'#,##0')]);
+  const advTT=calc.rows.reduce((s,r)=>s+(r.advT||0),0);
+  r4.push([cell('รวมทั้งร้าน',sSec),cell('',sSec),cell('',sSec),cell('',sSec),cell('',sSec),cell('',sSec),cell('',sSec),cell('',sSec),cell('',sSec),cell('',sSec),cell(calc.total,{...sSec,alignment:{horizontal:'right'},font:{bold:true,sz:12}},'#,##0'),cell(-advTT,{...sSec,alignment:{horizontal:'right'},font:{bold:true,color:{rgb:'B0483C'}}},'#,##0'),cell(calc.total-advTT,{...sSec,alignment:{horizontal:'right'},font:{bold:true,sz:12}},'#,##0')]);
   r4.push([]);
   r4.push([cell('ยอดขายรวมเดือนนี้ (แก้ว)',sTxt),cell(calc.cupsT,sNumB,'#,##0')]);
   r4.push([cell('ประเมินยอดขาย (฿) = แก้ว × ราคาเฉลี่ย',sTxt),cell(Math.round(calc.rev),sNumB,'#,##0')]);
   r4.push([cell('%ค่าแรงต่อยอดขาย (เป้าไม่เกิน 18%)',sTxt),cell(calc.rev>0? Math.round(calc.laborPct*100)/10000 : 0,sNumB,'0.0%')]);
-  const ws4=toSheet(r4,[{s:{r:0,c:0},e:{r:0,c:10}}],[{wch:18},{wch:8},{wch:14},{wch:11},{wch:9},{wch:9},{wch:12},{wch:11},{wch:12},{wch:12},{wch:12}]);
+  const ws4=toSheet(r4,[{s:{r:0,c:0},e:{r:0,c:12}}],[{wch:18},{wch:8},{wch:14},{wch:11},{wch:9},{wch:9},{wch:12},{wch:11},{wch:12},{wch:12},{wch:12},{wch:11},{wch:12}]);
   const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb,ws4,'Payroll');
   calc.rows.forEach((r,ri)=>{
@@ -2307,7 +2309,7 @@ function ocPayBuildWorkbook(pay,ym){
     });
     rr.push([]);
     rr.push([cell('ฐานตามวันเข้า',sTxt),cell(r.base,sNumB,'#,##0'),cell('คอมรวม',sTxt),cell(r.com,sNumB,'#,##0'),cell('OT (฿)',sTxt),cell(r.otB,sNumB,'#,##0'),cell('วันหยุด×2',sTxt),cell(r.holPay,sNumB,'#,##0')]);
-    rr.push([cell('เบี้ยขยัน',sTxt),cell(r.dl,sNumB,'#,##0'),cell('โบนัส/หัก',sTxt),cell(r.bn,sNumB,'#,##0'),cell('หักชม.ขาด ('+(r.missH||0)+' ชม.)',sTxt),cell(-(r.missB||0),{...sNumB,font:{bold:true,color:{rgb:'B0483C'}}},'#,##0'),cell('เบิก/หักอื่นๆ',sTxt),cell(-(r.advT||0),{...sNumB,font:{bold:true,color:{rgb:'B0483C'}}},'#,##0')]);
+    rr.push([cell('เบี้ยขยัน',sTxt),cell(r.dl,sNumB,'#,##0'),cell('โบนัส/หัก',sTxt),cell(r.bn,sNumB,'#,##0'),cell('หักชม.ขาด ('+(r.missH||0)+' ชม.)',sTxt),cell(-(r.missB||0),{...sNumB,font:{bold:true,color:{rgb:'B0483C'}}},'#,##0'),cell('รวมค่าจ้างเดือนนี้',sSec),cell(r.net,{...sSec,alignment:{horizontal:'right'},font:{bold:true,sz:12}},'#,##0')]);
     if(r.advList&&r.advList.length){
       rr.push([]);
       rr.push([cell('รายการเบิก/หักเงิน',{...sHead,alignment:{horizontal:'left'}}),cell('วันที่',sHead),cell('จำนวน (฿)',sHead),cell('',sHead),cell('',sHead),cell('',sHead),cell('',sHead),cell('',sHead)]);
@@ -2315,7 +2317,7 @@ function ocPayBuildWorkbook(pay,ym){
         rr.push([cell(e.note||'เบิก/หัก',sTxt),cell(e.d||'',{...sNum,alignment:{horizontal:'center'}}),cell(-(Number(e.amt)||0),{...sNum,font:{color:{rgb:'B0483C'}}},'#,##0'),cell('',sTxt),cell('',sTxt),cell('',sTxt),cell('',sTxt),cell('',sTxt)]);
       });
     }
-    rr.push([cell('',sTxt),cell('',sTxt),cell('',sTxt),cell('',sTxt),cell('',sTxt),cell('',sTxt),cell('รวมสุทธิ',sSec),cell(r.net,{...sSec,alignment:{horizontal:'right'},font:{bold:true,sz:13}},'#,##0')]);
+    rr.push([cell('',sTxt),cell('',sTxt),cell('',sTxt),cell('',sTxt),cell('เบิกไปแล้ว',sTxt),cell(-(r.advT||0),{...sNumB,font:{bold:true,color:{rgb:'B0483C'}}},'#,##0'),cell('คงเหลือจ่ายสิ้นเดือน',sSec),cell(r.toPay,{...sSec,alignment:{horizontal:'right'},font:{bold:true,sz:13}},'#,##0')]);
     const wsE=toSheet(rr,[{s:{r:0,c:0},e:{r:0,c:7}}],[{wch:8},{wch:11},{wch:12},{wch:9},{wch:9},{wch:10},{wch:9},{wch:10}]);
     XLSX.utils.book_append_sheet(wb,wsE,'E'+String(ri+1).padStart(2,'0'));
   });
@@ -2368,7 +2370,8 @@ async function ocPayPersonImage(pay,ym,stId){
   const idx=calc.rows.indexOf(r)+1;
   const W=900, headH=142, sumH=96, colH=42, rowH=38, footH=112;
   const advRows=(r.advList&&r.advList.length)? r.advList.length+1 : 0;
-  const H=headH+sumH+colH+Math.max(1,days.length)*rowH+advRows*34+footH;
+  const footX = r.advT>0? 62 : 0;
+  const H=headH+sumH+colH+Math.max(1,days.length)*rowH+advRows*34+footH+footX;
   const cv=document.createElement('canvas'); cv.width=W*2; cv.height=H*2;
   const g=cv.getContext('2d'); g.scale(2,2);
   const F=(w,s)=>w+' '+s+'px Kanit, "Noto Sans Thai", sans-serif';
@@ -2423,9 +2426,17 @@ async function ocPayPersonImage(pay,ym,stId){
       y+=34;
     });
   }
+  if(r.advT>0){
+    g.fillStyle='#FFFFFF'; g.fillRect(0,y,W,62);
+    g.fillStyle='#3B2F24'; g.font=F(600,16); g.textAlign='left'; g.fillText('ค่าจ้างเดือนนี้',32,y+25);
+    g.textAlign='right'; g.fillText(num(r.net)+' ฿',868,y+25);
+    g.fillStyle='#B0483C'; g.font=F(400,15); g.textAlign='left'; g.fillText('เบิกไปแล้วระหว่างเดือน',32,y+50);
+    g.textAlign='right'; g.fillText('−'+num(r.advT)+' ฿',868,y+50);
+    y+=62;
+  }
   g.fillStyle='#F1E1B4'; g.fillRect(0,y,W,60);
-  g.fillStyle='#5B4636'; g.font=F(700,20); g.textAlign='left'; g.fillText('รวมสุทธิ',32,y+39);
-  g.font=F(800,26); g.textAlign='right'; g.fillText(num(r.net)+' ฿',868,y+40);
+  g.fillStyle='#5B4636'; g.font=F(700,20); g.textAlign='left'; g.fillText(r.advT>0?'คงเหลือรับสิ้นเดือน':'รวมสุทธิ',32,y+39);
+  g.font=F(800,26); g.textAlign='right'; g.fillText(num(r.advT>0? r.toPay : r.net)+' ฿',868,y+40);
   g.fillStyle='#B7A88F'; g.font=F(400,13); g.textAlign='left';
   g.fillText('OWL CHA · สาขา ม.ศิลปากร · สร้างจากแอป PLP Finance',32,y+92);
   const a=document.createElement('a');
@@ -2451,7 +2462,7 @@ async function ocPayImage(pay,ym){
   const cols=[
     {t:'ชื่อ',x:36,a:'left'},{t:'วัน',x:322,a:'right'},{t:'ฐาน',x:412,a:'right'},
     {t:'คอม',x:494,a:'right'},{t:'OT฿',x:570,a:'right'},{t:'หยุด×2',x:660,a:'right'},
-    {t:'เบี้ย',x:730,a:'right'},{t:'โบนัส',x:806,a:'right'},{t:'หัก',x:894,a:'right'},{t:'สุทธิ',x:1044,a:'right'}
+    {t:'เบี้ย',x:730,a:'right'},{t:'โบนัส',x:806,a:'right'},{t:'หักขาด',x:894,a:'right'},{t:'คงเหลือจ่าย',x:1044,a:'right'}
   ];
   g.fillStyle='#EFE6D2'; g.fillRect(0,headH,W,colH);
   g.font=F(600,17); g.fillStyle='#5B4636';
@@ -2465,17 +2476,18 @@ async function ocPayImage(pay,ym){
     g.font=F(400,18);
     const cells=[ String(r.days+(r.holDays? '+'+r.holDays:'')), num(r.base),
       r.isMaid?'–':num(r.com), r.isMaid?'–':num(r.otB), num(r.holPay),
-      r.isMaid?'–':num(r.dl), r.bn?num(r.bn):'–', (r.missB||r.advT)?('−'+num(r.missB+r.advT)):'–' ];
+      r.isMaid?'–':num(r.dl), r.bn?num(r.bn):'–', r.missB?('−'+num(r.missB)):'–' ];
     cells.forEach((v,k)=>{ g.textAlign='right'; g.fillStyle='#3B2F24'; g.fillText(v, cols[k+1].x, y+36); });
-    g.font=F(700,20); g.fillStyle='#5B4636'; g.fillText(num(r.net), cols[9].x, y+37);
+    g.font=F(700,20); g.fillStyle='#5B4636'; g.fillText(num(r.toPay!=null?r.toPay:r.net), cols[9].x, y+37);
     y+=rowH;
   });
   g.fillStyle='#F1E1B4'; g.fillRect(0,y,W,58);
-  g.fillStyle='#5B4636'; g.font=F(700,21); g.textAlign='left'; g.fillText('รวมทั้งร้าน',36,y+38);
-  g.font=F(800,25); g.textAlign='right'; g.fillText(num(calc.total)+' ฿',1044,y+39);
+  const toPayT=calc.rows.reduce((s,r)=>s+(r.toPay!=null?r.toPay:r.net),0);
+  g.fillStyle='#5B4636'; g.font=F(700,21); g.textAlign='left'; g.fillText('รวมจ่ายสิ้นเดือน (หักเบิกแล้ว)',36,y+38);
+  g.font=F(800,25); g.textAlign='right'; g.fillText(num(toPayT)+' ฿',1044,y+39);
   y+=58;
   g.font=F(400,17); g.fillStyle='#8A8072'; g.textAlign='left';
-  g.fillText('แก้วรวม '+num(calc.cupsT)+' · ประเมินยอดขาย '+num(calc.rev)+' ฿',36,y+34);
+  g.fillText('ต้นทุนค่าแรงจริง (รวมเบิกแล้ว) '+num(calc.total)+' ฿ · แก้วรวม '+num(calc.cupsT)+' · ยอดขายประเมิน '+num(calc.rev)+' ฿',36,y+34);
   const ok=calc.laborPct<=18;
   g.fillStyle= ok? '#3E7D3E':'#B0483C'; g.font=F(600,17);
   g.fillText('ค่าแรง '+(Math.round(calc.laborPct*10)/10)+'% ของยอดขาย (เป้า ≤18%)',36,y+62);
@@ -2685,7 +2697,10 @@ function OCTabPay({ toast }){
           <div key={r.st.id} className="py-2" style={{borderBottom:'1px solid var(--soft)'}}>
             <div className="flex items-center justify-between">
               <div className="kanit text-[14px] flex items-center gap-1.5 flex-wrap">{r.isMaid?'🧹 ':''}{r.st.name} <span className="text-[11px]" style={{fontWeight:400,color:'var(--muted)'}}>{r.isMaid?'แม่บ้าน':'เฟส '+r.st.phase} · เข้า {r.days} วัน{r.holDays>0?' +หยุด'+r.holDays:''}</span> <button className="press" style={{border:'none',background:'var(--soft)',borderRadius:8,padding:'2px 9px',fontSize:12}} onClick={(e)=>{e.stopPropagation(); ocPayPersonImage(pay,ym,r.st.id);}}>🖼 สลิป</button> <button className="press" style={{border:'none',background: advOpen===r.st.id?'var(--primary)':'var(--soft)', color: advOpen===r.st.id?'#fff':'inherit', borderRadius:8,padding:'2px 9px',fontSize:12}} onClick={(e)=>{e.stopPropagation(); setAdvOpen(advOpen===r.st.id?null:r.st.id);}}>💸 เบิก/หัก{r.advT>0?' −'+ocFmt(r.advT,0):''}</button></div>
-              <div className="kanit num text-[16px]" style={{fontWeight:700,color:'var(--primary)'}}>{ocFmt(r.net,0)} ฿</div>
+              <div className="text-right">
+                <div className="kanit num text-[16px]" style={{fontWeight:700,color:'var(--primary)'}}>{ocFmt(r.net,0)} ฿</div>
+                {r.advT>0 && <div className="num text-[11px]" style={{color:'var(--neg)'}}>คงเหลือจ่าย {ocFmt(r.toPay,0)}</div>}
+              </div>
             </div>
             <div className="flex items-center gap-x-2 gap-y-1 flex-wrap text-[12px] mt-1" style={{color:'var(--muted)'}}>
               <span>ฐาน <b className="num">{ocFmt(r.base,0)}</b></span>
