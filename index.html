@@ -2169,7 +2169,7 @@ function ocPayCalc(pay,ym){
     com=Math.round(com); holPay=Math.round(holPay);
     const baseUsed=ocPayBaseOf(st,cfg);
     const base=Math.round(baseUsed/(cfg.divisor||26)*days);
-    let otAuto=0;
+    let otAuto=0, missH=0;
     for(let d=1;d<=nDays;d++){
       if(perDay[d].ids.indexOf(st.id)<0) continue;
       if(((hol[d]||[]).indexOf(st.id))>=0) continue;
@@ -2178,6 +2178,7 @@ function ocPayCalc(pay,ym){
         const mi=ocPayMin(tt.i), mo2=ocPayMin(tt.o);
         if(mi!=null&&mo2!=null){
           let hrs=(mo2-mi)/60; if(hrs<0) hrs+=24;
+          missH+=Math.floor(Math.max(0,(cfg.shiftHrs||10)-hrs));
           otAuto+=Math.floor(Math.max(0,hrs-(cfg.shiftHrs||10)));
         }
       }
@@ -2187,8 +2188,9 @@ function ocPayCalc(pay,ym){
     let otB=Math.round(otH*baseUsed/(cfg.divisor||26)/(cfg.shiftHrs||10)*(cfg.otMult||2));
     let dl=(dg[st.id]===0)? 0 : (cfg.dilig||0);
     if(isMaid){ otAuto=0; otH=0; otB=0; dl=0; }
+    const missB=Math.round(missH*hourRate);
     const bn=Number(bonus[st.id])||0;
-    return { st, isMaid, days, holDays, holPay, baseUsed, base, com, otAuto, otMan, otH, otB, dl, bn, net: base+com+otB+dl+bn+holPay };
+    return { st, isMaid, days, holDays, holPay, baseUsed, base, com, otAuto, otMan, otH, otB, dl, bn, missH, missB, net: base+com+otB+dl+bn+holPay-missB };
   });
   const total=rows.reduce((s,r)=>s+r.net,0);
   const rev=cupsT*(cfg.avgPrice||0);
@@ -2267,20 +2269,20 @@ function ocPayBuildWorkbook(pay,ym){
   const r4=[];
   r4.push([cell('สรุปเงินเดือน · '+ocPayLabel(ym),sTitle)]);
   r4.push([]);
-  r4.push(['ชื่อ','วันเข้า','ฐานตามวันเข้า (฿)','คอมรวม (฿)','OT (ชม.)','OT (฿)','วันหยุด×2 (฿)','เบี้ยขยัน (฿)','โบนัส/หัก (฿)','รวมสุทธิ (฿)'].map(h=>cell(h,sHead)));
+  r4.push(['ชื่อ','วันเข้า','ฐานตามวันเข้า (฿)','คอมรวม (฿)','OT (ชม.)','OT (฿)','วันหยุด×2 (฿)','เบี้ยขยัน (฿)','โบนัส/หัก (฿)','หักชม.ขาด (฿)','รวมสุทธิ (฿)'].map(h=>cell(h,sHead)));
   calc.rows.forEach((r,ri)=>{
     const band= ri%2? {fgColor:{rgb:'F6F0E2'}} : null;
     const bT= band? {...sTxt, fill:band} : sTxt;
     const bN= band? {...sNum, fill:band} : sNum;
     const nm=(r.isMaid?'🧹 ':'')+r.st.name;
-    r4.push([cell(nm,bT),cell(r.days,{...bN,alignment:{horizontal:'center'}}),cell(r.base,bN,'#,##0'),cell(r.com,bN,'#,##0'),cell(r.otH,sYel,'#,##0.0'),cell(r.otB,bN,'#,##0'),cell(r.holPay,bN,'#,##0'),cell(r.dl,bN,'#,##0'),cell(r.bn,sYel,'#,##0'),cell(r.net,{...sNumB, fill:{fgColor:{rgb:'F1E6C8'}}},'#,##0')]);
+    r4.push([cell(nm,bT),cell(r.days,{...bN,alignment:{horizontal:'center'}}),cell(r.base,bN,'#,##0'),cell(r.com,bN,'#,##0'),cell(r.otH,sYel,'#,##0.0'),cell(r.otB,bN,'#,##0'),cell(r.holPay,bN,'#,##0'),cell(r.dl,bN,'#,##0'),cell(r.bn,sYel,'#,##0'),cell(r.missB?-r.missB:0,{...bN,font:{color:{rgb:'B0483C'}}},'#,##0'),cell(r.net,{...sNumB, fill:{fgColor:{rgb:'F1E6C8'}}},'#,##0')]);
   });
-  r4.push([cell('รวมทั้งร้าน',sSec),cell('',sSec),cell('',sSec),cell('',sSec),cell('',sSec),cell('',sSec),cell('',sSec),cell('',sSec),cell('',sSec),cell(calc.total,{...sSec,alignment:{horizontal:'right'},font:{bold:true,sz:12}},'#,##0')]);
+  r4.push([cell('รวมทั้งร้าน',sSec),cell('',sSec),cell('',sSec),cell('',sSec),cell('',sSec),cell('',sSec),cell('',sSec),cell('',sSec),cell('',sSec),cell('',sSec),cell(calc.total,{...sSec,alignment:{horizontal:'right'},font:{bold:true,sz:12}},'#,##0')]);
   r4.push([]);
   r4.push([cell('ยอดขายรวมเดือนนี้ (แก้ว)',sTxt),cell(calc.cupsT,sNumB,'#,##0')]);
   r4.push([cell('ประเมินยอดขาย (฿) = แก้ว × ราคาเฉลี่ย',sTxt),cell(Math.round(calc.rev),sNumB,'#,##0')]);
   r4.push([cell('%ค่าแรงต่อยอดขาย (เป้าไม่เกิน 18%)',sTxt),cell(calc.rev>0? Math.round(calc.laborPct*100)/10000 : 0,sNumB,'0.0%')]);
-  const ws4=toSheet(r4,[{s:{r:0,c:0},e:{r:0,c:9}}],[{wch:18},{wch:8},{wch:14},{wch:11},{wch:9},{wch:9},{wch:12},{wch:11},{wch:12},{wch:12}]);
+  const ws4=toSheet(r4,[{s:{r:0,c:0},e:{r:0,c:10}}],[{wch:18},{wch:8},{wch:14},{wch:11},{wch:9},{wch:9},{wch:12},{wch:11},{wch:12},{wch:12},{wch:12}]);
   const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb,ws4,'Payroll');
   calc.rows.forEach((r,ri)=>{
@@ -2299,11 +2301,11 @@ function ocPayBuildWorkbook(pay,ym){
       }
       rr.push([cell(o.d,{...sNum,alignment:{horizontal:'center'}}),cell(o.cups||'',sNum,'#,##0'),cell(o.com?Math.round(o.com):'',sNum,'#,##0'),
         cell(o.tin,{...sTxt,alignment:{horizontal:'center'}}),cell(o.tout,{...sTxt,alignment:{horizontal:'center'}}),
-        cell(o.hrs!=null?Math.round(o.hrs*10)/10:'',sNum,'0.0'),cell(o.otH||'',sNum),cell(o.isHol?'x2':'',{...sTxt,alignment:{horizontal:'center'}})]);
+        cell(o.hrs!=null?Math.round(o.hrs*10)/10:'',sNum,'0.0'),cell(o.otH||'',sNum),cell(o.isHol?'x2':(o.miss?('ขาด '+o.miss+' ชม.'):''),{...sTxt,alignment:{horizontal:'center'}})]);
     });
     rr.push([]);
     rr.push([cell('ฐานตามวันเข้า',sTxt),cell(r.base,sNumB,'#,##0'),cell('คอมรวม',sTxt),cell(r.com,sNumB,'#,##0'),cell('OT (฿)',sTxt),cell(r.otB,sNumB,'#,##0'),cell('วันหยุด×2',sTxt),cell(r.holPay,sNumB,'#,##0')]);
-    rr.push([cell('เบี้ยขยัน',sTxt),cell(r.dl,sNumB,'#,##0'),cell('โบนัส/หัก',sTxt),cell(r.bn,sNumB,'#,##0'),cell('รวมสุทธิ',sSec),cell(r.net,{...sSec,alignment:{horizontal:'right'},font:{bold:true,sz:13}},'#,##0'),cell('',sTxt),cell('',sTxt)]);
+    rr.push([cell('เบี้ยขยัน',sTxt),cell(r.dl,sNumB,'#,##0'),cell('โบนัส/หัก',sTxt),cell(r.bn,sNumB,'#,##0'),cell('หักชม.ขาด ('+(r.missH||0)+' ชม.)',sTxt),cell(-(r.missB||0),{...sNumB,font:{bold:true,color:{rgb:'B0483C'}}},'#,##0'),cell('รวมสุทธิ',sSec),cell(r.net,{...sSec,alignment:{horizontal:'right'},font:{bold:true,sz:13}},'#,##0')]);
     const wsE=toSheet(rr,[{s:{r:0,c:0},e:{r:0,c:7}}],[{wch:8},{wch:11},{wch:12},{wch:9},{wch:9},{wch:10},{wch:9},{wch:10}]);
     XLSX.utils.book_append_sheet(wb,wsE,'E'+String(ri+1).padStart(2,'0'));
   });
@@ -2344,7 +2346,8 @@ function ocPayPersonDays(pay,ym,stId){
     let hrs=null;
     if(tt.i&&tt.o){ const a=ocPayMin(tt.i), b=ocPayMin(tt.o); if(a!=null&&b!=null){ hrs=(b-a)/60; if(hrs<0)hrs+=24; } }
     const otH=(!isHol&&hrs!=null)? Math.floor(Math.max(0,hrs-(cfg.shiftHrs||10))) : 0;
-    out.push({ d, cups:Number(cups[d])||0, com: pd.comIds.indexOf(stId)>=0? pd.each:0, tin:tt.i||'', tout:tt.o||'', hrs, otH, isHol });
+    const miss=(!isHol&&hrs!=null)? Math.floor(Math.max(0,(cfg.shiftHrs||10)-hrs)) : 0;
+    out.push({ d, cups:Number(cups[d])||0, com: pd.comIds.indexOf(stId)>=0? pd.each:0, tin:tt.i||'', tout:tt.o||'', hrs, otH, miss, isHol });
   }
   return out;
 }
@@ -2367,11 +2370,12 @@ async function ocPayPersonImage(pay,ym,stId){
   g.fillText('Owl Cha · '+ocPayLabel(ym)+(r.isMaid?' · แม่บ้าน':' · เฟส '+r.st.phase),32,76);
   const ab=ocPayAbsent(pay,ym,stId);
   g.fillText('ทำงาน '+(r.days+r.holDays)+' วัน'+(r.holDays?(' (วันหยุด×2 '+r.holDays+' วัน)'):'')+' · หยุด '+ab.n+' วัน: '+ab.text,32,106);
-  const chips=[['ฐาน',r.base],['คอม',r.com],['OT '+(r.otH||0)+' ชม.',r.otB],['หยุด×2',r.holPay],['เบี้ยขยัน',r.dl],['โบนัส/หัก',r.bn]];
+  const chips=[['ฐาน',r.base],['คอม',r.com],['OT '+(r.otH||0)+' ชม.',r.otB],['หยุด×2',r.holPay],['เบี้ยขยัน',r.dl],['โบนัส/หัก',r.bn],['หักขาด '+(r.missH||0)+' ชม.',-(r.missB||0)]];
   chips.forEach((c,k)=>{
-    const x=32+k*142;
-    g.font=F(400,14); g.fillStyle='#8A8072'; g.textAlign='left'; g.fillText(c[0],x,headH+34);
-    g.font=F(700,19); g.fillStyle='#3B2F24'; g.fillText(num(c[1]),x,headH+62);
+    const x=32+k*121;
+    g.font=F(400,13.5); g.fillStyle='#8A8072'; g.textAlign='left'; g.fillText(c[0],x,headH+34);
+    g.font=F(700,18); g.fillStyle= c[1]<0? '#B0483C':'#3B2F24';
+    g.fillText((c[1]<0?'−':'')+num(Math.abs(c[1])),x,headH+62);
   });
   const cols=[['วัน',62,'right'],['แก้วร้าน',185,'right'],['คอม',295,'right'],['เข้า',405,'center'],['ออก',505,'center'],['ชม.',600,'right'],['OT',675,'right'],['หมายเหตุ',868,'right']];
   const ty0=headH+sumH;
@@ -2390,7 +2394,7 @@ async function ocPayPersonImage(pay,ym,stId){
     g.fillStyle= o.isHol? '#FBE9E5' : (i%2? '#F5EEDD':'#FFFFFF'); g.fillRect(0,y,W,rowH);
     g.fillStyle='#3B2F24'; g.font=F(400,15.5);
     const vals=[String(o.d), o.cups?num(o.cups):'–', o.com?num(Math.round(o.com)):'–', o.tin||'–', o.tout||'–',
-      o.hrs!=null?(Math.round(o.hrs*10)/10).toString():'–', o.otH?String(o.otH):'–', o.isHol?'🆘 ×2':(o.otH?'OT':'')];
+      o.hrs!=null?(Math.round(o.hrs*10)/10).toString():'–', o.otH?String(o.otH):'–', o.isHol?'🆘 ×2':(o.otH?'OT':(o.miss?('ขาด '+o.miss+' ชม.'):''))];
     vals.forEach((v,k)=>{ g.textAlign=cols[k][2]; g.fillText(v,cols[k][1],y+26); });
     y+=rowH;
   });
@@ -2421,9 +2425,9 @@ async function ocPayImage(pay,ym){
   g.fillText('สรุปเงินเดือนพนักงาน · Owl Cha',36,50);
   g.font=F(400,21); g.fillStyle='#E8DCC8'; g.fillText('เดือน'+ocPayLabel(ym),36,86);
   const cols=[
-    {t:'ชื่อ',x:36,a:'left'},{t:'วัน',x:342,a:'right'},{t:'ฐาน',x:436,a:'right'},
-    {t:'คอม',x:524,a:'right'},{t:'OT฿',x:606,a:'right'},{t:'หยุด×2',x:706,a:'right'},
-    {t:'เบี้ย',x:782,a:'right'},{t:'โบนัส',x:868,a:'right'},{t:'สุทธิ',x:1044,a:'right'}
+    {t:'ชื่อ',x:36,a:'left'},{t:'วัน',x:322,a:'right'},{t:'ฐาน',x:412,a:'right'},
+    {t:'คอม',x:494,a:'right'},{t:'OT฿',x:570,a:'right'},{t:'หยุด×2',x:660,a:'right'},
+    {t:'เบี้ย',x:730,a:'right'},{t:'โบนัส',x:806,a:'right'},{t:'หักขาด',x:894,a:'right'},{t:'สุทธิ',x:1044,a:'right'}
   ];
   g.fillStyle='#EFE6D2'; g.fillRect(0,headH,W,colH);
   g.font=F(600,17); g.fillStyle='#5B4636';
@@ -2437,9 +2441,9 @@ async function ocPayImage(pay,ym){
     g.font=F(400,18);
     const cells=[ String(r.days+(r.holDays? '+'+r.holDays:'')), num(r.base),
       r.isMaid?'–':num(r.com), r.isMaid?'–':num(r.otB), num(r.holPay),
-      r.isMaid?'–':num(r.dl), r.bn?num(r.bn):'–' ];
+      r.isMaid?'–':num(r.dl), r.bn?num(r.bn):'–', r.missB?('−'+num(r.missB)):'–' ];
     cells.forEach((v,k)=>{ g.textAlign='right'; g.fillStyle='#3B2F24'; g.fillText(v, cols[k+1].x, y+36); });
-    g.font=F(700,20); g.fillStyle='#5B4636'; g.fillText(num(r.net), cols[8].x, y+37);
+    g.font=F(700,20); g.fillStyle='#5B4636'; g.fillText(num(r.net), cols[9].x, y+37);
     y+=rowH;
   });
   g.fillStyle='#F1E1B4'; g.fillRect(0,y,W,58);
@@ -2658,6 +2662,7 @@ function OCTabPay({ toast }){
             <div className="flex items-center gap-x-2 gap-y-1 flex-wrap text-[12px] mt-1" style={{color:'var(--muted)'}}>
               <span>ฐาน <b className="num">{ocFmt(r.base,0)}</b></span>
               {r.holPay>0 && <span>🆘หยุด×2 <b className="num">{ocFmt(r.holPay,0)}</b></span>}
+              {r.missB>0 && <span style={{color:'var(--neg)'}}>หักขาด {r.missH}ชม. <b className="num">−{ocFmt(r.missB,0)}</b></span>}
               {!r.isMaid && <span>คอม <b className="num">{ocFmt(r.com,0)}</b></span>}
               {!r.isMaid && <span className="flex items-center gap-1">OT{r.otAuto>0? <span className="num"> {ocFmt(r.otAuto,1)}+</span>:null} <OCPayIn value={(mo.ot||{})[r.st.id]} onChange={v=>setOt(r.st.id,v)} w="44px" ph="เพิ่ม"/> <span>= <b className="num">{ocFmt(r.otH,1)}ชม. · {ocFmt(r.otB,0)}฿</b></span></span>}
               {!r.isMaid && <button className="press kanit" style={chipS(r.dl>0)} onClick={()=>togDilig(r.st.id)}>เบี้ยขยัน {r.dl>0? ocFmt(r.dl,0) : '✗'}</button>}
