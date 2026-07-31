@@ -2518,6 +2518,7 @@ function OCTabPay({ toast }){
   const [showCfg,setShowCfg]=useState(false);
   const [expDay,setExpDay]=useState(null);
   const [saveState,setSaveState]=useState('idle');
+  const [advOpen,setAdvOpen]=useState(null);
   const saveTimer=useRef(null);
   const loadedRef=useRef(false);
 
@@ -2578,7 +2579,6 @@ function OCTabPay({ toast }){
   const setCups=(d,v)=>setMon(m=>{ const c=m.cups||(m.cups={}); if(v===''||v==null) delete c[d]; else c[d]=parseFloat(v)||0; });
   const togAtt=(d,id)=>setMon(m=>{ const a=m.att||(m.att={}); const arr=a[d]||(a[d]=[]); const i=arr.indexOf(id); if(i>=0) arr.splice(i,1); else arr.push(id); });
   const setOt=(id,v)=>setMon(m=>{ const o=m.ot||(m.ot={}); if(v===''||v==null) delete o[id]; else o[id]=parseFloat(v)||0; });
-  const [advOpen,setAdvOpen]=React.useState(null);
   const addAdv=(id)=>setMon(m=>{ const a=m.adv||(m.adv={}); (a[id]||(a[id]=[])).push({d:'',amt:'',note:''}); });
   const updAdv=(id,i,k,v)=>setMon(m=>{ const a=m.adv||(m.adv={}); if(a[id]&&a[id][i]) a[id][i][k]=v; });
   const delAdv=(id,i)=>setMon(m=>{ const a=m.adv||(m.adv={}); if(a[id]) a[id].splice(i,1); });
