@@ -2172,7 +2172,7 @@ function ocPayCalc(pay,ym){
     let base, offDays=nDays-(days+holDays), offExcess=0;
     let extraDays=0, extraRate=0;
     if(quota!=null && !isNaN(quota)){
-      const dayRate=baseUsed/(cfg.divisor||26);
+      const dayRate=baseUsed/Math.max(1,(nDays-quota));
       const diff=(days+holDays)-(nDays-quota);
       offExcess=Math.max(0,-diff);
       extraDays=Math.max(0,diff);
