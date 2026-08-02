@@ -1,6 +1,8 @@
 <!DOCTYPE html>
 <html lang="th">
 <head>
+<link rel="preconnect" href="https://firestore.googleapis.com">
+<link rel="preconnect" href="https://identitytoolkit.googleapis.com">
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>OWL — สั่งล่วงหน้า</title>
@@ -114,6 +116,7 @@ const firebaseConfig = {
 };
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
+try{ db.settings({ experimentalAutoDetectLongPolling: true, merge: true }); }catch(e){}
 firebase.auth().signInAnonymously().catch(e => console.error('auth', e));
 
 function cleanUndefined(obj){
@@ -722,11 +725,36 @@ function App(){
   const [editIdx, setEditIdx] = useState(-1);     // index ในตะกร้าที่กำลังแก้
   const keyRef = useRef(0);
 
-  useEffect(() => {
-    db.collection('owlMenu').get().then(snap => {
-      setMenus(snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(m => m.active !== false));
-    }).catch(e => { console.error(e); setMenus([]); });
+  const [menuErr, setMenuErr] = useState(false);
+  const loadMenus = React.useCallback(() => {
+    setMenuErr(false); setMenus(null);
+    // โชว์จาก cache ก่อนทันที (เปิดครั้งที่ 2 ขึ้นไปไม่ต้องรอเน็ต)
+    try{
+      const c = localStorage.getItem('owlMenuCache');
+      if (c){ const list = JSON.parse(c); if (Array.isArray(list) && list.length) setMenus(list); }
+    }catch(e){}
+    const attempt = (n) => {
+      Promise.race([
+        db.collection('owlMenu').get(),
+        new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 8000))
+      ]).then(snap => {
+        const list = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(m => m.active !== false);
+        setMenus(list);
+        try{ localStorage.setItem('owlMenuCache', JSON.stringify(list)); }catch(e){}
+      }).catch(e => {
+        console.error('menu', n, e);
+        if (n < 2) return attempt(n + 1);
+        // เน็ตล่มจริง: ถ้ามี cache ใช้ไปก่อน ไม่มีค่อยโชว์ปุ่มลองใหม่
+        try{
+          const c = localStorage.getItem('owlMenuCache');
+          if (c){ const list = JSON.parse(c); if (Array.isArray(list) && list.length) return setMenus(list); }
+        }catch(err){}
+        setMenus([]); setMenuErr(true);
+      });
+    };
+    attempt(0);
   }, []);
+  useEffect(() => { loadMenus(); }, []);
 
   if (done) return <Done info={done} />;
 
@@ -784,7 +812,14 @@ function App(){
 
       {menus === null &&
         <div style={{textAlign:'center', color:'var(--muted)', padding:'50px 0'}}>กำลังโหลดเมนู…</div>}
-      {menus !== null && shown.length === 0 &&
+      {menus !== null && menuErr && shown.length === 0 &&
+        <div style={{textAlign:'center', padding:'40px 0'}}>
+          <div style={{color:'var(--muted)', marginBottom:12}}>โหลดเมนูไม่สำเร็จ เน็ตอาจไม่เสถียร</div>
+          <button className="press" onClick={loadMenus}
+            style={{background:'var(--primary)', color:'#fff', border:'none', borderRadius:12,
+                    padding:'10px 22px', fontSize:15, fontWeight:600}}>ลองใหม่อีกครั้ง</button>
+        </div>}
+      {menus !== null && !menuErr && shown.length === 0 &&
         <div style={{textAlign:'center', color:'var(--muted)', padding:'50px 0'}}>ยังไม่มีเมนูในหมวดนี้</div>}
 
       {CAT_POSTER[cat] &&
