@@ -2164,7 +2164,7 @@ function ocPayCalc(pay,ym){
         holDays++;
         let hrs=cfg.shiftHrs||10;
         const tt=(times[d]||{})[st.id];
-        if(tt&&tt.i&&tt.o){ const mi=ocPayMin(tt.i), mo2=ocPayMin(tt.o); if(mi!=null&&mo2!=null){ hrs=(mo2-mi)/60; if(hrs<0) hrs+=24; } }
+        if(tt&&tt.i&&tt.o){ const nh=ocPayNetHrs(tt); if(nh!=null) hrs=nh; }
         holPay += hrs*hourRate*2;
       } else days++;
     }
@@ -2191,7 +2191,7 @@ function ocPayCalc(pay,ym){
       if(tt&&tt.i&&tt.o){
         const mi=ocPayMin(tt.i), mo2=ocPayMin(tt.o);
         if(mi!=null&&mo2!=null){
-          let hrs=(mo2-mi)/60; if(hrs<0) hrs+=24;
+          let hrs=ocPayNetHrs(tt);
           missH+=Math.floor(Math.max(0,(cfg.shiftHrs||10)-hrs));
           otAuto+=Math.floor(Math.max(0,hrs-(cfg.shiftHrs||10)));
         }
@@ -2370,10 +2370,10 @@ function ocPayPersonDays(pay,ym,stId){
     const isHol=((hol[d]||[]).indexOf(stId))>=0;
     const tt=(times[d]||{})[stId]||{};
     let hrs=null;
-    if(tt.i&&tt.o){ const a=ocPayMin(tt.i), b=ocPayMin(tt.o); if(a!=null&&b!=null){ hrs=(b-a)/60; if(hrs<0)hrs+=24; } }
+    if(tt.i&&tt.o){ hrs=ocPayNetHrs(tt); }
     const otH=(!isHol&&hrs!=null)? Math.floor(Math.max(0,hrs-(cfg.shiftHrs||10))) : 0;
     const miss=(!isHol&&hrs!=null)? Math.floor(Math.max(0,(cfg.shiftHrs||10)-hrs)) : 0;
-    out.push({ d, cups:Number(cups[d])||0, com: pd.comIds.indexOf(stId)>=0? pd.each:0, tin:tt.i||'', tout:tt.o||'', hrs, otH, miss, isHol });
+    out.push({ d, cups:Number(cups[d])||0, com: pd.comIds.indexOf(stId)>=0? pd.each:0, tin:tt.i||'', tout:tt.o||'', brk:Number(tt.b)||0, hrs, otH, miss, isHol });
   }
   return out;
 }
@@ -2422,7 +2422,7 @@ async function ocPayPersonImage(pay,ym,stId){
     g.fillStyle= o.isHol? '#FBE9E5' : (i%2? '#F5EEDD':'#FFFFFF'); g.fillRect(0,y,W,rowH);
     g.fillStyle='#3B2F24'; g.font=F(400,15.5);
     const vals=[String(o.d), o.cups?num(o.cups):'–', o.com?num(Math.round(o.com)):'–', o.tin||'–', o.tout||'–',
-      o.hrs!=null?(Math.round(o.hrs*10)/10).toString():'–', o.otH?String(o.otH):'–', o.isHol?'🆘 ×2':(o.otH?'OT':(o.miss?('ขาด '+o.miss+' ชม.'):''))];
+      o.hrs!=null?(Math.round(o.hrs*10)/10).toString():'–', o.otH?String(o.otH):'–', o.isHol?'🆘 ×2':(o.brk?('พัก '+o.brk+' น.'):(o.otH?'OT':(o.miss?('ขาด '+o.miss+' ชม.'):'')))];
     vals.forEach((v,k)=>{ g.textAlign=cols[k][2]; g.fillText(v,cols[k][1],y+26); });
     y+=rowH;
   });
@@ -2542,6 +2542,14 @@ function OCPayTime({value,onChange}){
 /* ================================================================
    ⏱ เวลาเข้า-ออก (จากเครื่องสแกนนิ้ว) — fpScans/{YYYY-MM}
    ================================================================ */
+function ocPayNetHrs(tt){
+  if(!tt||!tt.i||!tt.o) return null;
+  const a=ocPayMin(tt.i), b=ocPayMin(tt.o);
+  if(a==null||b==null) return null;
+  let h=(b-a)/60; if(h<0) h+=24;
+  const br=(Number(tt.b)||0)/60;
+  return Math.max(0, h-br);
+}
 function attHM(t){ if(!t) return null; const p=String(t).split(':'); const h=+p[0], m=+p[1]; return (isNaN(h)||isNaN(m))? null : h*60+m; }
 function attHours(i,o){
   const a=attHM(i), b=attHM(o);
@@ -2586,7 +2594,24 @@ function AttendPanel({ user }){
       const rows=Object.keys(scans[d]||{})
         .filter(p=> who==='all' || String(p)===who)
         .sort((a,b)=>(+a)-(+b))
-        .map(p=>({ pin:p, ...(scans[d][p]||{}) }));
+        .map(p=>{
+          const v=scans[d][p]||{};
+          const list=String(v.t||'').split(',').map(x=>x.trim()).filter(Boolean).sort();
+          const pairs=[]; let net=0;
+          if(list.length>=2){
+            for(let k=0;k+1<list.length;k+=2){
+              const h=attHours(list[k],list[k+1]);
+              pairs.push({ i:list[k], o:list[k+1], h });
+              if(h) net+=h;
+            }
+            if(list.length%2) pairs.push({ i:list[list.length-1], o:'', h:null });
+          } else if(v.i){
+            const h=attHours(v.i, (v.o&&v.o!==v.i)? v.o : '');
+            pairs.push({ i:v.i, o:(v.o&&v.o!==v.i)? v.o:'', h });
+            net = h || 0;
+          }
+          return { pin:p, ...v, pairs, net:Math.round(net*10)/10 };
+        });
       if(rows.length) out.push({ d, rows });
     });
     return out;
@@ -2700,7 +2725,16 @@ function OCTabPay({ toast }){
             const cur=(times[d]||{})[sid];
             if(cur && (cur.i||cur.o)) return;
             const v=sc[d][pin]||{};
-            (times[d]||(times[d]={}))[sid]={ i:v.i||'', o:(v.o&&v.o!==v.i)? v.o:'' };
+            const list=String(v.t||'').split(',').map(x=>x.trim()).filter(Boolean).sort();
+            let brk=0;
+            if(list.length>=4){
+              const usable=list.length - (list.length%2);
+              for(let k=1;k+1<usable;k+=2){
+                const g=ocPayMin(list[k+1])-ocPayMin(list[k]);
+                if(g>0) brk+=g;
+              }
+            }
+            (times[d]||(times[d]={}))[sid]={ i:v.i||'', o:(v.o&&v.o!==v.i)? v.o:'', b:brk };
             ch=true;
           });
         });
@@ -2849,7 +2883,7 @@ function OCTabPay({ toast }){
                     const st=pay.staff.find(s=>s.id===id); if(!st) return null;
                     const tt=tms[id]||{};
                     let info='';
-                    if(tt.i&&tt.o){ const mi=ocPayMin(tt.i), mo2=ocPayMin(tt.o); if(mi!=null&&mo2!=null){ let h=(mo2-mi)/60; if(h<0)h+=24; const ex=Math.floor(Math.max(0,h-(cfg.shiftHrs||10))); info=ocFmt(h,1)+' ชม.'+(ex>0?' · OT '+ocFmt(ex,1):''); } }
+                    if(tt.i&&tt.o){ const h=ocPayNetHrs(tt); if(h!=null){ const ex=Math.floor(Math.max(0,h-(cfg.shiftHrs||10))); const br=Number(tt.b)||0; info=ocFmt(h,1)+' ชม.'+(br>0?' (พัก '+br+'น.)':'')+(ex>0?' · OT '+ocFmt(ex,1):''); } }
                     return (
                       <div key={id} className="flex items-center gap-1.5 py-0.5 text-[12px] flex-wrap">
                         <span className="kanit" style={{width:44}}>{st.name.slice(0,5)}</span>
