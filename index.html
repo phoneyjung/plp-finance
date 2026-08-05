@@ -2594,7 +2594,7 @@ function AttendPanel({ user }){
 
   const stat=React.useMemo(()=>{
     let dd=0, hh=0;
-    days.forEach(x=>x.rows.forEach(r=>{ dd++; const h=attHours(r.i,r.o); if(h) hh+=h; }));
+    days.forEach(x=>x.rows.forEach(r=>{ dd++; if(r.net) hh+=r.net; }));
     return { days:dd, hours:Math.round(hh*10)/10 };
   },[days]);
 
@@ -2643,24 +2643,28 @@ function AttendPanel({ user }){
               <div className="kanit text-[14px]" style={{fontWeight:600}}>{d} {['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'][M-1]} <span className="text-[12px]" style={{fontWeight:400,color:'var(--muted)'}}>({DOW[dt.getDay()]})</span></div>
               <div className="text-[11px]" style={{color:'var(--muted)'}}>{rows.length} คน</div>
             </div>
-            {rows.map(r=>{
-              const h=attHours(r.i,r.o);
-              return (
-                <div key={r.pin} className="flex items-center gap-2 py-1.5" style={{borderTop:'1px solid var(--line)'}}>
+            {rows.map(r=>(
+              <div key={r.pin} className="py-1.5" style={{borderTop:'1px solid var(--line)'}}>
+                <div className="flex items-center gap-2">
                   <div className="kanit text-[13.5px] flex-1 min-w-0" style={{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{nameOf(r.pin)}</div>
-                  <div className="num text-[13px]" style={{color:'var(--ink)'}}>{r.i||'–'}</div>
-                  <div className="text-[11px]" style={{color:'var(--muted)'}}>→</div>
-                  <div className="num text-[13px]" style={{color: r.o? 'var(--ink)':'var(--neg)'}}>{r.o||'ยังไม่ออก'}</div>
-                  <div className="num text-[12.5px]" style={{minWidth:52,textAlign:'right',color: h==null?'var(--muted)':(h>=10?'#3E7D3E':'var(--muted)')}}>{h!=null? h+' ชม.' : '–'}</div>
+                  {r.pairs.length>1 && <span className="text-[10.5px]" style={{color:'var(--muted)'}}>{r.pairs.length} ช่วง</span>}
+                  <div className="num text-[13px]" style={{fontWeight:700,color: r.net>=10?'#3E7D3E':'var(--ink)'}}>{r.net? r.net+' ชม.':'–'}</div>
                 </div>
-              );
-            })}
+                {r.pairs.map((p,k)=>(
+                  <div key={k} className="flex items-center gap-2 mt-0.5 text-[12.5px]" style={{color:'var(--muted)',paddingLeft:8}}>
+                    <span className="num">{p.i}</span><span>→</span>
+                    <span className="num" style={{color: p.o? 'inherit':'var(--neg)'}}>{p.o||'ยังไม่ออก'}</span>
+                    <span className="num" style={{marginLeft:'auto'}}>{p.h!=null? p.h+' ชม.':''}</span>
+                  </div>
+                ))}
+              </div>
+            ))}
           </div>
         );
       })}
 
       <div className="text-[11.5px] text-center pb-4 pt-1" style={{color:'var(--muted)'}}>
-        ข้อมูลจากเครื่องสแกนนิ้ว · สแกนแรกของวัน = เวลาเข้า · สแกนล่าสุด = เวลาออก
+        ข้อมูลจากเครื่องสแกนนิ้ว · สแกนเป็นคู่ เข้า→ออก · ออกไปทำธุระให้สแกนออก แล้วสแกนเข้าใหม่ตอนกลับ
       </div>
     </div>
   );
