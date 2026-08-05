@@ -2812,6 +2812,48 @@ function OCTabPay({ toast }){
   const clearTime=(d,id)=>setMon(m=>{ const t=m.times||(m.times={}); if(t[d]) delete t[d][id]; });
   const togHol=(d,id)=>setMon(m=>{ const hh=m.hol||(m.hol={}); const arr=hh[d]||(hh[d]=[]); const i=arr.indexOf(id); if(i>=0) arr.splice(i,1); else arr.push(id); });
 
+  const [fpBusy,setFpBusy]=useState(false);
+  const pullFp=async(force)=>{
+    if(!db){ toast('ออฟไลน์ ดึงไม่ได้','err'); return; }
+    setFpBusy(true);
+    try{
+      const s=await db.collection('fpScans').doc(ym).get();
+      if(!s.exists){ toast('ยังไม่มีข้อมูลสแกนเดือนนี้','err'); setFpBusy(false); return; }
+      const sc=(s.data()||{}).d||{};
+      let added=0, skipped=0, nomap=0;
+      upd(p=>{
+        const map={};
+        (p.staff||[]).forEach(st=>{ if(st.fpId!=null&&st.fpId!=='') map[String(st.fpId)]=st.id; });
+        const m=p.months[ym]||(p.months[ym]={});
+        const times=m.times||(m.times={});
+        const att=m.att||(m.att={});
+        Object.keys(sc).forEach(d=>{
+          Object.keys(sc[d]||{}).forEach(pin=>{
+            const sid=map[String(pin)];
+            if(!sid){ nomap++; return; }
+            const cur=(times[d]||{})[sid];
+            if(!force && cur && (cur.i||cur.o)){ skipped++; return; }
+            const v=sc[d][pin]||{};
+            const list=String(v.t||'').split(',').map(x=>x.trim()).filter(Boolean).sort();
+            let brk=0;
+            if(list.length>=4){
+              const usable=list.length-(list.length%2);
+              for(let k=1;k+1<usable;k+=2){ const g=ocPayMin(list[k+1])-ocPayMin(list[k]); if(g>0) brk+=g; }
+            }
+            (times[d]||(times[d]={}))[sid]={ i:v.i||'', o:(v.o&&v.o!==v.i)? v.o:'', b:brk };
+            const arr=att[d]||(att[d]=[]);
+            if(arr.indexOf(sid)<0) arr.push(sid);
+            added++;
+          });
+        });
+      });
+      let msg='ดึงเวลาแล้ว '+added+' รายการ';
+      if(skipped) msg+=' · ข้ามที่แก้มือ '+skipped;
+      if(nomap) msg+=' · ยังไม่จับคู่รหัส '+nomap;
+      toast(msg, added? 'ok':'err');
+    }catch(e){ console.error(e); toast('ดึงข้อมูลไม่สำเร็จ','err'); }
+    setFpBusy(false);
+  };
   const pull=async()=>{
     if(!db){ toast('ออฟไลน์ ดึงยอดไม่ได้','err'); return; }
     try{
@@ -2846,6 +2888,10 @@ function OCTabPay({ toast }){
           <button className="press kanit text-[12px] flex-1 py-1.5 rounded-lg" style={{background:'var(--soft)',color:'var(--primary)',border:'none'}} onClick={pull}>⇣ ดึงยอด</button>
           <button className="press kanit text-[12px] flex-1 py-1.5 rounded-lg text-white" style={{background:'#1D6F42',border:'none'}} onClick={()=>ocPayExport(pay,ym)}>⬇ Excel</button>
           <button className="press kanit text-[12px] flex-1 py-1.5 rounded-lg text-white" style={{background:'var(--primary)',border:'none'}} onClick={()=>ocPayImage(pay,ym)}>🖼 รูปสรุป</button>
+        </div>
+        <div className="flex gap-2 mt-2">
+          <button className="press kanit text-[12px] flex-1 py-1.5 rounded-lg" style={{background:'var(--soft)',color:'var(--primary)',border:'none',opacity:fpBusy?0.6:1}} disabled={fpBusy} onClick={()=>pullFp(false)}>🖐 ดึงเวลาสแกนนิ้ว</button>
+          <button className="press kanit text-[12px] py-1.5 px-3 rounded-lg" style={{background:'var(--card)',color:'var(--muted)',border:'1px solid var(--line)',opacity:fpBusy?0.6:1}} disabled={fpBusy} onClick={()=>{ if(window.confirm('ทับเวลาที่แก้มือไว้ทั้งหมดด้วยข้อมูลจากเครื่องสแกน?')) pullFp(true); }}>ทับทั้งหมด</button>
         </div>
       </div>
 
