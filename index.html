@@ -2702,6 +2702,7 @@ function OCTabPay({ toast }){
   const [expDay,setExpDay]=useState(null);
   const [saveState,setSaveState]=useState('idle');
   const [advOpen,setAdvOpen]=useState(null);
+  const [fpBusy,setFpBusy]=useState(false);
   const fpMergedRef=useRef('');
   useEffect(()=>{
     if(!db || !pay) return;
@@ -2812,7 +2813,6 @@ function OCTabPay({ toast }){
   const clearTime=(d,id)=>setMon(m=>{ const t=m.times||(m.times={}); if(t[d]) delete t[d][id]; });
   const togHol=(d,id)=>setMon(m=>{ const hh=m.hol||(m.hol={}); const arr=hh[d]||(hh[d]=[]); const i=arr.indexOf(id); if(i>=0) arr.splice(i,1); else arr.push(id); });
 
-  const [fpBusy,setFpBusy]=useState(false);
   const pullFp=async(force)=>{
     if(!db){ toast('ออฟไลน์ ดึงไม่ได้','err'); return; }
     setFpBusy(true);
