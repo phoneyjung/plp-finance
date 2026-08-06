@@ -2695,6 +2695,28 @@ function AttendPanel({ user }){
   );
 }
 
+class TabErrorBoundary extends React.Component{
+  constructor(p){ super(p); this.state={err:null}; }
+  static getDerivedStateFromError(err){ return { err }; }
+  componentDidCatch(err,info){ console.error('TAB ERROR', err, info); this.setState({info}); }
+  render(){
+    if(!this.state.err) return this.props.children;
+    const msg=String(this.state.err && (this.state.err.stack||this.state.err.message||this.state.err));
+    return (
+      <div className="p-4">
+        <div className="card p-4" style={{borderLeft:'4px solid var(--neg)'}}>
+          <div className="kanit text-[15px]" style={{fontWeight:700,color:'var(--neg)'}}>⚠️ หน้านี้มีปัญหา</div>
+          <div className="text-[12.5px] mt-1" style={{color:'var(--muted)'}}>ส่วนอื่นของแอปยังใช้ได้ปกติ · แคปหน้าจอนี้ส่งให้ผู้ดูแลได้เลย</div>
+          <pre style={{whiteSpace:'pre-wrap',fontSize:11,marginTop:10,background:'var(--soft)',padding:10,borderRadius:8,maxHeight:220,overflow:'auto',color:'var(--ink)'}}>{msg.slice(0,900)}</pre>
+          <div className="flex gap-2 mt-3">
+            <button className="press kanit text-[13px] flex-1 py-2 rounded-xl text-white" style={{background:'var(--primary)',border:'none'}} onClick={()=>{ try{ localStorage.removeItem('plp_tab'); }catch(e){} location.reload(); }}>กลับหน้าแรก</button>
+            <button className="press kanit text-[13px] py-2 px-4 rounded-xl" style={{background:'var(--card)',border:'1px solid var(--line)'}} onClick={()=>{ try{ navigator.clipboard.writeText(msg); }catch(e){} }}>คัดลอก</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+}
 function OCTabPay({ toast }){
   const [pay,setPay]=useState(null);
   const [ym,setYm]=useState(ymOf(today()));
@@ -3110,8 +3132,10 @@ function Main({shop,user,canSwitch,onSwitch,logout}){
         {tab==='orders' && <OwlOrdersPanel/>}
         {tab==='stamp' && <StampPanel shop={shop} user={user} toast={toast}/>}
         {tab==='print' && <PrintPanel user={user}/>}
+        <TabErrorBoundary key={tab}>
         {tab==='cost' && <CostPanel toast={toast}/>}
         {tab==='attend' && <AttendPanel user={user}/>}
+        </TabErrorBoundary>
         {tab==='settings' && <Settings shop={shop} user={user} logout={logout} toast={toast}/>}
       </div>
 
