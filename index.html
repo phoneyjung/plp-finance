@@ -2747,6 +2747,31 @@ function ocPayNetHrs(tt){
   const br=(Number(tt.b)||0)/60;
   return Math.max(0, h-br);
 }
+/* ---- ทำความสะอาดเวลาสแกนนิ้ว (กันแตะซ้ำ / แตะหลง) ---- */
+const FP_DEDUP_MIN = 20;   /* แตะห่างกันน้อยกว่านี้ (นาที) = แตะซ้ำ ตัดทิ้ง */
+const FP_STRAY_MIN = 45;   /* จำนวนครั้งเป็นคี่ + ช่องว่างสั้นกว่านี้ = แตะหลง ตัดออก */
+function fpRaw(t){ return String(t||'').split(',').map(x=>x.trim()).filter(Boolean).sort(); }
+function fpMin(s){ const p=String(s).split(':'); const h=+p[0], m=+p[1]; return (isNaN(h)||isNaN(m))? null : h*60+m; }
+function fpClean(t){
+  const raw=fpRaw(t);
+  const out=[]; let last=null;
+  for(let i=0;i<raw.length;i++){
+    const v=fpMin(raw[i]); if(v==null) continue;
+    if(last!=null && (v-last)<FP_DEDUP_MIN) continue;
+    out.push(raw[i]); last=v;
+  }
+  let guard=0;
+  while(out.length>=3 && (out.length%2)===1 && guard++<8){
+    let bi=-1, bg=1e9;
+    for(let k=0;k+1<out.length;k++){
+      const g=fpMin(out[k+1])-fpMin(out[k]);
+      if(g<bg){ bg=g; bi=k+1; }
+    }
+    if(bi<0 || bg>FP_STRAY_MIN) break;
+    out.splice(bi,1);
+  }
+  return out;
+}
 function attHM(t){ if(!t) return null; const p=String(t).split(':'); const h=+p[0], m=+p[1]; return (isNaN(h)||isNaN(m))? null : h*60+m; }
 function attHours(i,o){
   const a=attHM(i), b=attHM(o);
@@ -2793,7 +2818,7 @@ function AttendPanel({ user }){
         .sort((a,b)=>(+a)-(+b))
         .map(p=>{
           const v=scans[d][p]||{};
-          const list=String(v.t||'').split(',').map(x=>x.trim()).filter(Boolean).sort();
+          const raw=fpRaw(v.t), list=fpClean(v.t);
           const pairs=[]; let net=0;
           if(list.length>=2){
             for(let k=0;k+1<list.length;k+=2){
@@ -2807,7 +2832,7 @@ function AttendPanel({ user }){
             pairs.push({ i:v.i, o:(v.o&&v.o!==v.i)? v.o:'', h });
             net = h || 0;
           }
-          return { pin:p, ...v, pairs, net:Math.round(net*10)/10 };
+          return { pin:p, ...v, pairs, fixed:Math.max(0, raw.length-list.length), net:Math.round(net*10)/10 };
         });
       if(rows.length) out.push({ d, rows });
     });
@@ -2870,6 +2895,7 @@ function AttendPanel({ user }){
                 <div className="flex items-center gap-2">
                   <div className="kanit text-[13.5px] flex-1 min-w-0" style={{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{nameOf(r.pin)}</div>
                   {r.pairs.length>1 && <span className="text-[10.5px]" style={{color:'var(--muted)'}}>{r.pairs.length} ช่วง</span>}
+                  {r.fixed>0 && <span className="text-[10.5px]" style={{color:'var(--muted)',opacity:.75}}>ตัดซ้ำ {r.fixed}</span>}
                   <div className="num text-[13px]" style={{fontWeight:700,color: r.net>=10?'#3E7D3E':'var(--ink)'}}>{r.net? r.net+' ชม.':'–'}</div>
                 </div>
                 {r.pairs.map((p,k)=>(
@@ -2886,7 +2912,8 @@ function AttendPanel({ user }){
       })}
 
       <div className="text-[11.5px] text-center pb-4 pt-1" style={{color:'var(--muted)'}}>
-        ข้อมูลจากเครื่องสแกนนิ้ว · สแกนเป็นคู่ เข้า→ออก · ออกไปทำธุระให้สแกนออก แล้วสแกนเข้าใหม่ตอนกลับ
+        ข้อมูลจากเครื่องสแกนนิ้ว · สแกนเป็นคู่ เข้า→ออก · ออกไปทำธุระให้สแกนออก แล้วสแกนเข้าใหม่ตอนกลับ<br/>
+        ระบบตัดสแกนซ้ำที่ห่างกันไม่ถึง {FP_DEDUP_MIN} นาทีให้อัตโนมัติ
       </div>
     </div>
   );
@@ -2945,7 +2972,7 @@ function OCTabPay({ toast }){
             const cur=(times[d]||{})[sid];
             if(cur && (cur.i||cur.o)) return;
             const v=sc[d][pin]||{};
-            const list=String(v.t||'').split(',').map(x=>x.trim()).filter(Boolean).sort();
+            const list=fpClean(v.t);
             let brk=0;
             if(list.length>=4){
               const usable=list.length - (list.length%2);
@@ -2954,7 +2981,9 @@ function OCTabPay({ toast }){
                 if(g>0) brk+=g;
               }
             }
-            (times[d]||(times[d]={}))[sid]={ i:v.i||'', o:(v.o&&v.o!==v.i)? v.o:'', b:brk };
+            const fi=list.length? list[0] : (v.i||'');
+            const fo=list.length>=2? list[list.length-1] : ((v.o&&v.o!==v.i)? v.o : '');
+            (times[d]||(times[d]={}))[sid]={ i:fi, o:fo, b:brk };
             ch=true;
           });
         });
@@ -3053,13 +3082,15 @@ function OCTabPay({ toast }){
             const cur=(times[d]||{})[sid];
             if(!force && cur && (cur.i||cur.o)){ skipped++; return; }
             const v=sc[d][pin]||{};
-            const list=String(v.t||'').split(',').map(x=>x.trim()).filter(Boolean).sort();
+            const list=fpClean(v.t);
             let brk=0;
             if(list.length>=4){
               const usable=list.length-(list.length%2);
               for(let k=1;k+1<usable;k+=2){ const g=ocPayMin(list[k+1])-ocPayMin(list[k]); if(g>0) brk+=g; }
             }
-            (times[d]||(times[d]={}))[sid]={ i:v.i||'', o:(v.o&&v.o!==v.i)? v.o:'', b:brk };
+            const fi=list.length? list[0] : (v.i||'');
+            const fo=list.length>=2? list[list.length-1] : ((v.o&&v.o!==v.i)? v.o : '');
+            (times[d]||(times[d]={}))[sid]={ i:fi, o:fo, b:brk };
             const arr=att[d]||(att[d]=[]);
             if(arr.indexOf(sid)<0) arr.push(sid);
             added++;
