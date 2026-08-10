@@ -1753,6 +1753,7 @@ function TeaStockPanel(){
   const [by,setBy]=useState('');
   const [prod,setProd]=useState(null);
   const [state,setState]=useState('load');
+  const [msg,setMsg]=useState('');
   useEffect(()=>{
     let stop=false;
     (async()=>{
@@ -1774,6 +1775,41 @@ function TeaStockPanel(){
   const totalOf=(k)=>lots[k].reduce((s,x)=>s+(Number(x.q)||0),0);
   const oldest=(k)=>{ const L=lots[k].filter(x=>(Number(x.q)||0)>0).slice().sort((a,b)=>a.d<b.d?-1:1); return L[0]||null; };
   const prodOf=(b)=>{ if(!prod) return 0; return prod.filter(x=>String(x.base||'').indexOf(b.match)>=0).reduce((s,x)=>s+(Number(x.qty)||0),0); };
+  const [pulling,setPulling]=useState(false);
+  const pullProd=async()=>{
+    if(!db) return;
+    setPulling(true);
+    try{
+      const days=[];
+      for(let i=0;i<7;i++){ const dt=new Date(); dt.setDate(dt.getDate()-i);
+        days.push(dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0')); }
+      const snaps=await Promise.all(days.map(dd=>db.collection('owlCost').doc('prod-'+dd).get().catch(()=>null)));
+      const found={milk:{},jasmine:{},thai:{}};
+      snaps.forEach((s,idx)=>{
+        if(!s||!s.exists) return;
+        ((s.data()||{}).list||[]).forEach(it=>{
+          const b=TEA_STOCK_BASES.find(x=>String(it.base||'').indexOf(x.match)>=0);
+          if(!b) return;
+          found[b.key][days[idx]]=(found[b.key][days[idx]]||0)+(Number(it.qty)||0);
+        });
+      });
+      let added=0;
+      setLots(o=>{
+        const n={...o};
+        TEA_STOCK_BASES.forEach(b=>{
+          const cur=[...(n[b.key]||[])];
+          Object.keys(found[b.key]).forEach(dd=>{
+            if(cur.some(x=>x.d===dd)) return;
+            cur.push({ d:dd, q:found[b.key][dd] }); added++;
+          });
+          n[b.key]=cur.sort((a,c)=>a.d<c.d?-1:1);
+        });
+        return n;
+      });
+      setMsg(added? ('ดึงมา '+added+' ล็อต · แก้จำนวนตามที่นับจริงได้เลย') : 'ไม่พบป้ายต้มชาย้อนหลัง 7 วัน');
+    }catch(e){ console.error(e); setMsg('ดึงไม่สำเร็จ'); }
+    setPulling(false);
+  };
   const save=async()=>{
     if(!db){ setState('err'); return; }
     setState('saving');
@@ -1832,6 +1868,16 @@ function TeaStockPanel(){
               <div className="kanit num text-[14px]" style={{fontWeight:700,color:'var(--primary)'}}>{totalOf(b.key)} ถุง</div>
             </div>
             {prod!==null && prodOf(b)>0 && <div className="text-[11px] mb-1.5" style={{color:'var(--muted)'}}>ต้มวันนี้ +{prodOf(b)} ถุง (จากป้ายที่พิมพ์ · ไว้เทียบ)</div>}
+            {lots[b.key].length===0 && (
+              <div className="text-[12px] mb-2 px-2 py-2 rounded-lg" style={{background:'var(--soft)',color:'var(--muted)'}}>
+                ยังไม่มีล็อต · กด <b>+ เพิ่มล็อต</b> แล้วเลือก <b>วันที่ผลิต</b> ของถุงนั้น (1 วันผลิต = 1 ล็อต)
+              </div>
+            )}
+            {lots[b.key].length>0 && (
+              <div className="flex items-center gap-1.5 mb-1 text-[11px]" style={{color:'var(--muted)'}}>
+                <span style={{width:132}}>วันที่ผลิต</span><span>จำนวนถุง (ครึ่งถุงได้)</span>
+              </div>
+            )}
             {lots[b.key].map((x,i)=>{
               const q=Number(x.q)||0, age=x.d?tsAge(x.d):0;
               const expired=q>0&&age>=b.days, warn=q>0&&age===b.days-1;
@@ -1854,6 +1900,10 @@ function TeaStockPanel(){
         );
       })}
       <div className="card p-3 mb-3">
+        <button className="press kanit text-[13px] w-full py-2 rounded-xl mb-2" style={{background:'var(--soft)',color:'var(--primary)',border:'none',opacity:pulling?0.6:1}} disabled={pulling} onClick={pullProd}>
+          ⬇ ดึงวันผลิตจากป้ายต้มชา (7 วันย้อนหลัง)
+        </button>
+        {msg && <div className="text-[11.5px] mb-2 text-center" style={{color:'var(--muted)'}}>{msg}</div>}
         <div className="flex items-center gap-2">
           <span className="text-[12px]" style={{color:'var(--muted)'}}>ผู้นับ</span>
           <input value={by} onChange={e=>setBy(e.target.value)} placeholder="ชื่อคนนับคืนนี้" style={{...selSt,flex:1}}/>
