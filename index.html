@@ -1739,6 +1739,137 @@ function OCShareQR({ toast }){
 })();
 
 /* ================ 🖨️ PRINT PANEL (Owl Cha ทุก role · แก้สูตรได้เฉพาะ admin) ================ */
+
+/* ============ 🧊 สต็อกชา (นับปิดร้าน · FIFO) ============ */
+const TEA_STOCK_BASES = [
+  { key:'milk',    name:'ชานม',        days:4, match:'ชานม' },
+  { key:'jasmine', name:'ชาเขียวมะลิ', days:3, match:'ชาเขียว' },
+  { key:'thai',    name:'ชาไทย',       days:3, match:'ชาไทย' },
+];
+function tsToday(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function tsAge(d){ const a=new Date(d+'T00:00:00'), b=new Date(tsToday()+'T00:00:00'); return Math.round((b-a)/86400000); }
+function TeaStockPanel(){
+  const [lots,setLots]=useState({milk:[],jasmine:[],thai:[]});
+  const [by,setBy]=useState('');
+  const [prod,setProd]=useState(null);
+  const [state,setState]=useState('load');
+  useEffect(()=>{
+    let stop=false;
+    (async()=>{
+      try{
+        if(db){
+          const s=await db.collection('owlCost').doc('teaStockLatest').get();
+          if(!stop && s.exists){ const v=s.data()||{}; if(v.lots) setLots({milk:[],jasmine:[],thai:[],...v.lots}); }
+          const p=await db.collection('owlCost').doc('prod-'+tsToday()).get();
+          if(!stop && p.exists) setProd((p.data()||{}).list||[]);
+        }
+      }catch(e){}
+      if(!stop) setState('idle');
+    })();
+    return ()=>{ stop=true; };
+  },[]);
+  const upd=(k,i,patch)=>setLots(o=>({...o,[k]:o[k].map((x,j)=>j===i?{...x,...patch}:x)}));
+  const del=(k,i)=>setLots(o=>({...o,[k]:o[k].filter((_,j)=>j!==i)}));
+  const add=(k)=>setLots(o=>({...o,[k]:[...o[k],{d:tsToday(),q:1}]}));
+  const totalOf=(k)=>lots[k].reduce((s,x)=>s+(Number(x.q)||0),0);
+  const oldest=(k)=>{ const L=lots[k].filter(x=>(Number(x.q)||0)>0).slice().sort((a,b)=>a.d<b.d?-1:1); return L[0]||null; };
+  const prodOf=(b)=>{ if(!prod) return 0; return prod.filter(x=>String(x.base||'').indexOf(b.match)>=0).reduce((s,x)=>s+(Number(x.qty)||0),0); };
+  const save=async()=>{
+    if(!db){ setState('err'); return; }
+    setState('saving');
+    try{
+      const clean={};
+      TEA_STOCK_BASES.forEach(b=>{ clean[b.key]=lots[b.key].filter(x=>x.d).map(x=>({d:x.d,q:Number(x.q)||0})); });
+      const doc={ date:tsToday(), lots:clean, by:by||'', t:new Date().toISOString() };
+      await db.collection('owlCost').doc('stock-'+tsToday()).set(doc);
+      await db.collection('owlCost').doc('teaStockLatest').set(doc);
+      setState('saved');
+    }catch(e){ console.error(e); setState('err'); }
+  };
+  const slip=()=>{
+    const out=['*** สต็อกชา (นับปิดร้าน) ***', opThDate(tsToday())+(by?(' · ผู้นับ '+by):''), '--------------------'];
+    TEA_STOCK_BASES.forEach(b=>{
+      out.push(b.name+' รวม '+totalOf(b.key)+' ถุง (เก็บ '+b.days+' วัน)');
+      const L=lots[b.key].slice().sort((a,b2)=>a.d<b2.d?-1:1);
+      const old=oldest(b.key);
+      L.forEach(x=>{
+        const q=Number(x.q)||0; if(!x.d||q<=0) return;
+        const age=tsAge(x.d);
+        let tag='';
+        if(age>=b.days) tag=' !! เกินอายุ-ทิ้ง';
+        else if(old && x.d===old.d) tag=' << ใช้ก่อน';
+        const boxes='☐'.repeat(Math.max(0,Math.floor(q)))+(q%1?' ◧':'');
+        out.push('• ผลิต '+opThDate(x.d).split(' ')[0]+' · '+q+' ถุง  '+boxes+tag);
+      });
+      out.push('');
+    });
+    out.push('--------------------');
+    out.push('ดึงถุงไปใช้ = ขีด ☐ ทันที (เก่าสุดก่อนเสมอ)');
+    return out;
+  };
+  const doPrintSlip=()=>{
+    const tls=slip();
+    let body='';
+    tls.forEach((t,i)=>{
+      const big=i===0;
+      const bold=big || t.indexOf('รวม ')>0;
+      body+='<div style="font-size:'+(big?40:28)+'px;font-weight:'+(bold?700:500)+';text-align:'+(big?'center':'left')+';line-height:1.5;">'+(opEscapeHtml(t)||'&nbsp;')+'</div>';
+    });
+    const htmlDoc='<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="width:560px;margin:0;padding:8px 4px;font-family:sans-serif;color:#000;">'+body+'<div style="height:20px;"></div></body></html>';
+    const backUrl=location.origin+location.pathname;
+    location.href='starpassprnt://v1/print/nopreview?back='+encodeURIComponent(backUrl)+'&html='+encodeURIComponent(htmlDoc);
+  };
+  const selSt={border:'1px solid var(--line)',borderRadius:10,padding:'7px 6px',fontSize:13,background:'#fff',outline:'none'};
+  if(state==='load') return <div className="text-center text-[13px] py-6" style={{color:'var(--muted)'}}>กำลังโหลด…</div>;
+  return (
+    <div>
+      {TEA_STOCK_BASES.map(b=>{
+        const old=oldest(b.key);
+        return (
+          <div key={b.key} className="card p-3 mb-3">
+            <div className="flex items-center justify-between mb-2">
+              <div className="kanit text-[14px]" style={{fontWeight:600}}>{b.name} <span className="text-[11px]" style={{fontWeight:400,color:'var(--muted)'}}>เก็บได้ {b.days} วัน</span></div>
+              <div className="kanit num text-[14px]" style={{fontWeight:700,color:'var(--primary)'}}>{totalOf(b.key)} ถุง</div>
+            </div>
+            {prod!==null && prodOf(b)>0 && <div className="text-[11px] mb-1.5" style={{color:'var(--muted)'}}>ต้มวันนี้ +{prodOf(b)} ถุง (จากป้ายที่พิมพ์ · ไว้เทียบ)</div>}
+            {lots[b.key].map((x,i)=>{
+              const q=Number(x.q)||0, age=x.d?tsAge(x.d):0;
+              const expired=q>0&&age>=b.days, warn=q>0&&age===b.days-1;
+              const isOld=old&&x.d===old.d&&q>0;
+              return (
+                <div key={i} className="flex items-center gap-1.5 mb-1.5 flex-wrap">
+                  <input type="date" value={x.d} onChange={e=>upd(b.key,i,{d:e.target.value})} style={{...selSt,width:132}}/>
+                  <button className="press" style={{...selSt,width:34,textAlign:'center'}} onClick={()=>upd(b.key,i,{q:Math.max(0,(Number(x.q)||0)-0.5)})}>−</button>
+                  <span className="num text-[14px]" style={{minWidth:30,textAlign:'center'}}>{q}</span>
+                  <button className="press" style={{...selSt,width:34,textAlign:'center'}} onClick={()=>upd(b.key,i,{q:(Number(x.q)||0)+0.5})}>＋</button>
+                  {expired && <span className="kanit text-[10.5px] px-2 py-0.5 rounded-full" style={{background:'#FBE3DF',color:'#B0483C'}}>เกินอายุ ทิ้ง</span>}
+                  {!expired && warn && <span className="kanit text-[10.5px] px-2 py-0.5 rounded-full" style={{background:'#FDEFD2',color:'#9A6A00'}}>ใช้วันนี้</span>}
+                  {!expired && !warn && isOld && <span className="kanit text-[10.5px] px-2 py-0.5 rounded-full" style={{background:'#F1E1B4',color:'#7A5C12'}}>ใช้ก่อน!</span>}
+                  <button className="press" style={{border:'none',background:'none',color:'var(--neg)',fontSize:14}} onClick={()=>del(b.key,i)}>✕</button>
+                </div>
+              );
+            })}
+            <button className="press kanit text-[12px] px-3 py-1 rounded-lg" style={{background:'var(--soft)',border:'none',color:'var(--primary)'}} onClick={()=>add(b.key)}>+ เพิ่มล็อต</button>
+          </div>
+        );
+      })}
+      <div className="card p-3 mb-3">
+        <div className="flex items-center gap-2">
+          <span className="text-[12px]" style={{color:'var(--muted)'}}>ผู้นับ</span>
+          <input value={by} onChange={e=>setBy(e.target.value)} placeholder="ชื่อคนนับคืนนี้" style={{...selSt,flex:1}}/>
+        </div>
+      </div>
+      <div className="flex gap-2 mb-2">
+        <button className="press kanit text-[14px] flex-1 py-3 rounded-xl text-white" style={{background:'var(--primary)',border:'none',fontWeight:600,opacity:state==='saving'?0.6:1}} disabled={state==='saving'} onClick={save}>💾 บันทึกนับคืนนี้</button>
+        <button className="press kanit text-[14px] py-3 px-4 rounded-xl" style={{background:'var(--card)',border:'1px solid var(--line)'}} onClick={doPrintSlip}>🖨️ พิมพ์ใบ</button>
+      </div>
+      {state==='saved' && <div className="text-[12px] text-center mb-2" style={{color:'var(--pos)'}}>✓ บันทึกแล้ว · ไปกับสรุป LINE 22:00</div>}
+      {state==='err' && <div className="text-[12px] text-center mb-2" style={{color:'var(--neg)'}}>บันทึกไม่สำเร็จ ลองใหม่</div>}
+      <div className="text-[11px] mb-3" style={{color:'var(--muted)'}}>พิมพ์ใบแปะตู้เย็น · กลางวันดึงถุงแล้วขีด ☐ บนใบ · คืนนี้นับจริงแล้วแก้เลขที่นี่ก่อนบันทึก</div>
+    </div>
+  );
+}
+
 const OP_BASES = ['เบสชานม','เบสชาไทย','เบสชาเขียวใส','น้ำเชื่อม','ไข่มุก','เบสนมสด'];
 const OP_SIZES = ['22','30','45','60','68','90','100'];
 const OP_SEED_RECIPES = [
@@ -1876,6 +2007,18 @@ function PrintPanel({ user }){
   const doPrint = ()=>{
     const tls = buildTextLines();
     if(!tls.length){ alert('ยังไม่มีข้อความให้พิมพ์'); return; }
+    if(mode==='form' && db){
+      try{
+        const items = plines.filter(l=>(l.qty||0)>0).map(l=>({ base:l.base, size:l.size, qty:l.qty, ts:new Date().toISOString() }));
+        if(items.length){
+          db.collection('owlCost').doc('prod-'+dateStr).set({
+            date: dateStr,
+            list: firebase.firestore.FieldValue.arrayUnion(...items),
+            t: new Date().toISOString()
+          },{ merge:true }).catch(()=>{});
+        }
+      }catch(e){}
+    }
     let body='';
     tls.forEach((t,i)=>{
       const big = (mode!=='free' && i===0);
@@ -1889,7 +2032,7 @@ function PrintPanel({ user }){
       '<body style="width:560px;margin:0;padding:8px 4px;font-family:sans-serif;color:#000;">'+body+
       '<div style="height:20px;"></div></body></html>';
     const backUrl = location.origin + location.pathname;
-    location.href = 'starpassprnt://v1/print/nopreview?back='+encodeURIComponent(backUrl)+'&html='+encodeURIComponent(htmlDoc);
+    setTimeout(()=>{ location.href = 'starpassprnt://v1/print/nopreview?back='+encodeURIComponent(backUrl)+'&html='+encodeURIComponent(htmlDoc); }, 250);
   };
 
   const updLine=(i,patch)=>{ const c=[...plines]; c[i]={...c[i],...patch}; setPlines(c); };
@@ -1907,7 +2050,7 @@ function PrintPanel({ user }){
         </div>
       )}
       <div className="flex gap-1.5 mt-2 mb-3 overflow-x-auto hide-scroll">
-        {[['form','🍵 ต้มชา'],['recipe','📖 สูตร'],['free','✏️ อิสระ']].map(t=>(
+        {[['form','🍵 ต้มชา'],['recipe','📖 สูตร'],['free','✏️ อิสระ'],['stock','🧊 สต็อกชา']].map(t=>(
           <button key={t[0]} onClick={()=>setMode(t[0])}
             className="press kanit text-[13px] px-3 py-1.5 rounded-full whitespace-nowrap"
             style={ mode===t[0] ? { background:'var(--primary)', color:'#fff', border:'none' } : { background:'var(--soft)', color:'var(--primary)', border:'none' } }>
@@ -2015,6 +2158,9 @@ function PrintPanel({ user }){
         </div>
       )}
 
+      {mode==='stock' && <TeaStockPanel/>}
+
+      {mode!=='stock' && <React.Fragment>
       <div className="card p-3 mb-3">
         <div className="kanit text-[13px] mb-2">👀 ตัวอย่างก่อนพิมพ์</div>
         <div className="kanit" style={{ border:'1px dashed var(--line)', borderRadius:12, padding:12, whiteSpace:'pre-wrap', fontSize:14, lineHeight:1.55 }}>
@@ -2026,6 +2172,7 @@ function PrintPanel({ user }){
       <div className="text-[11px] mt-2" style={{ color:'var(--muted)' }}>
         ต้องติดตั้งแอป Star PassPRNT และเลือกเครื่องพิมพ์ไว้ก่อน (ทำครั้งเดียว)
       </div>
+      </React.Fragment>}
     </div>
   );
 }
