@@ -1748,9 +1748,13 @@ const TEA_STOCK_BASES = [
 ];
 function tsToday(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 function tsAge(d){ const a=new Date(d+'T00:00:00'), b=new Date(tsToday()+'T00:00:00'); return Math.round((b-a)/86400000); }
-function TeaStockPanel(){
+function TeaStockPanel({ user }){
   const [lots,setLots]=useState({milk:[],jasmine:[],thai:[]});
   const [by,setBy]=useState('');
+  const [viewDate,setViewDate]=useState(tsToday());
+  const [meta,setMeta]=useState(null);
+  const [hist,setHist]=useState(null);
+  const [logOpen2,setLogOpen2]=useState(false);
   const [prod,setProd]=useState(null);
   const [state,setState]=useState('load');
   const [msg,setMsg]=useState('');
@@ -1759,13 +1763,47 @@ function TeaStockPanel(){
     (async()=>{
       try{
         if(db){
-          const s=await db.collection('owlCost').doc('teaStockLatest').get();
-          if(!stop && s.exists){ const v=s.data()||{}; if(v.lots) setLots({milk:[],jasmine:[],thai:[],...v.lots}); }
-          const p=await db.collection('owlCost').doc('prod-'+tsToday()).get();
-          if(!stop && p.exists) setProd((p.data()||{}).list||[]);
+          const s=await db.collection('owlCost').doc('stock-'+viewDate).get();
+          if(!stop){
+            if(s.exists){
+              const v=s.data()||{};
+              setLots({milk:[],jasmine:[],thai:[],...(v.lots||{})});
+              setBy(v.by||'');
+              setMeta({ exists:true, del:!!v.del, by:v.by||'', t:v.t||'', log:v.log||[] });
+            }else{
+              setMeta({ exists:false, del:false, by:'', t:'', log:[] });
+              if(viewDate===tsToday()){
+                const s2=await db.collection('owlCost').doc('teaStockLatest').get();
+                if(!stop && s2.exists){ const v2=s2.data()||{}; if(v2.lots) setLots({milk:[],jasmine:[],thai:[],...v2.lots}); }
+              }else{
+                setLots({milk:[],jasmine:[],thai:[]});
+                setBy('');
+              }
+            }
+          }
+          const p=await db.collection('owlCost').doc('prod-'+viewDate).get();
+          if(!stop) setProd(p.exists ? ((p.data()||{}).list||[]) : []);
         }
-      }catch(e){}
+      }catch(e){ console.error(e); }
       if(!stop) setState('idle');
+    })();
+    return ()=>{ stop=true; };
+  },[viewDate]);
+
+  useEffect(()=>{
+    if(!db){ setHist([]); return; }
+    let stop=false;
+    (async()=>{
+      const days=[];
+      for(let i=0;i<14;i++){ const dt=new Date(); dt.setDate(dt.getDate()-i);
+        days.push(dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0')); }
+      try{
+        const snaps=await Promise.all(days.map(dd=>db.collection('owlCost').doc('stock-'+dd).get().catch(()=>null)));
+        if(stop) return;
+        const h=[];
+        snaps.forEach((sn,i)=>{ if(sn&&sn.exists){ const v=sn.data()||{}; h.push({ d:days[i], by:v.by||'', del:!!v.del }); } });
+        setHist(h.sort((a,b2)=>a.d<b2.d?1:-1));
+      }catch(e){ if(!stop) setHist([]); }
     })();
     return ()=>{ stop=true; };
   },[]);
@@ -1810,20 +1848,68 @@ function TeaStockPanel(){
     }catch(e){ console.error(e); setMsg('ดึงไม่สำเร็จ'); }
     setPulling(false);
   };
+  const whoName=()=> (user&&user.name) || by || 'ไม่ระบุ';
+  const stTime=(iso)=>{ try{ const d=new Date(iso);
+      return d.getDate()+'/'+(d.getMonth()+1)+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+    }catch(e){ return ''; } };
+  const totalsNote=()=> TEA_STOCK_BASES.map(b=>b.name+' '+totalOf(b.key)).join(' · ')+' ถุง';
   const save=async()=>{
     if(!db){ setState('err'); return; }
     setState('saving');
     try{
       const clean={};
       TEA_STOCK_BASES.forEach(b=>{ clean[b.key]=lots[b.key].filter(x=>x.d).map(x=>({d:x.d,q:Number(x.q)||0})); });
-      const doc={ date:tsToday(), lots:clean, by:by||'', t:new Date().toISOString() };
-      await db.collection('owlCost').doc('stock-'+tsToday()).set(doc);
-      await db.collection('owlCost').doc('teaStockLatest').set(doc);
+      const now=new Date().toISOString();
+      const entry={ a:(meta&&meta.exists)?'แก้ไข':'บันทึก', by:whoName(), at:now, note:totalsNote() };
+      const log=[ ...((meta&&meta.log)||[]), entry ].slice(-40);
+      const doc={ date:viewDate, lots:clean, by:by||'', t:now, del:false, log:log };
+      await db.collection('owlCost').doc('stock-'+viewDate).set(doc);
+      const newest=[ ...(hist||[]).filter(h=>!h.del&&h.d!==viewDate).map(h=>h.d), viewDate ].sort().pop();
+      if(viewDate===newest) await db.collection('owlCost').doc('teaStockLatest').set(doc);
+      setMeta({ exists:true, del:false, by:by||'', t:now, log:log });
+      setHist(h=>{ const o=(h||[]).filter(x=>x.d!==viewDate);
+        return [{ d:viewDate, by:by||'', del:false }, ...o].sort((a,b2)=>a.d<b2.d?1:-1); });
       setState('saved');
     }catch(e){ console.error(e); setState('err'); }
   };
+  const removeRec=async()=>{
+    if(!db||!meta||!meta.exists) return;
+    if(!window.confirm('ลบบันทึกของ '+opThDate(viewDate)+' ?\n(เก็บประวัติไว้ กู้คืนได้)')) return;
+    setState('saving');
+    try{
+      const now=new Date().toISOString();
+      const log=[ ...((meta&&meta.log)||[]), { a:'ลบ', by:whoName(), at:now, note:'' } ].slice(-40);
+      await db.collection('owlCost').doc('stock-'+viewDate).set({ del:true, t:now, log:log },{ merge:true });
+      const rest=(hist||[]).filter(h=>!h.del&&h.d!==viewDate).map(h=>h.d).sort();
+      const newest=rest.pop();
+      const ls=await db.collection('owlCost').doc('teaStockLatest').get();
+      if(ls.exists && (ls.data()||{}).date===viewDate){
+        if(newest){
+          const nd=await db.collection('owlCost').doc('stock-'+newest).get();
+          if(nd.exists) await db.collection('owlCost').doc('teaStockLatest').set(nd.data());
+        }else{
+          await db.collection('owlCost').doc('teaStockLatest').set({ date:'', lots:{milk:[],jasmine:[],thai:[]}, t:now });
+        }
+      }
+      setMeta(m=>({ ...(m||{}), del:true, log:log }));
+      setHist(h=>(h||[]).map(x=>x.d===viewDate?{...x,del:true}:x));
+      setState('idle');
+    }catch(e){ console.error(e); setState('err'); }
+  };
+  const restoreRec=async()=>{
+    if(!db||!meta) return;
+    setState('saving');
+    try{
+      const now=new Date().toISOString();
+      const log=[ ...((meta&&meta.log)||[]), { a:'กู้คืน', by:whoName(), at:now, note:'' } ].slice(-40);
+      await db.collection('owlCost').doc('stock-'+viewDate).set({ del:false, t:now, log:log },{ merge:true });
+      setMeta(m=>({ ...(m||{}), del:false, log:log }));
+      setHist(h=>(h||[]).map(x=>x.d===viewDate?{...x,del:false}:x));
+      setState('idle');
+    }catch(e){ console.error(e); setState('err'); }
+  };
   const slip=()=>{
-    const out=['*** สต็อกชา (นับปิดร้าน) ***', opThDate(tsToday())+(by?(' · ผู้นับ '+by):''), '--------------------'];
+    const out=['*** สต็อกชา (นับปิดร้าน) ***', opThDate(viewDate)+(by?(' · ผู้นับ '+by):''), '--------------------'];
     TEA_STOCK_BASES.forEach(b=>{
       out.push(b.name+' รวม '+totalOf(b.key)+' ถุง (เก็บ '+b.days+' วัน)');
       const L=lots[b.key].slice().sort((a,b2)=>a.d<b2.d?-1:1);
@@ -1859,6 +1945,51 @@ function TeaStockPanel(){
   if(state==='load') return <div className="text-center text-[13px] py-6" style={{color:'var(--muted)'}}>กำลังโหลด…</div>;
   return (
     <div>
+      <div className="card p-3 mb-3">
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-[12px]" style={{color:'var(--muted)'}}>ดูบันทึกของ</span>
+          <input type="date" value={viewDate} max={tsToday()} onChange={e=>{ if(e.target.value){ setViewDate(e.target.value); setLogOpen2(false); } }} style={{...selSt,flex:1}}/>
+        </div>
+        {hist && hist.length>0 && (
+          <div className="flex gap-1.5 overflow-x-auto hide-scroll mb-1.5">
+            {(hist.some(h=>h.d===tsToday())?hist:[{d:tsToday(),by:'',del:false},...hist]).map(h=>(
+              <button key={h.d} className="press kanit text-[11.5px] px-2.5 py-1 rounded-full whitespace-nowrap"
+                onClick={()=>{ setViewDate(h.d); setLogOpen2(false); }}
+                style={ viewDate===h.d
+                  ? { background:'var(--primary)', color:'#fff', border:'none', textDecoration:h.del?'line-through':'none' }
+                  : { background:'var(--soft)', color:h.del?'var(--neg)':'var(--primary)', border:'none', textDecoration:h.del?'line-through':'none' } }>
+                {h.d===tsToday()?'วันนี้':h.d.slice(8,10)+'/'+h.d.slice(5,7)}
+              </button>
+            ))}
+          </div>
+        )}
+        <div className="text-[11.5px]" style={{color:'var(--muted)',lineHeight:1.6}}>
+          {meta&&meta.exists
+            ? <span>📌 บันทึกของ <b style={{color:'var(--ink)'}}>{opThDate(viewDate)}</b> · ผู้นับ {meta.by||'-'} · บันทึกเมื่อ {stTime(meta.t)}
+                {meta.del && <b style={{color:'var(--neg)'}}> · ถูกลบแล้ว</b>}
+                {(meta.log||[]).length>1 && <span> · แก้ไข {(meta.log||[]).length-1} ครั้ง</span>}</span>
+            : <span>ยังไม่มีบันทึกของ {opThDate(viewDate)}{viewDate===tsToday()?' · ตัวเลขตั้งต้นจากบันทึกล่าสุด นับจริงแล้วกดบันทึก':''}</span>}
+        </div>
+        {viewDate!==tsToday() && (
+          <div className="text-[11px] mt-1.5 px-2 py-1.5 rounded-lg" style={{background:'#FDEFD2',color:'#9A6A00'}}>
+            ⚠️ กำลังดู/แก้บันทึกย้อนหลัง — ไม่ใช่ของวันนี้
+          </div>
+        )}
+        {meta&&meta.exists&&(meta.log||[]).length>0 && (
+          <button className="press kanit text-[11.5px] px-2.5 py-1 rounded-lg mt-1.5" style={{background:'var(--soft)',color:'var(--muted)',border:'none'}}
+            onClick={()=>setLogOpen2(v=>!v)}>🕘 ประวัติการแก้ไข</button>
+        )}
+        {logOpen2 && meta && (
+          <div className="mt-2 pt-2" style={{borderTop:'1px dashed var(--line)'}}>
+            {(meta.log||[]).slice().reverse().map((g,gi)=>(
+              <div key={gi} className="text-[11.5px] mb-1" style={{color:'var(--muted)',lineHeight:1.55}}>
+                <b style={{color:'var(--ink)'}}>{g.a}</b> · {g.by} · {stTime(g.at)}
+                {g.note && <div style={{paddingLeft:10,opacity:.85}}>{g.note}</div>}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
       {TEA_STOCK_BASES.map(b=>{
         const old=oldest(b.key);
         return (
@@ -1867,7 +1998,7 @@ function TeaStockPanel(){
               <div className="kanit text-[14px]" style={{fontWeight:600}}>{b.name} <span className="text-[11px]" style={{fontWeight:400,color:'var(--muted)'}}>เก็บได้ {b.days} วัน</span></div>
               <div className="kanit num text-[14px]" style={{fontWeight:700,color:'var(--primary)'}}>{totalOf(b.key)} ถุง</div>
             </div>
-            {prod!==null && prodOf(b)>0 && <div className="text-[11px] mb-1.5" style={{color:'var(--muted)'}}>ต้มวันนี้ +{prodOf(b)} ถุง (จากป้ายที่พิมพ์ · ไว้เทียบ)</div>}
+            {prod!==null && prodOf(b)>0 && <div className="text-[11px] mb-1.5" style={{color:'var(--muted)'}}>{viewDate===tsToday()?'ต้มวันนี้':'ต้มวันที่เลือก'} +{prodOf(b)} ถุง (จากป้ายที่พิมพ์ · ไว้เทียบ)</div>}
             {lots[b.key].length===0 && (
               <div className="text-[12px] mb-2 px-2 py-2 rounded-lg" style={{background:'var(--soft)',color:'var(--muted)'}}>
                 ยังไม่มีล็อต · กด <b>+ เพิ่มล็อต</b> แล้วเลือก <b>วันที่ผลิต</b> ของถุงนั้น (1 วันผลิต = 1 ล็อต)
@@ -1910,9 +2041,17 @@ function TeaStockPanel(){
         </div>
       </div>
       <div className="flex gap-2 mb-2">
-        <button className="press kanit text-[14px] flex-1 py-3 rounded-xl text-white" style={{background:'var(--primary)',border:'none',fontWeight:600,opacity:state==='saving'?0.6:1}} disabled={state==='saving'} onClick={save}>💾 บันทึกนับคืนนี้</button>
+        <button className="press kanit text-[14px] flex-1 py-3 rounded-xl text-white" style={{background:'var(--primary)',border:'none',fontWeight:600,opacity:state==='saving'?0.6:1}} disabled={state==='saving'} onClick={save}>{viewDate===tsToday()?'💾 บันทึกนับคืนนี้':'💾 บันทึกแก้ไขย้อนหลัง'}</button>
         <button className="press kanit text-[14px] py-3 px-4 rounded-xl" style={{background:'var(--card)',border:'1px solid var(--line)'}} onClick={doPrintSlip}>🖨️ พิมพ์ใบ</button>
       </div>
+      {meta&&meta.exists&&!meta.del && (
+        <button className="press kanit text-[12.5px] w-full py-2 rounded-xl mb-2" style={{background:'none',border:'1px solid var(--line)',color:'var(--neg)'}}
+          onClick={removeRec}>🗑 ลบบันทึกของ {opThDate(viewDate)}</button>
+      )}
+      {meta&&meta.del && (
+        <button className="press kanit text-[12.5px] w-full py-2 rounded-xl mb-2" style={{background:'var(--soft)',border:'none',color:'var(--primary)'}}
+          onClick={restoreRec}>↩ กู้คืนบันทึกของ {opThDate(viewDate)}</button>
+      )}
       {state==='saved' && <div className="text-[12px] text-center mb-2" style={{color:'var(--pos)'}}>✓ บันทึกแล้ว · ไปกับสรุป LINE 22:00</div>}
       {state==='err' && <div className="text-[12px] text-center mb-2" style={{color:'var(--neg)'}}>บันทึกไม่สำเร็จ ลองใหม่</div>}
       <div className="text-[11px] mb-3" style={{color:'var(--muted)'}}>พิมพ์ใบแปะตู้เย็น · กลางวันดึงถุงแล้วขีด ☐ บนใบ · คืนนี้นับจริงแล้วแก้เลขที่นี่ก่อนบันทึก</div>
@@ -2384,7 +2523,7 @@ function PrintPanel({ user }){
         </div>
       )}
 
-      {mode==='stock' && <TeaStockPanel/>}
+      {mode==='stock' && <TeaStockPanel user={user}/>}
 
       {mode!=='stock' && !(mode==='form' && !showForm) && <React.Fragment>
       <div className="card p-3 mb-3">
