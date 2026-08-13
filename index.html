@@ -1772,13 +1772,8 @@ function TeaStockPanel({ user }){
               setMeta({ exists:true, del:!!v.del, by:v.by||'', t:v.t||'', log:v.log||[] });
             }else{
               setMeta({ exists:false, del:false, by:'', t:'', log:[] });
-              if(viewDate===tsToday()){
-                const s2=await db.collection('owlCost').doc('teaStockLatest').get();
-                if(!stop && s2.exists){ const v2=s2.data()||{}; if(v2.lots) setLots({milk:[],jasmine:[],thai:[],...v2.lots}); }
-              }else{
-                setLots({milk:[],jasmine:[],thai:[]});
-                setBy('');
-              }
+              setLots({milk:[],jasmine:[],thai:[]});
+              setBy('');
             }
           }
           const p=await db.collection('owlCost').doc('prod-'+viewDate).get();
@@ -1968,7 +1963,7 @@ function TeaStockPanel({ user }){
             ? <span>📌 บันทึกของ <b style={{color:'var(--ink)'}}>{opThDate(viewDate)}</b> · ผู้นับ {meta.by||'-'} · บันทึกเมื่อ {stTime(meta.t)}
                 {meta.del && <b style={{color:'var(--neg)'}}> · ถูกลบแล้ว</b>}
                 {(meta.log||[]).length>1 && <span> · แก้ไข {(meta.log||[]).length-1} ครั้ง</span>}</span>
-            : <span>ยังไม่มีบันทึกของ {opThDate(viewDate)}{viewDate===tsToday()?' · ตัวเลขตั้งต้นจากบันทึกล่าสุด นับจริงแล้วกดบันทึก':''}</span>}
+            : <span>ยังไม่มีบันทึกของ {opThDate(viewDate)} · กรอกใหม่ หรือกด ⬇ ดึงวันผลิตจากป้ายต้มชา</span>}
         </div>
         {viewDate!==tsToday() && (
           <div className="text-[11px] mt-1.5 px-2 py-1.5 rounded-lg" style={{background:'#FDEFD2',color:'#9A6A00'}}>
