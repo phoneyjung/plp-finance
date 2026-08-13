@@ -1981,6 +1981,14 @@ function PrintPanel({ user }){
   const [selR,setSelR] = useState('');
   const [selS,setSelS] = useState(0);
   const [editing,setEditing] = useState(false);
+  /* ---- ใบสั่งต้มชา: บันทึก + ประวัติแก้ไข ---- */
+  const [brews,setBrews]     = useState(null);
+  const [brewYM,setBrewYM]   = useState(()=>tsToday().slice(0,7));
+  const [editId,setEditId]   = useState(null);
+  const [showForm,setShowForm] = useState(false);
+  const [logOpen,setLogOpen] = useState(null);
+  const [showDel,setShowDel] = useState(false);
+  const [brewBusy,setBrewBusy] = useState(false);
 
   useEffect(()=>{ localStorage.setItem('owlprint', JSON.stringify({ lines:plines, free })); },[plines,free]);
 
@@ -2004,6 +2012,82 @@ function PrintPanel({ user }){
     localStorage.setItem('owlrecipes', JSON.stringify(rs));
     try{ if(db) await db.collection('owlCost').doc('print').set({ recipes:rs }); }catch(e){ console.error(e); }
   };
+  useEffect(()=>{
+    if(!db){ setBrews([]); return; }
+    let cancelled=false;
+    setBrews(null);
+    db.collection('owlCost').doc('brew-'+brewYM).get()
+      .then(sn=>{ if(!cancelled) setBrews((sn.exists && sn.data().list) || []); })
+      .catch(e=>{ console.error(e); if(!cancelled) setBrews([]); });
+    return ()=>{ cancelled=true; };
+  },[brewYM]);
+
+  const bWho  = ()=> (user && user.name) || 'ไม่ทราบชื่อ';
+  const bLog  = (a,note)=>({ a:a, by:bWho(), at:new Date().toISOString(), note:note||'' });
+  const bSum  = (rows)=> (rows||[]).map(r=>r.base+' '+r.size+' แก้ว × '+r.qty+' ถุง').join('\n');
+  const bBags = (rows)=> (rows||[]).reduce((t,r)=>t+(Number(r.qty)||0),0);
+  const bTime = (iso)=>{ try{ const d=new Date(iso);
+      return d.getDate()+'/'+(d.getMonth()+1)+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+    }catch(e){ return ''; } };
+
+  const bSave = async (list)=>{
+    setBrews(list);
+    if(!db) return;
+    setBrewBusy(true);
+    try{
+      await db.collection('owlCost').doc('brew-'+brewYM).set({ ym:brewYM, list:list, t:new Date().toISOString() });
+    }catch(e){ console.error(e); alert('บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง'); }
+    setBrewBusy(false);
+  };
+  const bPush = (b,entry)=> ({ ...b, log:[...(b.log||[]), entry].slice(-40) });
+
+  const bNew = ()=>{
+    setEditId(null);
+    setPlines([{ base:'เบสชานม', size:'45', qty:1 }]);
+    setDateStr(tsToday());
+    setShowForm(true);
+  };
+  const bEdit = (b)=>{
+    setEditId(b.id);
+    setPlines((b.rows||[]).map(r=>({ ...r })));
+    setDateStr(b.d || tsToday());
+    setBoxes(b.boxes!==false);
+    setShowRecipe(b.recipe!==false);
+    setShowForm(true);
+  };
+  const bCommit = ()=>{
+    const rows = plines.filter(l=>(Number(l.qty)||0)>0).map(l=>({ base:l.base, size:l.size, qty:Number(l.qty)||0 }));
+    if(!rows.length){ alert('ยังไม่มีรายการ'); return; }
+    const now = new Date().toISOString();
+    const cur = brews||[];
+    if(editId){
+      const old = cur.find(x=>x.id===editId);
+      if(!old){ alert('ไม่พบใบสั่งนี้'); return; }
+      const changed = bSum(old.rows)!==bSum(rows) || old.d!==dateStr;
+      const nb = bPush({ ...old, d:dateStr, rows:rows, boxes:boxes, recipe:showRecipe },
+                       bLog('แก้ไข', changed ? ('จาก: '+bSum(old.rows).replace(/\n/g,' · ')) : 'ปรับตัวเลือกการพิมพ์'));
+      bSave(cur.map(x=>x.id===editId?nb:x));
+    }else{
+      const nb = { id:'bw'+ocUid(), d:dateStr, rows:rows, boxes:boxes, recipe:showRecipe,
+                   done:false, del:false,
+                   by:{ id:(user&&user.id)||'', name:bWho() }, at:now,
+                   log:[ bLog('สร้าง', bSum(rows).replace(/\n/g,' · ')) ] };
+      bSave([nb, ...cur]);
+    }
+    setShowForm(false); setEditId(null);
+  };
+  const bDel = (b)=>{
+    if(!window.confirm('ลบใบสั่งนี้?\n(เก็บไว้ในประวัติ ตรวจย้อนหลังได้)')) return;
+    bSave((brews||[]).map(x=>x.id===b.id? bPush({...x, del:true}, bLog('ลบ')) : x));
+  };
+  const bRestore = (b)=> bSave((brews||[]).map(x=>x.id===b.id? bPush({...x, del:false}, bLog('กู้คืน')) : x));
+  const bDone = (b)=> bSave((brews||[]).map(x=>x.id===b.id?
+      bPush({...x, done:!x.done}, bLog(x.done?'ยกเลิกทำเสร็จ':'ทำเสร็จ')) : x));
+  const bPrint = async (b)=>{
+    await bSave((brews||[]).map(x=>x.id===b.id? bPush(x, bLog('พิมพ์')) : x));
+    doPrint({ rows:b.rows, date:b.d, boxes:b.boxes!==false, recipe:b.recipe!==false });
+  };
+
   const curR = (recipes||[]).find(r=>r.id===selR) || null;
   const curSize = curR && curR.sizes[Math.min(selS, curR.sizes.length-1)];
   const updR = (patch)=> saveRecipes(recipes.map(r=>r.id===selR?{...r,...patch}:r));
@@ -2025,7 +2109,22 @@ function PrintPanel({ user }){
     return r.items.map(it=>it.name+' '+opQty(it.qty*f)+' '+it.unit);
   };
 
-  const buildTextLines = ()=>{
+  const buildTextLines = (ov)=>{
+    if(ov && ov.rows){
+      const out=['*** ต้มชา ***', opThDate(ov.date), '--------------------'];
+      let tt=0;
+      ov.rows.forEach(l=>{
+        out.push(l.base+' สูตร '+l.size+' แก้ว');
+        let q='จำนวน '+l.qty+' ถุง';
+        if(ov.boxes) q += '  '+'☐'.repeat(Math.min(l.qty,10));
+        out.push(q);
+        if(ov.recipe){ const rc=recipeFor(l.base,l.size); if(rc) rc.forEach(x=>out.push('• '+x)); }
+        out.push('');
+        tt += (Number(l.qty)||0);
+      });
+      out.push('--------------------'); out.push('รวมทั้งหมด '+tt+' ถุง');
+      return out;
+    }
     if(mode==='free'){ const t=free.trim(); return t? t.split('\n') : []; }
     if(mode==='recipe'){
       if(!curR || !curSize) return [];
@@ -2054,15 +2153,18 @@ function PrintPanel({ user }){
     return out;
   };
 
-  const doPrint = ()=>{
-    const tls = buildTextLines();
+  const doPrint = (ovIn)=>{
+    const ov = (ovIn && ovIn.rows) ? ovIn : null;
+    const tls = buildTextLines(ov);
     if(!tls.length){ alert('ยังไม่มีข้อความให้พิมพ์'); return; }
-    if(mode==='form' && db){
+    if((ov || mode==='form') && db){
       try{
-        const items = plines.filter(l=>(l.qty||0)>0).map(l=>({ base:l.base, size:l.size, qty:l.qty, ts:new Date().toISOString() }));
+        const dts = ov ? ov.date : dateStr;
+        const srcRows = ov ? ov.rows : plines;
+        const items = srcRows.filter(l=>(l.qty||0)>0).map(l=>({ base:l.base, size:l.size, qty:l.qty, ts:new Date().toISOString() }));
         if(items.length){
-          db.collection('owlCost').doc('prod-'+dateStr).set({
-            date: dateStr,
+          db.collection('owlCost').doc('prod-'+dts).set({
+            date: dts,
             list: firebase.firestore.FieldValue.arrayUnion(...items),
             t: new Date().toISOString()
           },{ merge:true }).catch(()=>{});
@@ -2110,7 +2212,73 @@ function PrintPanel({ user }){
       </div>
 
       {mode==='form' && (
-        <div className="card p-3 mb-3">
+        <div className="mb-3">
+          <div className="flex items-center gap-2 mb-2">
+            <input type="month" value={brewYM} onChange={e=>setBrewYM(e.target.value)} style={{ ...selSt, width:150 }}/>
+            <div style={{ flex:1 }}/>
+            {brewBusy && <span className="text-[11px]" style={{ color:'var(--muted)' }}>กำลังบันทึก…</span>}
+            <button className="press kanit text-[12.5px] px-3 py-1.5 rounded-lg"
+              style={{ background:'var(--primary)', color:'#fff', border:'none' }} onClick={bNew}>+ สร้างใบสั่ง</button>
+          </div>
+
+          {brews===null && <div className="card p-3 text-[13px]" style={{ color:'var(--muted)' }}>กำลังโหลด…</div>}
+
+          {brews && brews.filter(b=>showDel||!b.del).length===0 && (
+            <div className="card p-4 text-center text-[13px]" style={{ color:'var(--muted)', lineHeight:1.7 }}>
+              ยังไม่มีใบสั่งต้มชาเดือนนี้<br/>
+              <span className="text-[12px]">กด “+ สร้างใบสั่ง” เพื่อเริ่ม</span>
+            </div>
+          )}
+
+          {brews && brews.filter(b=>showDel||!b.del).map(b=>(
+            <div key={b.id} className="card p-3 mb-2"
+              style={{ opacity: b.del?0.5:1, borderLeft:'4px solid '+(b.del?'var(--neg)':(b.done?'var(--pos)':'var(--primary)')) }}>
+              <div className="flex items-center gap-2">
+                <span className="kanit text-[14px]" style={{ fontWeight:600 }}>{opThDate(b.d)}</span>
+                {b.done && <span className="text-[10.5px] px-2 py-0.5 rounded-full" style={{ background:'var(--soft)', color:'var(--pos)' }}>ต้มแล้ว</span>}
+                {b.del && <span className="text-[10.5px] px-2 py-0.5 rounded-full" style={{ background:'var(--soft)', color:'var(--neg)' }}>ลบแล้ว</span>}
+                <div style={{ flex:1 }}/>
+                <span className="num text-[13px]" style={{ color:'var(--muted)' }}>{bBags(b.rows)} ถุง</span>
+              </div>
+              <div className="kanit text-[13px] mt-1.5" style={{ whiteSpace:'pre-wrap', lineHeight:1.6 }}>{bSum(b.rows)}</div>
+              <div className="text-[11px] mt-1.5" style={{ color:'var(--muted)' }}>
+                ลงโดย {(b.by&&b.by.name)||'-'} · {bTime(b.at)}
+                {(b.log||[]).length>1 && <span> · มีการแก้ไข {(b.log||[]).length-1} ครั้ง</span>}
+              </div>
+              <div className="flex gap-1.5 mt-2 flex-wrap">
+                {!b.del && <button className="press kanit text-[12px] px-3 py-1.5 rounded-lg" style={{ background:'var(--primary)', color:'#fff', border:'none' }} onClick={()=>bPrint(b)}>🖨️ พิมพ์</button>}
+                {!b.del && <button className="press kanit text-[12px] px-3 py-1.5 rounded-lg" style={{ background:'var(--soft)', color:'var(--primary)', border:'none' }} onClick={()=>bEdit(b)}>✏️ แก้ไข</button>}
+                {!b.del && <button className="press kanit text-[12px] px-3 py-1.5 rounded-lg" style={{ background:'var(--soft)', color:'var(--primary)', border:'none' }} onClick={()=>bDone(b)}>{b.done?'↩ ยังไม่ต้ม':'✓ ต้มแล้ว'}</button>}
+                <button className="press kanit text-[12px] px-3 py-1.5 rounded-lg" style={{ background:'var(--soft)', color:'var(--muted)', border:'none' }}
+                  onClick={()=>setLogOpen(logOpen===b.id?null:b.id)}>🕘 ประวัติ</button>
+                {!b.del && <button className="press kanit text-[12px] px-3 py-1.5 rounded-lg" style={{ background:'none', color:'var(--neg)', border:'1px solid var(--line)' }} onClick={()=>bDel(b)}>🗑 ลบ</button>}
+                {b.del && <button className="press kanit text-[12px] px-3 py-1.5 rounded-lg" style={{ background:'var(--soft)', color:'var(--primary)', border:'none' }} onClick={()=>bRestore(b)}>↩ กู้คืน</button>}
+              </div>
+              {logOpen===b.id && (
+                <div className="mt-2 pt-2" style={{ borderTop:'1px dashed var(--line)' }}>
+                  <div className="text-[11px] mb-1" style={{ color:'var(--muted)', fontWeight:600 }}>ประวัติทั้งหมด</div>
+                  {(b.log||[]).slice().reverse().map((g,gi)=>(
+                    <div key={gi} className="text-[11.5px] mb-1" style={{ color:'var(--muted)', lineHeight:1.55 }}>
+                      <b style={{ color:'var(--ink)' }}>{g.a}</b> · {g.by} · {bTime(g.at)}
+                      {g.note && <div style={{ paddingLeft:10, opacity:.85 }}>{g.note}</div>}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+
+          <label className="flex items-center gap-1.5 mt-2 text-[11.5px]" style={{ color:'var(--muted)' }}>
+            <input type="checkbox" checked={showDel} onChange={e=>setShowDel(e.target.checked)}/> แสดงใบที่ลบแล้ว
+          </label>
+        </div>
+      )}
+
+      {mode==='form' && showForm && (
+        <div className="card p-3 mb-3" style={{ border:'2px solid var(--primary)' }}>
+          <div className="kanit text-[14px] mb-2" style={{ fontWeight:600, color:'var(--primary)' }}>
+            {editId?'✏️ แก้ไขใบสั่ง':'📝 ใบสั่งใหม่'}
+          </div>
           <div className="flex items-center gap-2 mb-2">
             <span className="text-[12px]" style={{ color:'var(--muted)' }}>วันที่</span>
             <input type="date" value={dateStr} onChange={e=>setDateStr(e.target.value)} style={{ ...selSt, flex:1 }}/>
@@ -2142,6 +2310,14 @@ function PrintPanel({ user }){
           <label className="flex items-center gap-1.5 mt-1 text-[12px]" style={{ color:'var(--muted)' }}>
             <input type="checkbox" checked={showRecipe} onChange={e=>setShowRecipe(e.target.checked)}/> พิมพ์สูตร (วัตถุดิบ+ปริมาณ) ใต้แต่ละรายการ
           </label>
+          <div className="flex gap-2 mt-3">
+            <button className="press kanit text-[14px] py-2.5 rounded-xl"
+              style={{ flex:1, background:'var(--primary)', color:'#fff', border:'none', fontWeight:600 }}
+              onClick={bCommit}>{editId?'💾 บันทึกการแก้ไข':'💾 บันทึกใบสั่ง'}</button>
+            <button className="press kanit text-[14px] py-2.5 px-4 rounded-xl"
+              style={{ background:'var(--soft)', color:'var(--muted)', border:'none' }}
+              onClick={()=>{ setShowForm(false); setEditId(null); }}>ยกเลิก</button>
+          </div>
         </div>
       )}
 
@@ -2210,7 +2386,7 @@ function PrintPanel({ user }){
 
       {mode==='stock' && <TeaStockPanel/>}
 
-      {mode!=='stock' && <React.Fragment>
+      {mode!=='stock' && !(mode==='form' && !showForm) && <React.Fragment>
       <div className="card p-3 mb-3">
         <div className="kanit text-[13px] mb-2">👀 ตัวอย่างก่อนพิมพ์</div>
         <div className="kanit" style={{ border:'1px dashed var(--line)', borderRadius:12, padding:12, whiteSpace:'pre-wrap', fontSize:14, lineHeight:1.55 }}>
