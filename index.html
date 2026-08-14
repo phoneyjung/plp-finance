@@ -2122,6 +2122,7 @@ function PrintPanel({ user }){
   const [showForm,setShowForm] = useState(false);
   const [logOpen,setLogOpen] = useState(null);
   const [showDel,setShowDel] = useState(false);
+  const [oldOpen,setOldOpen] = useState({});
   const [brewBusy,setBrewBusy] = useState(false);
 
   useEffect(()=>{ localStorage.setItem('owlprint', JSON.stringify({ lines:plines, free })); },[plines,free]);
@@ -2364,16 +2365,25 @@ function PrintPanel({ user }){
             </div>
           )}
 
-          {brews && brews.filter(b=>showDel||!b.del).map(b=>(
+          {brews && brews.filter(b=>showDel||!b.del).map(b=>{
+            const isPast = b.d < tsToday();
+            const opened = !isPast || !!oldOpen[b.id];
+            return (
             <div key={b.id} className="card p-3 mb-2"
-              style={{ opacity: b.del?0.5:1, borderLeft:'4px solid '+(b.del?'var(--neg)':(b.done?'var(--pos)':'var(--primary)')) }}>
-              <div className="flex items-center gap-2">
-                <span className="kanit text-[14px]" style={{ fontWeight:600 }}>{opThDate(b.d)}</span>
+              style={{ opacity: b.del?0.5:(isPast&&!opened?0.72:1),
+                       borderLeft:'4px solid '+(b.del?'var(--neg)':(b.done?'var(--pos)':(isPast?'var(--line)':'var(--primary)'))) }}>
+              <div className="flex items-center gap-2"
+                onClick={isPast? ()=>setOldOpen(o=>({ ...o, [b.id]:!o[b.id] })) : undefined}
+                style={isPast?{cursor:'pointer'}:undefined}>
+                <span className="kanit text-[14px]" style={{ fontWeight:600, color:isPast?'var(--muted)':'var(--ink)' }}>{opThDate(b.d)}</span>
+                {isPast && <span className="text-[10.5px] px-2 py-0.5 rounded-full" style={{ background:'var(--soft)', color:'var(--muted)' }}>ผ่านแล้ว</span>}
                 {b.done && <span className="text-[10.5px] px-2 py-0.5 rounded-full" style={{ background:'var(--soft)', color:'var(--pos)' }}>ต้มแล้ว</span>}
                 {b.del && <span className="text-[10.5px] px-2 py-0.5 rounded-full" style={{ background:'var(--soft)', color:'var(--neg)' }}>ลบแล้ว</span>}
                 <div style={{ flex:1 }}/>
                 <span className="num text-[13px]" style={{ color:'var(--muted)' }}>{bBags(b.rows)} ถุง</span>
+                {isPast && <span className="text-[13px]" style={{ color:'var(--muted)' }}>{opened?'▴':'▾'}</span>}
               </div>
+              {opened && <React.Fragment>
               <div className="kanit text-[13px] mt-1.5" style={{ whiteSpace:'pre-wrap', lineHeight:1.6 }}>{bSum(b.rows)}</div>
               <div className="text-[11px] mt-1.5" style={{ color:'var(--muted)' }}>
                 ลงโดย {(b.by&&b.by.name)||'-'} · {bTime(b.at)}
@@ -2399,8 +2409,9 @@ function PrintPanel({ user }){
                   ))}
                 </div>
               )}
+              </React.Fragment>}
             </div>
-          ))}
+          );})}
 
           <label className="flex items-center gap-1.5 mt-2 text-[11.5px]" style={{ color:'var(--muted)' }}>
             <input type="checkbox" checked={showDel} onChange={e=>setShowDel(e.target.checked)}/> แสดงใบที่ลบแล้ว
