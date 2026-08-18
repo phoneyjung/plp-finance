@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Teddy Wash & Dry · คู่มือซักผ้า</title>
+<meta name="description" content="เกมจำลองซักผ้า วิธีใช้เครื่องซัก-อบ เทคนิค และโปรโมชั่น Teddy Wash & Dry สาขา ม.ศิลปากร">
+<link rel="icon" href="logo-teddy.jpg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --cream:#FAF6EE; --blue:#5BB8E8; --blue-d:#2E8FC4; --gold:#C68B4A; --gold-l:#E8C9A2;
+  --navy:#113E6C; --ink:#243240; --muted:#8A95A0; --line:#ECE5D6;
+  --pos:#2E9E5B; --pos-d:#1E7A42; --warn:#C98F16; --neg:#CE4A5A;
+  --pos-bg:#EAF7EF; --warn-bg:#FCF4DE; --neg-bg:#FCECEF;
+  --shadow:0 8px 26px rgba(17,62,108,.07);
+  --shadow-s:0 3px 12px rgba(17,62,108,.06);
+}
+*{ margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+html,body{ background:var(--cream); color:var(--ink); font-family:'Kanit',sans-serif; }
+body{ background-image:url('art-pattern.jpg'); background-size:430px; }
+body{ padding-bottom:88px; }
+.wrap{ max-width:520px; margin:0 auto; padding:0 16px; }
+
+/* ───────── HEADER ───────── */
+header{ background:linear-gradient(180deg,#FFFDF8,var(--cream)); padding:22px 0 6px; }
+header .wrap{ display:flex; align-items:center; gap:12px; }
+.logo-bear{ width:52px; height:52px; background:#fff; border-radius:16px; box-shadow:var(--shadow-s);
+  display:flex; align-items:center; justify-content:center; font-size:29px; flex:none; overflow:hidden; }
+.logo-bear img{ width:100%; height:100%; object-fit:cover; }
+.eyebrow{ font-size:10px; letter-spacing:.22em; color:var(--gold); font-weight:600; }
+header h1{ color:var(--navy); font-size:21px; font-weight:700; line-height:1.2; }
+header .sub{ color:var(--muted); font-size:12px; font-weight:300; margin-top:1px; }
+.hairline{ height:2px; background:linear-gradient(90deg,transparent,var(--gold-l),transparent); margin:14px 0 0; }
+
+/* ───────── NAV ───────── */
+nav{ position:fixed; bottom:0; left:0; right:0; background:rgba(255,255,255,.92);
+  backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
+  border-top:1px solid var(--line); box-shadow:0 -6px 20px rgba(17,62,108,.05); z-index:50; }
+nav .wrap{ display:flex; }
+nav button{ flex:1; border:none; background:none; font-family:'Kanit'; padding:9px 0 10px; font-size:11px; color:var(--muted); cursor:pointer; }
+nav button .ic{ display:block; font-size:21px; margin-bottom:2px; transition:transform .15s; }
+nav button.on{ color:var(--blue-d); font-weight:600; }
+nav button.on .ic{ transform:translateY(-2px) scale(1.12); }
+
+.page{ display:none; padding-top:16px; }
+.page.on{ display:block; animation:fadeUp .3s ease both; }
+@keyframes fadeUp{ 0%{ opacity:0; transform:translateY(8px) } 100%{ opacity:1; transform:none } }
+
+h2{ font-size:18px; font-weight:600; margin:4px 0 12px; color:var(--navy); }
+h2 small{ font-weight:300; font-size:12.5px; color:var(--muted); display:block; margin-top:1px; }
+.card{ background:#fff; border:none; box-shadow:var(--shadow); border-radius:20px; padding:16px; margin-bottom:13px; }
+
+.btn{ display:block; width:100%; border:none; border-radius:15px; padding:13.5px; font-family:'Kanit';
+  font-size:15.5px; font-weight:600; cursor:pointer; text-align:center; text-decoration:none; }
+.btn:active{ transform:scale(.985); }
+.btn-blue{ background:linear-gradient(135deg,var(--blue),var(--blue-d)); color:#fff; box-shadow:0 6px 16px rgba(91,184,232,.35); }
+.btn-gold{ background:linear-gradient(135deg,#D19A5C,var(--gold)); color:#fff; box-shadow:0 6px 16px rgba(198,139,74,.3); }
+.btn-line{ background:#06C755; color:#fff; box-shadow:0 6px 16px rgba(6,199,85,.28); }
+.btn-ghost{ background:#F3EDE0; color:var(--ink); }
+.btn[disabled]{ opacity:.45; pointer-events:none; }
+.btn+.btn{ margin-top:9px; }
+
+/* ───────── GAME ───────── */
+.g-hero{ background:linear-gradient(135deg,var(--navy) 15%,#1D6396 70%,var(--blue-d)); color:#fff;
+  border-radius:22px; padding:18px; margin-bottom:14px; position:relative; overflow:hidden; box-shadow:var(--shadow); }
+.g-hero .bub{ position:absolute; border-radius:50%; border:2px solid rgba(255,255,255,.35); animation:floatB 3.2s ease-in-out infinite; }
+.g-hero h3{ font-size:20px; font-weight:700; }
+.g-hero .ey{ font-size:9.5px; letter-spacing:.24em; color:#9CCBEE; font-weight:500; margin-bottom:3px; }
+.g-hero p{ font-size:12.5px; color:#C9DDF2; margin-top:4px; line-height:1.6; font-weight:300; }
+
+.stp{ display:flex; gap:4px; margin-bottom:14px; }
+.stp .s{ flex:1; text-align:center; }
+.stp .dot{ width:32px; height:32px; border-radius:50%; background:#EFE8D9; color:#B9AE97; margin:0 auto 4px;
+  display:flex; align-items:center; justify-content:center; font-size:14px; transition:all .25s; }
+.stp .t{ font-size:10px; color:var(--muted); }
+.stp .s.on .dot{ background:var(--blue); color:#fff; transform:scale(1.12); box-shadow:0 4px 10px rgba(91,184,232,.4); }
+.stp .s.on .t{ color:var(--blue-d); font-weight:600; }
+.stp .s.done .dot{ background:var(--pos); color:#fff; }
+
+.g-q{ font-size:16px; font-weight:600; margin-bottom:2px; color:var(--navy); }
+.g-sub{ font-size:12.5px; color:var(--muted); font-weight:300; line-height:1.6; margin-bottom:12px; }
+
+.items{ display:grid; grid-template-columns:1fr 1fr; gap:9px; }
+.item{ background:#fff; border:2px solid var(--line); border-radius:16px; padding:11px 9px; text-align:center;
+  cursor:pointer; transition:all .12s; position:relative; }
+.item .e{ font-size:29px; display:block; }
+.item b{ font-size:12px; font-weight:500; display:block; margin-top:4px; line-height:1.35; }
+.item span{ font-size:10.5px; color:var(--muted); font-weight:300; }
+.item.sel{ border-color:var(--blue); background:#F2FAFE; box-shadow:0 4px 12px rgba(91,184,232,.18); }
+.item.sel::after{ content:'✓'; position:absolute; top:6px; right:8px; width:20px; height:20px; border-radius:50%;
+  background:var(--blue); color:#fff; font-size:12px; display:flex; align-items:center; justify-content:center; }
+.item:active{ transform:scale(.96); }
+
+.meter{ margin:13px 0 4px; }
+.meter .m-lab{ display:flex; justify-content:space-between; font-size:11.5px; color:var(--muted); margin-bottom:5px; }
+.meter .m-bar{ height:10px; border-radius:5px; background:#EFE8D9; overflow:hidden; }
+.meter .m-fill{ height:100%; border-radius:5px; background:linear-gradient(90deg,var(--blue),var(--blue-d)); transition:width .3s; }
+.meter .m-fill.over{ background:linear-gradient(90deg,#E0864F,var(--neg)); }
+
+.togg{ display:flex; align-items:center; gap:10px; background:#FBF7EE; border-radius:14px; padding:11px 13px; margin-top:11px; cursor:pointer; }
+.togg .tk{ flex:none; width:44px; height:26px; border-radius:13px; background:#DDD4C2; position:relative; transition:.2s; }
+.togg .tk::after{ content:''; position:absolute; top:3px; left:3px; width:20px; height:20px; border-radius:50%; background:#fff; transition:.2s; }
+.togg.on .tk{ background:var(--pos); }
+.togg.on .tk::after{ left:21px; }
+.togg b{ font-size:13px; font-weight:500; }
+.togg span{ font-size:11px; color:var(--muted); font-weight:300; display:block; }
+
+.choice{ display:flex; gap:9px; margin-bottom:11px; }
+.ch{ flex:1; border:2px solid var(--line); border-radius:16px; background:#fff; padding:13px 6px; text-align:center; cursor:pointer; transition:all .12s; font-family:'Kanit'; }
+.ch .e{ font-size:26px; display:block; }
+.ch b{ font-size:13.5px; font-weight:600; display:block; margin-top:3px; }
+.ch span{ font-size:10.5px; color:var(--muted); font-weight:300; display:block; margin-top:1px; line-height:1.4; }
+.ch.sel{ border-color:var(--blue); background:#F2FAFE; box-shadow:0 4px 12px rgba(91,184,232,.18); }
+.ch.sel-g{ border-color:var(--gold); background:#FDF8F0; box-shadow:0 4px 12px rgba(198,139,74,.18); }
+.ch:active{ transform:scale(.96); }
+
+.machine{ width:200px; margin:8px auto 14px; background:#fff; border-radius:24px; box-shadow:var(--shadow); padding:14px; }
+.m-top{ display:flex; gap:5px; margin-bottom:10px; align-items:center; }
+.m-top i{ width:9px; height:9px; border-radius:50%; background:#E3DCCB; }
+.m-top i.go{ background:var(--pos); animation:pulseG 1s infinite; }
+.m-top .m-name{ margin-left:auto; font-size:10px; letter-spacing:.14em; color:var(--muted); font-weight:500; }
+.door{ width:150px; height:150px; margin:0 auto; border-radius:50%; border:11px solid #E4EDF5;
+  background:radial-gradient(circle at 38% 32%, #F2FAFF, #CFE8F8); overflow:hidden; position:relative;
+  display:flex; align-items:center; justify-content:center; }
+.door.dry{ border-color:#F2E3CE; background:radial-gradient(circle at 38% 32%, #FFF7EC, #F6DFC0); }
+.drum{ font-size:40px; letter-spacing:2px; }
+.spin .drum{ animation:spinDrum 0.75s linear infinite; }
+@keyframes spinDrum{ to{ transform:rotate(360deg); } }
+.suds{ position:absolute; inset:0; pointer-events:none; }
+.suds i{ position:absolute; border-radius:50%; border:2px solid rgba(255,255,255,.8); animation:sudsUp 1.6s linear infinite; }
+@keyframes sudsUp{ 0%{ transform:translateY(52px); opacity:0 } 25%{ opacity:1 } 100%{ transform:translateY(-64px); opacity:0 } }
+.m-done{ text-align:center; font-size:14px; font-weight:600; color:var(--pos-d); animation:bounceIn .5s ease both; }
+
+.verdict-hero{ text-align:center; padding:8px 0 4px; }
+.verdict-hero .big{ font-size:46px; font-weight:800; color:var(--blue-d); line-height:1; }
+.verdict-hero .of{ font-size:16px; color:var(--muted); font-weight:300; }
+.rank{ display:inline-block; margin:10px 0 6px; border-radius:999px; padding:7px 20px; font-size:16px; font-weight:700; color:#fff; animation:bounceIn .55s ease both; }
+.rk3{ background:linear-gradient(135deg,#3FBF77,var(--pos-d)); box-shadow:0 6px 16px rgba(46,158,91,.35); }
+.rk2{ background:linear-gradient(135deg,#5BB8E8,var(--blue-d)); box-shadow:0 6px 16px rgba(91,184,232,.35); }
+.rk1{ background:linear-gradient(135deg,#E4B33C,var(--warn)); box-shadow:0 6px 16px rgba(201,143,22,.35); }
+.rk0{ background:linear-gradient(135deg,#E0687A,var(--neg)); box-shadow:0 6px 16px rgba(206,74,90,.35); }
+.cost-line{ font-size:12.5px; color:var(--muted); font-weight:300; margin-top:3px; }
+.fnd{ display:flex; gap:10px; padding:10px 0; border-bottom:1px dashed var(--line); }
+.fnd:last-child{ border-bottom:none; }
+.fnd .fi{ flex:none; width:26px; height:26px; border-radius:50%; font-size:13px; display:flex; align-items:center; justify-content:center; }
+.f2 .fi{ background:var(--pos-bg); } .f1 .fi{ background:var(--warn-bg); } .f0 .fi{ background:var(--neg-bg); }
+.fnd p{ font-size:13px; line-height:1.6; flex:1; }
+.f2 p{ color:#2C6E45; } .f1 p{ color:#8A6410; } .f0 p{ color:#A83646; }
+
+/* ───────── HOWTO ───────── */
+.seg{ display:flex; background:#F1EBDD; border-radius:14px; padding:4px; margin-bottom:13px; }
+.seg button{ flex:1; border:none; border-radius:11px; padding:10px; font-family:'Kanit'; font-size:14px; font-weight:600; background:none; color:var(--muted); cursor:pointer; }
+.seg button.on{ background:#fff; color:var(--blue-d); box-shadow:var(--shadow-s); }
+.step{ display:flex; gap:12px; align-items:flex-start; background:#fff; box-shadow:var(--shadow-s); border-radius:18px; padding:14px; margin-bottom:10px; }
+.step .n{ flex:none; width:40px; height:40px; border-radius:13px; background:linear-gradient(135deg,var(--blue),var(--blue-d)); color:#fff; font-size:16px; font-weight:700; display:flex; align-items:center; justify-content:center; }
+.step.dry .n{ background:linear-gradient(135deg,#D19A5C,var(--gold)); }
+.step .e{ flex:none; font-size:29px; width:37px; text-align:center; }
+.step b{ font-size:14.5px; font-weight:600; display:block; }
+.step p{ font-size:12.5px; color:var(--muted); line-height:1.62; margin-top:2px; font-weight:300; }
+.callout{ border-radius:15px; padding:12px 14px; font-size:12.5px; line-height:1.65; margin-bottom:12px; }
+.co-blue{ background:#EAF5FC; color:#1F6E9C; }
+.co-red{ background:var(--neg-bg); color:#A83646; }
+
+/* ───────── TIPS ───────── */
+.tip{ background:#fff; box-shadow:var(--shadow-s); border-radius:18px; padding:13px 14px; margin-bottom:10px; display:flex; gap:12px; }
+.tip .e{ flex:none; font-size:27px; width:35px; text-align:center; }
+.tip b{ font-size:14px; font-weight:600; display:block; }
+.tip p{ font-size:12.5px; color:var(--muted); line-height:1.62; margin-top:2px; font-weight:300; }
+.temp-row{ display:flex; gap:9px; margin-bottom:13px; }
+.temp{ flex:1; border-radius:16px; padding:12px 8px; text-align:center; color:#fff; box-shadow:var(--shadow-s); }
+.temp b{ font-size:14.5px; font-weight:700; display:block; }
+.temp span{ font-size:11px; line-height:1.5; display:block; margin-top:3px; opacity:.95; font-weight:300; }
+.t-cold{ background:linear-gradient(135deg,#6BB7E0,#3E93C9); }
+.t-warm{ background:linear-gradient(135deg,#E9B052,#CE8F27); }
+.t-hot{ background:linear-gradient(135deg,#E58170,#C9564B); }
+
+/* ───────── PROMO ───────── */
+.price-tbl{ width:100%; border-collapse:collapse; font-size:14px; }
+.price-tbl th{ text-align:left; font-weight:500; color:var(--muted); font-size:12px; padding:5px 4px; border-bottom:1px solid var(--line); }
+.price-tbl td{ padding:9px 4px; border-bottom:1px solid #F5F0E4; }
+.price-tbl td.num{ font-weight:700; color:var(--blue-d); }
+.promo-big{ background:linear-gradient(135deg,#FFF8E8,#FCEBCB); border-radius:20px; padding:16px; margin-bottom:12px; box-shadow:var(--shadow-s); position:relative; overflow:hidden; }
+.promo-big::before{ content:'✦'; position:absolute; right:-8px; top:-14px; font-size:70px; color:rgba(198,139,74,.12); }
+.promo-big .p-title{ font-size:16.5px; font-weight:700; color:#8A6410; }
+.promo-big .p-dis{ float:right; background:linear-gradient(135deg,#D19A5C,var(--gold)); color:#fff; border-radius:999px; padding:4px 15px; font-size:14px; font-weight:700; box-shadow:0 4px 10px rgba(198,139,74,.3); }
+.promo-big p{ font-size:12.5px; color:#7A6428; line-height:1.65; margin-top:5px; font-weight:300; }
+.svc{ display:flex; gap:12px; align-items:flex-start; padding:12px 0; border-bottom:1px dashed var(--line); }
+.svc:last-child{ border-bottom:none; }
+.svc .e{ flex:none; font-size:25px; width:33px; text-align:center; }
+.svc b{ font-size:14px; font-weight:600; display:block; }
+.svc p{ font-size:12px; color:var(--muted); line-height:1.6; margin-top:1px; font-weight:300; }
+.foot-note{ text-align:center; font-size:11.5px; color:var(--muted); margin:16px 0 6px; line-height:1.8; font-weight:300; }
+
+/* ───────── FX ───────── */
+@keyframes floatB{ 0%,100%{ transform:translateY(0) } 50%{ transform:translateY(-8px) } }
+@keyframes pulseG{ 0%,100%{ opacity:1 } 50%{ opacity:.4 } }
+@keyframes cfFall{ 0%{ transform:translateY(-8vh) rotate(0deg) } 100%{ transform:translateY(108vh) rotate(680deg) } }
+@keyframes bounceIn{ 0%{ transform:scale(.4); opacity:0 } 55%{ transform:scale(1.14) } 100%{ transform:scale(1); opacity:1 } }
+.pop{ animation:fadeUp .3s ease both; }
+#cf{ position:fixed; inset:0; pointer-events:none; z-index:99; overflow:hidden; }
+#cf span{ position:absolute; top:0; width:10px; height:14px; border-radius:3px; animation:cfFall linear both; }
+.art-slot{ text-align:center; margin:2px 0 10px; }
+.art-slot:empty{ display:none; }
+.art-slot img{ max-width:100%; border-radius:18px; box-shadow:var(--shadow-s); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <div class="logo-bear"><img src="logo-teddy.jpg" alt="Teddy" onerror="this.parentNode.textContent='🧸'"></div>
+    <div>
+      <div class="eyebrow">SILPAKORN · 24 HOURS</div>
+      <h1>Teddy Wash &amp; Dry</h1>
+      <div class="sub">สาขา ม.ศิลปากร · แม่บ้านดูแล 09:00–21:00</div>
+    </div>
+  </div>
+  <div class="wrap"><div class="hairline"></div></div>
+</header>
+
+<div class="wrap">
+
+<!-- ═══════════ GAME ═══════════ -->
+<section class="page" id="pg-game">
+  <div class="art-slot" id="art-hero"></div>
+  <div class="g-hero">
+    <span class="bub" style="width:42px;height:42px;right:16px;top:12px"></span>
+    <span class="bub" style="width:20px;height:20px;right:72px;top:52px;animation-delay:1.1s"></span>
+    <span class="bub" style="width:13px;height:13px;right:42px;bottom:14px;animation-delay:1.8s"></span>
+    <div class="ey">LAUNDRY SIMULATOR</div>
+    <h3>🎮 ซักให้เป๊ะ!</h3>
+    <p>เลือกผ้าลงตะกร้า ตั้งเครื่องเอง ซักจริง อบจริง — จบเกมรู้เลยว่าตัดสินใจถูกหรือพลาดตรงไหน</p>
+  </div>
+  <div class="art-slot" id="art-game"></div>
+  <div id="g-body"></div>
+</section>
+
+<!-- ═══════════ HOW TO ═══════════ -->
+<section class="page" id="pg-howto">
+  <h2>🧺 ขั้นตอนการใช้งาน <small>ง่ายมาก ทำตามทีละข้อได้เลย</small></h2>
+  <div class="art-slot" id="art-howto"></div>
+  <div class="seg">
+    <button id="sg-wash" class="on" onclick="howSeg('wash')">🫧 เครื่องซัก</button>
+    <button id="sg-dry" onclick="howSeg('dry')">🔥 เครื่องอบ</button>
+  </div>
+  <div id="how-wash">
+    <div class="step"><div class="n">1</div><div class="e">👕</div><div><b>แยกผ้าก่อนซัก</b><p>ผ้าขาว / ผ้าสี / ผ้าสีเข้มตัวใหม่ แยกกัน — ไม่แน่ใจไปเล่นเกมแยกผ้าได้เลย</p></div></div>
+    <div class="step"><div class="n">2</div><div class="e">🧺</div><div><b>ใส่ผ้าหลวมๆ ไม่อัดแน่น</b><p>ผ้าควรไม่เกิน 3/4 ของถัง เหลือที่ให้ผ้าหมุน ซักถึงจะสะอาด</p></div></div>
+    <div class="step"><div class="n">3</div><div class="e">🧴</div><div><b>เติมน้ำยาในลิ้นชักช่องที่ถูก</b><p>ช่อง "ซัก" ใส่น้ำยาซักผ้า · ช่อง "นุ่ม" ใส่น้ำยาปรับผ้านุ่ม (ดูสติกเกอร์บนฝากล่อง)</p></div></div>
+    <div class="step"><div class="n">4</div><div class="e">🌡️</div><div><b>เลือกอุณหภูมิน้ำ</b><p>เย็น = ผ้าสีทั่วไป · อุ่น = ผ้าขาว/เหงื่อเยอะ · ร้อน = ผ้าปูที่นอน ฆ่าไรฝุ่น</p></div></div>
+    <div class="step"><div class="n">5</div><div class="e">🪙</div><div><b>หยอดเหรียญ หรือสแกนจ่าย</b><p>ราคาโชว์ที่จอบนเครื่อง · เครื่องเริ่มทำงานเอง</p></div></div>
+    <div class="step"><div class="n">6</div><div class="e">⏰</div><div><b>รอประมาณ 30–40 นาที</b><p>ระหว่างรอ แวะจิบชานม Owl Cha ข้างๆ ได้น้า 🧋</p></div></div>
+  </div>
+  <div id="how-dry" style="display:none">
+    <div class="callout co-red">⚠️ ห้ามอบ: รองเท้า · ผ้าที่มียาง/โฟม · ผ้าเปื้อนน้ำมัน · ชุดชั้นในโครงเหล็ก · ผ้าขนสัตว์/ผ้าไหม — เสี่ยงไฟไหม้และผ้าพัง</div>
+    <div class="step dry"><div class="n">1</div><div class="e">🌀</div><div><b>สะบัดผ้าก่อนใส่</b><p>ผ้าที่พันกันเป็นก้อนจะแห้งไม่ทั่ว สะบัดให้คลายก่อน</p></div></div>
+    <div class="step dry"><div class="n">2</div><div class="e">🧺</div><div><b>ใส่หลวมๆ ครึ่งถังกำลังดี</b><p>ยิ่งหลวม ยิ่งแห้งไว ประหยัดเงินกว่าอัดเต็มถัง</p></div></div>
+    <div class="step dry"><div class="n">3</div><div class="e">🌡️</div><div><b>เลือกระดับความร้อน</b><p>ผ้าหนา = ร้อนสูง · ผ้าบาง/ผ้ายืด = ร้อนต่ำ กันผ้าหด</p></div></div>
+    <div class="step dry"><div class="n">4</div><div class="e">🪙</div><div><b>หยอดเหรียญ หรือสแกนจ่าย</b><p>12 กก. เริ่ม 50฿ · 17 กก. เริ่ม 60฿</p></div></div>
+    <div class="step dry"><div class="n">5</div><div class="e">➕</div><div><b>ยังไม่แห้ง? เพิ่มได้</b><p>หยอดเพิ่ม 10฿ = เพิ่มเวลา (12กก. +7 นาที · 17กก. +6 นาที)</p></div></div>
+  </div>
+  <a class="btn btn-line" href="https://lin.ee/tLp9JME">💬 ไม่แน่ใจตรงไหน ทักแชทถามได้เลย</a>
+</section>
+
+<!-- ═══════════ TIPS ═══════════ -->
+<section class="page" id="pg-tips">
+  <h2>💡 เทคนิคซักผ้า <small>รู้ไว้ ผ้าสวยเหมือนใหม่ไปอีกนาน</small></h2>
+  <div class="art-slot" id="art-tips"></div>
+
+  <div class="temp-row">
+    <div class="temp t-cold"><b>🧊 เย็น</b><span>ผ้าสีทั่วไป<br>กันสีตก สีซีด</span></div>
+    <div class="temp t-warm"><b>🌤️ อุ่น</b><span>ผ้าขาว<br>คราบเหงื่อ</span></div>
+    <div class="temp t-hot"><b>🔥 ร้อน</b><span>ผ้าปูที่นอน<br>ฆ่าไรฝุ่น</span></div>
+  </div>
+
+  <div class="tip"><div class="e">🎨</div><div><b>ผ้าสีเข้มตัวใหม่ = ตัวอันตราย</b><p>ยีนส์ใหม่ เสื้อแดง/ดำตัวใหม่ สีตกแน่นอน 2–3 ครั้งแรก — ซักแยกด้วยน้ำเย็น กลับด้านในออก</p></div></div>
+  <div class="tip"><div class="e">🤍</div><div><b>ผ้าขาวอย่าซักรวมผ้าสี</b><p>ต่อให้น้ำเย็นก็เสี่ยงหม่น ซักผ้าขาวแยกด้วยน้ำอุ่นจะขาวสุด</p></div></div>
+  <div class="tip"><div class="e">🧥</div><div><b>สีซีดเพราะน้ำร้อน + ตากแดดจัด</b><p>ผ้าสีใช้น้ำเย็นพอ แล้วกลับด้านในออกก่อนซัก-ตาก สีจะอยู่ทนกว่าเยอะ</p></div></div>
+  <div class="tip"><div class="e">🪝</div><div><b>รูดซิป ปลดตะขอ กลับด้าน</b><p>ซิปที่เปิดอยู่จะเกี่ยวผ้าตัวอื่นเป็นรู กระดุมให้ติดไว้ เสื้อสกรีนกลับด้านในออก</p></div></div>
+  <div class="tip"><div class="e">🩲</div><div><b>ชุดชั้นใน/ผ้าบาง ใส่ถุงซัก</b><p>กันยืด กันเกี่ยว — ไม่มีถุงซัก ใส่ปลอกหมอนมัดปากแทนได้</p></div></div>
+  <div class="tip"><div class="e">⚖️</div><div><b>เลือกขนาดเครื่องให้พอดี</b><p>ผ้า 1 สัปดาห์ของ 1 คน = 12 กก. พอ · ผ้านวม/ผ้าห่ม/ซักรวม 2 คน = 17 กก. — อัดแน่นเกิน ซักไม่สะอาด เปลืองเงินฟรี</p></div></div>
+  <div class="tip"><div class="e">🫧</div><div><b>น้ำยาไม่ต้องเยอะ</b><p>เครื่องหน้าร้านเป็นระบบประหยัดน้ำ ใส่น้ำยาเกินจะล้างไม่หมด ผ้าเหนียวเหนอะ ใส่ตามฝาเดียวพอ</p></div></div>
+  <div class="tip"><div class="e">🌧️</div><div><b>หน้าฝนผ้าเหม็นอับ = อบเลย</b><p>ตากในหอไม่แห้ง กลิ่นอับจากเชื้อรา — เครื่องอบ 40 นาที แห้งหอมทันที</p></div></div>
+  <div class="tip"><div class="e">⏱️</div><div><b>ซักเสร็จรีบเอาออก</b><p>ผ้าเปียกทิ้งไว้ในถังเกิน 1–2 ชม. จะเริ่มเหม็นอับ ต้องซักใหม่</p></div></div>
+
+  <a class="btn btn-blue" onclick="go('game')">🎮 ลองเล่นเกมซักผ้า ทดสอบตัวเอง</a>
+</section>
+
+<!-- ═══════════ PROMO & SERVICE ═══════════ -->
+<section class="page" id="pg-promo">
+  <h2>🏷️ โปรโมชั่น <small>โชว์หน้าจอไลน์กับแม่บ้านเพื่อรับสิทธิ์</small></h2>
+  <div class="art-slot" id="art-promo"></div>
+
+  <div class="promo-big">
+    <span class="p-dis">ลด 50฿</span>
+    <div class="p-title">💚 แอดไลน์ครั้งแรก</div>
+    <p>เพิ่มเพื่อน LINE ร้านครั้งแรก รับส่วนลดค่าซัก 50฿ ทันที · 1 คน 1 สิทธิ์</p>
+  </div>
+  <div class="callout co-blue" id="promo-how">
+    💁‍♀️ <b>วิธีรับ:</b> กดปุ่มเขียวด้านล่างแอดไลน์ → โชว์หน้าจอกับแม่บ้านหน้าร้าน รับส่วนลดได้เลย
+  </div>
+
+  <div class="card">
+    <b style="font-size:15px; color:var(--navy)">💰 ราคาค่าซัก</b>
+    <table class="price-tbl" style="margin-top:8px">
+      <tr><th>เครื่อง</th><th>เย็น</th><th>อุ่น</th><th>ร้อน</th></tr>
+      <tr><td>12 กก.</td><td class="num">50฿</td><td class="num">60฿</td><td class="num">70฿</td></tr>
+      <tr><td>17 กก.</td><td class="num">60฿</td><td class="num">70฿</td><td class="num">80฿</td></tr>
+    </table>
+    <b style="font-size:15px; display:block; margin-top:14px; color:var(--navy)">🔥 ราคาค่าอบ</b>
+    <table class="price-tbl" style="margin-top:8px">
+      <tr><th>เครื่อง</th><th>เริ่มต้น</th><th>เพิ่มเวลา</th></tr>
+      <tr><td>12 กก.</td><td class="num">50฿</td><td>+10฿ = +7 นาที</td></tr>
+      <tr><td>17 กก.</td><td class="num">60฿</td><td>+10฿ = +6 นาที</td></tr>
+    </table>
+  </div>
+
+  <h2 id="service" style="margin-top:18px">🧸 บริการของร้าน</h2>
+  <div class="card">
+    <div class="svc"><div class="e">🧺</div><div><b>ฝากซัก อบ พับ — ฟรีค่าบริการ</b><p>จ่ายแค่ค่าเครื่อง! ส่งผ้าก่อน 18:00 รับคืนวันเดียวกัน · หลัง 18:00 รับวันถัดไป</p></div></div>
+    <div class="svc"><div class="e">🛵</div><div><b>เดลิเวอรี่ถึงหอ</b><p>รับ-ส่งผ้าถึงที่ เริ่ม 20฿ (บวกเพิ่มตามระยะทาง) — ทักไลน์นัดเวลาได้เลย</p></div></div>
+    <div class="svc"><div class="e">🕐</div><div><b>เปิด 24 ชั่วโมง</b><p>แม่บ้านประจำร้าน 09:00–21:00 · แอดมินไลน์ตอบ 09:00–21:00</p></div></div>
+    <div class="svc"><div class="e">📞</div><div><b>ติดต่อร้าน</b><p>โทร 083-145-6588 หรือทักไลน์ด้านล่างเลย</p></div></div>
+  </div>
+
+  <a class="btn btn-line" href="https://lin.ee/tLp9JME">💬 ทักแชทร้าน · ฝากซัก / เรียกเดลิเวอรี่</a>
+  <div class="foot-note">Teddy Wash &amp; Dry สาขา ม.ศิลปากร<br>ซัก อบ พับ ครบจบที่เดียว 🧸</div>
+</section>
+
+<div class="art-slot" id="art-night" style="margin-top:16px"></div>
+</div>
+
+<nav>
+  <div class="wrap">
+    <button id="nb-game" onclick="go('game')"><span class="ic">🎮</span>เกมซักผ้า</button>
+    <button id="nb-howto" onclick="go('howto')"><span class="ic">🧺</span>วิธีใช้</button>
+    <button id="nb-tips" onclick="go('tips')"><span class="ic">💡</span>เทคนิค</button>
+    <button id="nb-promo" onclick="go('promo')"><span class="ic">🏷️</span>โปร·บริการ</button>
+  </div>
+</nav>
+
+<script>
+/* ══════════ ROUTER ══════════ */
+var PAGES = ['game','howto','tips','promo'];
+function go(p, scrollId){
+  if(PAGES.indexOf(p) < 0) p = 'game';
+  for(var i=0;i<PAGES.length;i++){
+    var k = PAGES[i];
+    document.getElementById('pg-'+k).className = 'page' + (k===p?' on':'');
+    document.getElementById('nb-'+k).className = (k===p?'on':'');
+  }
+  try{ history.replaceState(null,'','#'+(scrollId||p)); }catch(e){}
+  if(scrollId){
+    var el = document.getElementById(scrollId);
+    if(el) setTimeout(function(){ el.scrollIntoView({behavior:'smooth'}); }, 60);
+  }else{
+    window.scrollTo(0,0);
+  }
+}
+function initRoute(){
+  var h = (location.hash||'').replace('#','');
+  if(h==='service'){ go('promo','service'); }
+  else if(PAGES.indexOf(h)>=0){ go(h); }
+  else{ go('game'); }
+}
+function howSeg(k){
+  document.getElementById('how-wash').style.display = (k==='wash'?'':'none');
+  document.getElementById('how-dry').style.display  = (k==='dry'?'':'none');
+  document.getElementById('sg-wash').className = (k==='wash'?'on':'');
+  document.getElementById('sg-dry').className  = (k==='dry'?'on':'');
+}
+function esc(t){ return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
+
+/* ══════════ ART (ใส่ชื่อไฟล์รูปเมื่อพร้อม เช่น game:'art-game.jpg') ══════════ */
+var ART = { hero:'art-hero.jpg', game:'', howto:'art-machines.jpg', tips:'', promo:'', win:'art-win.jpg', fail:'', night:'art-night.jpg' };
+function artImg(k, extra){
+  return ART[k] ? '<div class="art-slot"><img src="'+ART[k]+'" alt="" '+(extra||'')+'></div>' : '';
+}
+function initArt(){
+  ['hero','game','howto','tips','promo','night'].forEach(function(k){
+    var el = document.getElementById('art-'+k);
+    if(el && ART[k]) el.innerHTML = '<img src="'+ART[k]+'" alt="">';
+  });
+}
+
+/* ══════════ GAME DATA ══════════ */
+var ITEMS = [
+  { id:'tee',      e:'👕', n:'เสื้อยืดสีอ่อน 4–5 ตัว',  kg:2,   tags:['light'] },
+  { id:'white',    e:'🤍', n:'เสื้อ/ชุดขาวล้วน',        kg:1.5, tags:['white'] },
+  { id:'jeans',    e:'👖', n:'ยีนส์ใหม่ 2 ตัว',         kg:2,   tags:['bleed','dark'] },
+  { id:'blacknew', e:'🖤', n:'เสื้อดำตัวใหม่',          kg:0.5, tags:['bleed','dark'] },
+  { id:'under',    e:'🧦', n:'ชุดชั้นใน + ถุงเท้า',     kg:0.5, tags:['delicate','heat'] },
+  { id:'bed',      e:'🛏️', n:'ผ้าปูที่นอน + ปลอกหมอน',  kg:3,   tags:['bedding'] },
+  { id:'duvet',    e:'🧸', n:'ผ้านวม 6 ฟุต',            kg:6,   tags:['bulky'] },
+  { id:'hoodie',   e:'🧥', n:'ฮู้ดดี้/ผ้าหนา 2 ตัว',    kg:2.5, tags:['heavy','heat'] },
+  { id:'shoes',    e:'👟', n:'รองเท้าผ้าใบ 1 คู่',      kg:1,   tags:['shoes'] },
+  { id:'scarf',    e:'🧣', n:'ผ้าพันคอขนนุ่ม',          kg:0.3, tags:['delicate','heat'] }
+];
+var WASH_PRICE = { 12:{cold:50,warm:60,hot:70}, 17:{cold:60,warm:70,hot:80} };
+var TEMP_TH = { cold:'น้ำเย็น', warm:'น้ำอุ่น', hot:'น้ำร้อน' };
+
+/* ══════════ STATE ══════════ */
+var gs;
+function gReset(){
+  gs = { step:'pick', sel:{}, bag:false, mc:0, temp:'', dry:'' };
+  gRender();
+}
+function selItems(){ return ITEMS.filter(function(it){ return gs.sel[it.id]; }); }
+function selKg(){ var t=0; selItems().forEach(function(it){ t+=it.kg; }); return Math.round(t*10)/10; }
+function hasTag(t){ return selItems().some(function(it){ return it.tags.indexOf(t)>=0; }); }
+
+function stepper(cur){
+  var steps = [ ['🧺','เลือกผ้า'], ['🫧','ซัก'], ['🔥','อบ'], ['🏁','ผล'] ];
+  var idx = { pick:0, wash:1, spin:1, dry:2, dspin:2, result:3 }[cur];
+  var h = '<div class="stp">';
+  for(var i=0;i<4;i++){
+    var cls = i<idx ? 'done' : (i===idx ? 'on' : '');
+    h += '<div class="s '+cls+'"><div class="dot">'+(i<idx?'✓':steps[i][0])+'</div><div class="t">'+steps[i][1]+'</div></div>';
+  }
+  return h+'</div>';
+}
+
+/* ══════════ RENDER ══════════ */
+function gRender(){
+  var el = document.getElementById('g-body');
+  var h = stepper(gs.step);
+
+  if(gs.step==='pick'){
+    h += '<div class="card pop">';
+    h += '<div class="g-q">วันนี้จะซักอะไรบ้าง?</div>';
+    h += '<div class="g-sub">แตะเลือกผ้าลงตะกร้า (เลือกได้หลายอย่าง) — คิดดีๆ ว่าอะไรควรไปด้วยกัน</div>';
+    h += '<div class="items">';
+    ITEMS.forEach(function(it){
+      h += '<div class="item'+(gs.sel[it.id]?' sel':'')+'" onclick="gTogItem(\''+it.id+'\')">';
+      h += '<span class="e">'+it.e+'</span><b>'+esc(it.n)+'</b><span>~'+it.kg+' กก.</span></div>';
+    });
+    h += '</div>';
+    var kg = selKg();
+    h += '<div class="meter"><div class="m-lab"><span>น้ำหนักในตะกร้า</span><span><b>'+kg+'</b> กก.</span></div>';
+    h += '<div class="m-bar"><div class="m-fill'+(kg>17?' over':'')+'" style="width:'+Math.min(100, kg/17*100)+'%"></div></div></div>';
+    if(hasTag('delicate')){
+      h += '<div class="togg'+(gs.bag?' on':'')+'" onclick="gTogBag()"><div class="tk"></div>';
+      h += '<div><b>🛍️ ใส่ถุงซักให้ชิ้นบอบบาง</b><span>ชุดชั้นใน/ผ้าบาง กันยืด กันเกี่ยว</span></div></div>';
+    }
+    h += '</div>';
+    h += '<button class="btn btn-blue" '+(selItems().length?'':'disabled ')+'onclick="gGo(\'wash\')">ใส่ตะกร้าเสร็จแล้ว ➜ ไปที่เครื่องซัก</button>';
+  }
+
+  else if(gs.step==='wash'){
+    h += '<div class="card pop">';
+    h += '<div class="g-q">เลือกเครื่องซัก</div>';
+    h += '<div class="g-sub">ในตะกร้ามี '+selKg()+' กก. — เลือกให้พอดี ไม่แน่นไป ไม่เปลืองไป</div>';
+    h += '<div class="choice">';
+    h += '<div class="ch'+(gs.mc===12?' sel':'')+'" onclick="gSetMc(12)"><span class="e">🫧</span><b>12 กก.</b><span>ผ้า 1 คน/สัปดาห์<br>50–70฿</span></div>';
+    h += '<div class="ch'+(gs.mc===17?' sel':'')+'" onclick="gSetMc(17)"><span class="e">🌊</span><b>17 กก.</b><span>ผ้านวม/กองใหญ่<br>60–80฿</span></div>';
+    h += '</div>';
+    h += '<div class="g-q" style="margin-top:6px">เลือกอุณหภูมิน้ำ</div>';
+    h += '<div class="choice">';
+    h += '<div class="ch'+(gs.temp==='cold'?' sel':'')+'" onclick="gSetTemp(\'cold\')"><span class="e">🧊</span><b>เย็น</b></div>';
+    h += '<div class="ch'+(gs.temp==='warm'?' sel':'')+'" onclick="gSetTemp(\'warm\')"><span class="e">🌤️</span><b>อุ่น</b></div>';
+    h += '<div class="ch'+(gs.temp==='hot'?' sel':'')+'" onclick="gSetTemp(\'hot\')"><span class="e">🔥</span><b>ร้อน</b></div>';
+    h += '</div>';
+    if(gs.mc && gs.temp) h += '<div class="g-sub" style="margin:2px 0 0">ค่าซักรอบนี้: <b style="color:var(--blue-d)">'+WASH_PRICE[gs.mc][gs.temp]+'฿</b></div>';
+    h += '</div>';
+    h += '<button class="btn btn-blue" '+((gs.mc&&gs.temp)?'':'disabled ')+'onclick="gGo(\'spin\')">🪙 หยอดเหรียญ เริ่มซัก!</button>';
+    h += '<button class="btn btn-ghost" onclick="gGo(\'pick\')">⬅ กลับไปเลือกผ้า</button>';
+  }
+
+  else if(gs.step==='spin'){
+    var em = selItems().slice(0,3).map(function(it){ return it.e; }).join('');
+    h += '<div class="card pop" style="text-align:center">';
+    h += '<div class="g-q">เครื่อง '+gs.mc+' กก. กำลังซัก · '+TEMP_TH[gs.temp]+'</div>';
+    h += '<div class="machine"><div class="m-top"><i class="go"></i><i></i><i></i><span class="m-name">WASH</span></div>';
+    h += '<div class="door spin" id="washDoor"><span class="drum">'+em+'</span>';
+    h += '<span class="suds"><i style="width:12px;height:12px;left:24%;animation-delay:0s"></i><i style="width:8px;height:8px;left:58%;animation-delay:.5s"></i><i style="width:10px;height:10px;left:74%;animation-delay:1s"></i></span>';
+    h += '</div></div>';
+    h += '<div id="washMsg" class="g-sub">กำลังปั่น… 🫧</div>';
+    h += '<div id="washBtn"></div>';
+    h += '</div>';
+  }
+
+  else if(gs.step==='dry'){
+    h += '<div class="card pop">';
+    h += '<div class="g-q">ซักเสร็จแล้ว! เอาผ้าไปไหนต่อ?</div>';
+    h += '<div class="g-sub">เครื่องอบ '+gs.mc+' กก. อยู่ชั้นบนของแท่นเดียวกันเลย ('+(gs.mc===12?'50':'60')+'฿)</div>';
+    h += '<div class="choice">';
+    h += '<div class="ch'+(gs.dry==='low'?' sel-g':'')+'" onclick="gSetDry(\'low\')"><span class="e">♨️</span><b>อบร้อนต่ำ</b><span>ถนอมผ้า</span></div>';
+    h += '<div class="ch'+(gs.dry==='high'?' sel-g':'')+'" onclick="gSetDry(\'high\')"><span class="e">🔥</span><b>อบร้อนสูง</b><span>แห้งไว</span></div>';
+    h += '<div class="ch'+(gs.dry==='none'?' sel-g':'')+'" onclick="gSetDry(\'none\')"><span class="e">🌤️</span><b>ไม่อบ</b><span>เอาไปตากเอง</span></div>';
+    h += '</div>';
+    h += '</div>';
+    h += '<button class="btn btn-gold" '+(gs.dry?'':'disabled ')+'onclick="gDryGo()">'+(gs.dry==='none'?'หิ้วผ้ากลับไปตาก ➜':'🪙 หยอดเหรียญ เริ่มอบ!')+'</button>';
+  }
+
+  else if(gs.step==='dspin'){
+    var em2 = selItems().slice(0,3).map(function(it){ return it.e; }).join('');
+    h += '<div class="card pop" style="text-align:center">';
+    h += '<div class="g-q">เครื่องอบ '+gs.mc+' กก. กำลังอบ · '+(gs.dry==='high'?'ร้อนสูง':'ร้อนต่ำ')+'</div>';
+    h += '<div class="machine"><div class="m-top"><i class="go"></i><i></i><i></i><span class="m-name">DRY</span></div>';
+    h += '<div class="door dry spin" id="dryDoor"><span class="drum">'+em2+'</span></div></div>';
+    h += '<div id="dryMsg" class="g-sub">กำลังอบ… ♨️</div>';
+    h += '<div id="dryBtn"></div>';
+    h += '</div>';
+  }
+
+  else if(gs.step==='result'){
+    var r = evalRun();
+    h += '<div class="card pop"><div class="verdict-hero">';
+    h += '<div style="font-size:13px;color:var(--muted);font-weight:300">คะแนนรอบนี้</div>';
+    h += '<div class="big"><span id="cnt">0</span><span class="of"> / 100</span></div>';
+    h += '<div class="rank rk'+r.grade+'">'+r.rankTxt+'</div>';
+    h += '<div class="cost-line">จ่ายจริงรอบนี้ '+r.cost+'฿ ('+r.costDetail+')</div>';
+    h += '</div></div>';
+    if(r.grade >= 2) h += artImg('win');
+    if(r.grade === 0) h += artImg('fail');
+    h += '<div class="card pop"><div class="g-q" style="margin-bottom:6px">📋 สรุปการตัดสินใจของคุณ</div>';
+    r.F.forEach(function(f){
+      var ic = f.k===2?'✓':(f.k===1?'!':'✕');
+      h += '<div class="fnd f'+f.k+'"><div class="fi">'+ic+'</div><p>'+esc(f.t)+'</p></div>';
+    });
+    h += '</div>';
+    h += '<button class="btn btn-blue" onclick="gReset()">🔄 ซักรอบใหม่</button>';
+    h += '<a class="btn btn-ghost" onclick="go(\'tips\')">💡 อ่านเทคนิคซักผ้า</a>';
+    h += '<a class="btn btn-line" href="https://lin.ee/tLp9JME">💬 กลับไปแชทกับร้าน</a>';
+  }
+
+  el.innerHTML = h;
+  window.scrollTo(0,0);
+
+  if(gs.step==='spin'){
+    setTimeout(function(){
+      if(gs.step!=='spin') return;
+      var dEl = document.getElementById('washDoor');
+      if(dEl) dEl.className = 'door';
+      var mEl = document.getElementById('washMsg');
+      if(mEl) mEl.innerHTML = '<span class="m-done">✨ ติ๊ง! ซักเสร็จแล้ว</span>';
+      var bEl = document.getElementById('washBtn');
+      if(bEl) bEl.innerHTML = '<button class="btn btn-gold" onclick="gGo(\'dry\')">เอาผ้าไปอบ ➜</button>';
+    }, 2300);
+  }
+  if(gs.step==='dspin'){
+    setTimeout(function(){
+      if(gs.step!=='dspin') return;
+      var dEl = document.getElementById('dryDoor');
+      if(dEl) dEl.className = 'door dry';
+      var mEl = document.getElementById('dryMsg');
+      if(mEl) mEl.innerHTML = '<span class="m-done">✨ ผ้าแห้งหอมฟูแล้ว!</span>';
+      var bEl = document.getElementById('dryBtn');
+      if(bEl) bEl.innerHTML = '<button class="btn btn-blue" onclick="gGo(\'result\')">ดูผลคะแนน 🏁</button>';
+    }, 2300);
+  }
+  if(gs.step==='result'){
+    var r2 = evalRun();
+    if(r2.score >= 75) confetti(64);
+    if(r2.score > 0){
+      var c = 0, iv = setInterval(function(){
+        c += 2; if(c > r2.score) c = r2.score;
+        var e2 = document.getElementById('cnt');
+        if(e2) e2.textContent = c;
+        if(c >= r2.score) clearInterval(iv);
+      }, 24);
+    }
+  }
+}
+
+/* ══════════ ACTIONS ══════════ */
+function gTogItem(id){ gs.sel[id] = !gs.sel[id]; gRender(); }
+function gTogBag(){ gs.bag = !gs.bag; gRender(); }
+function gSetMc(v){ gs.mc = v; gRender(); }
+function gSetTemp(v){ gs.temp = v; gRender(); }
+function gSetDry(v){ gs.dry = v; gRender(); }
+function gGo(st){ gs.step = st; gRender(); }
+function gDryGo(){ gs.step = (gs.dry==='none' ? 'result' : 'dspin'); gRender(); }
+
+/* ══════════ EVALUATION ══════════ */
+function evalRun(){
+  var F = [], sc = 100, fatal = false;
+  var kg = selKg(), mc = gs.mc, temp = gs.temp, dry = gs.dry;
+  var has = hasTag;
+
+  if(has('bleed') && (has('white')||has('light'))){
+    fatal = true; sc -= 60;
+    F.push({k:0, t:'สีตกครั้งใหญ่! ยีนส์/ผ้าเข้มตัวใหม่ปล่อยสีใส่ผ้าสีอ่อนทั้งกอง — ผ้าขาวกลายเป็นสีหม่น ซักคืนไม่ได้'});
+  }else if(has('bleed')){
+    sc += 4;
+    F.push({k:2, t:'แยกผ้าเข้มตัวใหม่ออกจากผ้าสีอ่อน — ถูกต้องที่สุด สีไม่เลอะใคร'});
+  }
+  if(has('white') && has('light') && !has('bleed')){
+    sc -= 5;
+    F.push({k:1, t:'ผ้าขาวปนผ้าสีอ่อน พอไหว แต่ถ้าอยากขาวจั๊วะ แยกซักผ้าขาวต่างหากดีกว่า'});
+  }
+  if(has('shoes')){
+    sc -= 20;
+    F.push({k:1, t:'รองเท้าไม่ควรลงเครื่องซักรวมกับเสื้อผ้า — เชื้อโรคปน กระแทกถังเสียงดัง ควรแปรงซักมือ'});
+  }
+
+  if(kg > mc*0.55){
+    sc -= 30;
+    F.push({k:0, t:'ผ้าแน่นเกินไปสำหรับเครื่อง '+mc+' กก. — ผ้าหมุนไม่ได้ ซักไม่สะอาด น้ำยาล้างไม่หมด'});
+  }else if(has('bulky') && mc===12){
+    sc -= 35;
+    F.push({k:0, t:'ผ้านวม 6 ฟุตต้องเครื่อง 17 กก. — ยัดลง 12 กก. แน่นเกิน ซักไม่ทั่ว เปลืองเงินฟรี'});
+  }else{
+    F.push({k:2, t:'ปริมาณผ้าพอดีเครื่อง '+mc+' กก. ผ้ามีที่หมุน ซักสะอาดทั่วถึง'});
+    if(mc===17 && kg<=5 && !has('bulky') && !has('bedding')){
+      sc -= 8;
+      F.push({k:1, t:'ผ้าแค่ '+kg+' กก. ใช้เครื่อง 12 กก. ก็พอ — ประหยัดได้ 10฿'});
+    }
+  }
+
+  if(has('delicate')){
+    if(gs.bag){ sc += 4; F.push({k:2, t:'ใส่ถุงซักให้ชิ้นบอบบาง — ทรงสวย ไม่ยืด ไม่เกี่ยว ถุงเท้าไม่หาย'}); }
+    else{ sc -= 12; F.push({k:1, t:'ชิ้นบอบบางไม่ได้ใส่ถุงซัก — เสี่ยงยืดเสียทรง โดนซิปเกี่ยว หรือหายในเครื่อง'}); }
+  }
+
+  if(temp==='hot'){
+    var hotBad = false;
+    if(has('light')||has('dark')||has('bleed')){ sc -= 22; hotBad = true; F.push({k:0, t:'น้ำร้อนเร่งให้ผ้าสีซีดเร็วมาก — ผ้าสี/ยีนส์ควรใช้น้ำเย็น'}); }
+    if(has('delicate')||has('heat')){ sc -= 18; hotBad = true; F.push({k:0, t:'น้ำร้อนทำผ้าบอบบาง/ผ้ายืด/ฮู้ดดี้หดและเสียทรง'}); }
+    if(has('bedding')){ sc += 8; F.push({k:2, t:'น้ำร้อนกับผ้าปูที่นอน — ฆ่าไรฝุ่นได้จริง เยี่ยมมาก!'}); }
+    if(has('white') && !hotBad){ sc += 4; F.push({k:2, t:'ผ้าขาวล้วนกับน้ำร้อน ขาวสะอาดสุดๆ'}); }
+  }else if(temp==='warm'){
+    if(has('white')){ sc += 6; F.push({k:2, t:'น้ำอุ่นสลายคราบเหงื่อ/ไขมันบนผ้าขาวได้ดี คอเสื้อไม่เหลืองสะสม'}); }
+    if(has('delicate')){ sc -= 6; F.push({k:1, t:'ชิ้นบอบบางเจอน้ำอุ่นพอไหว แต่น้ำเย็นถนอมกว่า'}); }
+    if(has('bleed')){ sc -= 8; F.push({k:1, t:'ผ้าเข้มตัวใหม่เจอน้ำอุ่น สีออกเร็วขึ้น — น้ำเย็นรักษาสีดีกว่า'}); }
+    if(!has('white') && !has('delicate') && !has('bleed')) F.push({k:2, t:'น้ำอุ่นสะอาดกำลังดีสำหรับกองนี้'});
+  }else if(temp==='cold'){
+    F.push({k:2, t:'น้ำเย็นถนอมสีผ้า ปลอดภัยกับผ้าเกือบทุกชนิด'});
+    if(has('white')){ sc -= 5; F.push({k:1, t:'ผ้าขาวคราบเหงื่อฝังลึก น้ำอุ่นจะจัดการได้ดีกว่านิดนึง'}); }
+    if(has('bleed')){ sc += 4; F.push({k:2, t:'ผ้าเข้มตัวใหม่กับน้ำเย็น — สีอยู่ทน ไม่ซีดไว'}); }
+  }
+
+  if(dry !== 'none'){
+    if(has('shoes')){
+      fatal = true; sc -= 100;
+      F.push({k:0, t:'ห้ามอบรองเท้าเด็ดขาด!! พื้นยาง/กาว/โฟมเจอความร้อนจะละลาย เสี่ยงไฟไหม้ในถังอบ'});
+    }
+    if(dry==='high'){
+      if(has('delicate')||has('heat')){ sc -= 20; F.push({k:0, t:'อบร้อนสูงทำผ้ายืด/ชิ้นบอบบาง/ฮู้ดดี้หดย้วยเสียทรงถาวร'}); }
+      if(has('bulky')||has('bedding')){ sc += 6; F.push({k:2, t:'ร้อนสูงกับผ้าหนา/ผ้าปู — แห้งสนิทถึงข้างใน หอมฟู'}); }
+      if(!has('delicate') && !has('heat') && !has('bulky') && !has('bedding') && !has('shoes')) F.push({k:2, t:'อบร้อนสูง แห้งไวทันใจ'});
+    }else{
+      sc += 4;
+      F.push({k:2, t:'อบร้อนต่ำ ถนอมผ้า แห้งนุ่มกำลังดี'});
+      if(has('bulky')){ sc -= 5; F.push({k:1, t:'ผ้านวมกับร้อนต่ำ อาจต้องหยอดเพิ่มเวลาถึงจะแห้งสนิทข้างใน'}); }
+    }
+  }else{
+    if(has('bulky')||has('bedding')){ sc -= 10; F.push({k:1, t:'ผ้าหนา/ผ้าปูตากเองแห้งยากมาก หน้าฝนเสี่ยงเหม็นอับ — เครื่องอบช่วยได้'}); }
+    else F.push({k:2, t:'ตากธรรมชาติก็ดี ประหยัดด้วย (หน้าฝนระวังผ้าอับนะ)'});
+  }
+
+  if(sc > 100) sc = 100;
+  if(sc < 0) sc = 0;
+  if(fatal && sc > 35) sc = 35;
+
+  var grade, rankTxt;
+  if(fatal || sc < 55){ grade = 0; rankTxt = '⛔ ห้ามทำแบบนี้!'; }
+  else if(sc >= 92){ grade = 3; rankTxt = '🌟 ดีมาก แยกดี!'; }
+  else if(sc >= 75){ grade = 2; rankTxt = '👍 ดี'; }
+  else{ grade = 1; rankTxt = '😐 พอใช้'; }
+
+  var wc = WASH_PRICE[mc][temp];
+  var dc = dry==='none' ? 0 : (mc===12?50:60);
+  var costDetail = 'ค่าซัก '+wc+'฿' + (dc? ' + ค่าอบ '+dc+'฿' : ' · ไม่อบ');
+
+  return { F:F, score:sc, grade:grade, rankTxt:rankTxt, cost:wc+dc, costDetail:costDetail };
+}
+
+/* ══════════ CONFETTI ══════════ */
+function confetti(n){
+  try{
+    var host = document.getElementById('cf');
+    if(!host){ host = document.createElement('div'); host.id = 'cf'; document.body.appendChild(host); }
+    var cols = ['#5BB8E8','#C68B4A','#2E9E5B','#F2C14E','#E8788A','#7ED3C5'];
+    for(var i=0;i<n;i++){
+      var sp = document.createElement('span');
+      sp.style.left = (Math.random()*100)+'%';
+      sp.style.background = cols[i%cols.length];
+      sp.style.animationDuration = (1.15+Math.random()*0.95)+'s';
+      sp.style.animationDelay = (Math.random()*0.3)+'s';
+      host.appendChild(sp);
+      (function(el2){ setTimeout(function(){ try{ el2.remove(); }catch(e){} }, 2600); })(sp);
+    }
+  }catch(e){}
+}
+
+/* ══════════ INIT ══════════ */
+initArt();
+gReset();
+initRoute();
+window.addEventListener('hashchange', initRoute);
+</script>
+</body>
+</html>
