@@ -221,6 +221,7 @@ h2 small{ font-weight:300; font-size:13.5px; color:var(--muted); display:block; 
 #cf span{ position:absolute; top:0; width:10px; height:14px; border-radius:3px; animation:cfFall linear both; }
 /* ปุ่มลอย LINE */
 .fab{ position:fixed; right:12px; bottom:92px; z-index:60; display:flex; align-items:center; gap:6px;
+  transition:opacity .25s;
   background:#06C755; color:#fff; text-decoration:none; border-radius:999px; padding:4px 11px 4px 4px;
   box-shadow:0 4px 12px rgba(6,199,85,.35); animation:fabIn .5s ease both .8s; }
 .fab img{ width:24px; height:24px; border-radius:50%; background:#fff; flex:none; }
@@ -254,6 +255,8 @@ h2 small{ font-weight:300; font-size:13.5px; color:var(--muted); display:block; 
 .art-slot{ text-align:center; margin:2px 0 10px; }
 .art-slot:empty{ display:none; }
 .art-slot img{ max-width:100%; border-radius:18px; box-shadow:var(--shadow-s); }
+.disclaim{ background:#F6F1E6; border-radius:15px; padding:12px 14px; margin-bottom:11px;
+  font-size:12.5px; line-height:1.7; color:#7C7466; font-weight:300; text-align:center; }
 .faq-art{ display:block; width:130px; margin:2px auto 10px; mix-blend-mode:multiply; }
 .rank-art{ width:158px; height:auto; display:block; margin:0 auto 2px; animation:bounceIn .6s ease both; }
 .card-art{ display:block; width:calc(100% + 32px); margin:-16px -16px 12px; border-radius:20px 20px 0 0; }
@@ -915,6 +918,7 @@ function gRender(){
       h += '<div class="fnd f'+f.k+'"><div class="fi">'+ic+'</div><p>'+esc(f.t)+'</p></div>';
     });
     h += '</div>';
+    h += '<div class="disclaim">🧸 เกมนี้เป็นเพียงการจำลองเพื่อให้เข้าใจหลักการเบื้องต้นนะคะ · ผลจริงขึ้นอยู่กับชนิดผ้า ป้ายในเสื้อ ความสกปรก และปัจจัยอื่นๆ อีกหลายอย่าง — ไม่แน่ใจตรงไหน ถามแม่บ้านหน้าร้านหรือทักไลน์ได้เสมอค่ะ</div>';
     h += '<button class="btn btn-blue" onclick="gReset()">🔄 ซักรอบใหม่</button>';
     h += '<a class="btn btn-ghost" onclick="go(\'tips\')">💡 อ่านเทคนิคซักผ้า</a>';
     h += '<a class="btn btn-line" href="https://lin.ee/tLp9JME">💬 กลับไปแชทกับร้าน</a>';
@@ -1126,9 +1130,29 @@ function confetti(n){
   }catch(e){}
 }
 
+/* ซ่อนปุ่มลอยเมื่อใกล้ปุ่มไลน์ใหญ่ท้ายหน้า (กันทับกัน) */
+function fabWatch(){
+  var fab = document.querySelector('.fab');
+  if(!fab) return;
+  var btns = document.querySelectorAll('.btn-line');
+  var hide = false;
+  for(var i=0;i<btns.length;i++){
+    var b = btns[i];
+    if(b.offsetParent === null) continue;
+    var r = b.getBoundingClientRect();
+    if(r.top < window.innerHeight && r.bottom > 0){ hide = true; break; }
+  }
+  fab.style.opacity = hide ? '0' : '1';
+  fab.style.pointerEvents = hide ? 'none' : 'auto';
+}
+
 /* ══════════ INIT ══════════ */
 initArt();
 howSeg('wash');
+try{
+  window.addEventListener('scroll', fabWatch, { passive:true });
+  setInterval(fabWatch, 700);
+}catch(e){}
 gReset();
 initRoute();
 window.addEventListener('hashchange', initRoute);
