@@ -108,11 +108,11 @@ h2 small{ font-weight:300; font-size:13.5px; color:var(--muted); display:block; 
 .togg b{ font-size:13px; font-weight:500; }
 .togg span{ font-size:11px; color:var(--muted); font-weight:300; display:block; }
 
-.choice{ display:flex; gap:9px; margin-bottom:11px; }
-.ch{ flex:1; border:2px solid var(--line); border-radius:16px; background:#fff; padding:13px 6px; text-align:center; cursor:pointer; transition:all .12s; font-family:'Kanit'; }
-.ch .e{ font-size:26px; display:block; }
-.ch b{ font-size:13.5px; font-weight:600; display:block; margin-top:3px; }
-.ch span{ font-size:10.5px; color:var(--muted); font-weight:300; display:block; margin-top:1px; line-height:1.4; }
+.choice{ display:flex; gap:6px; margin-bottom:8px; }
+.ch{ flex:1; border:2px solid var(--line); border-radius:13px; background:#fff; padding:8px 4px; text-align:center; cursor:pointer; transition:all .12s; font-family:'Kanit'; }
+.ch .e{ font-size:21px; display:block; line-height:1.15; }
+.ch b{ font-size:13px; font-weight:600; display:block; margin-top:1px; }
+.ch span{ font-size:9.5px; color:var(--muted); font-weight:300; display:block; margin-top:0; line-height:1.3; }
 .ch.sel{ border-color:var(--blue); background:#F2FAFE; box-shadow:0 4px 12px rgba(91,184,232,.18); }
 .ch.sel-g{ border-color:var(--gold); background:#FDF8F0; box-shadow:0 4px 12px rgba(198,139,74,.18); }
 .ch:active{ transform:scale(.96); }
@@ -233,12 +233,24 @@ h2 small{ font-weight:300; font-size:13.5px; color:var(--muted); display:block; 
 .art-slot{ text-align:center; margin:2px 0 10px; }
 .art-slot:empty{ display:none; }
 .art-slot img{ max-width:100%; border-radius:18px; box-shadow:var(--shadow-s); }
+.stp2{ background:#fff; box-shadow:var(--shadow-s); border-radius:16px; margin-bottom:8px; overflow:hidden; }
+.stp2h{ display:flex; gap:11px; align-items:center; padding:12px 13px; cursor:pointer; }
+.stp2h .n{ flex:none; width:30px; height:30px; border-radius:10px; background:linear-gradient(135deg,var(--blue),var(--blue-d)); color:#fff; font-size:14px; font-weight:700; display:flex; align-items:center; justify-content:center; }
+.stp2.dry .stp2h .n{ background:linear-gradient(135deg,#D19A5C,var(--gold)); }
+.stp2h b{ font-size:15px; font-weight:600; flex:1; }
+.stp2h .arw{ flex:none; color:var(--muted); font-size:14px; transition:transform .25s; }
+.stp2.open .stp2h .arw{ transform:rotate(180deg); }
+.stp2.open .stp2h{ padding-bottom:4px; }
+.stp2b{ display:none; padding:0 13px 13px 54px; }
+.stp2.open .stp2b{ display:block; animation:fadeUp .25s ease both; }
+.stp2b p{ font-size:13.5px; line-height:1.7; color:var(--muted); font-weight:300; }
+
 .disclaim{ background:#F6F1E6; border-radius:15px; padding:12px 14px; margin-bottom:11px;
   font-size:12.5px; line-height:1.7; color:#7C7466; font-weight:300; text-align:center; }
 .faq-art{ display:block; width:130px; margin:2px auto 10px; mix-blend-mode:multiply; }
 .rank-art{ width:158px; height:auto; display:block; margin:0 auto 2px; animation:bounceIn .6s ease both; }
 .card-art{ display:block; width:calc(100% + 32px); margin:-16px -16px 12px; border-radius:20px 20px 0 0; }
-.ic-img{ width:44px; height:44px; object-fit:contain; display:block; margin:0 auto 2px; mix-blend-mode:multiply; }
+.ic-img{ width:36px; height:36px; object-fit:contain; display:block; margin:0 auto 1px; mix-blend-mode:multiply; }
 .seg .ic-sm{ width:22px; height:22px; object-fit:contain; vertical-align:-5px; margin-right:3px; mix-blend-mode:multiply; }
 </style>
 </head>
@@ -280,7 +292,6 @@ h2 small{ font-weight:300; font-size:13.5px; color:var(--muted); display:block; 
 <!-- ═══════════ HOW TO ═══════════ -->
 <section class="page" id="pg-howto">
   <h2>🧺 ขั้นตอนการใช้งาน <small>ง่ายมาก ทำตามทีละข้อได้เลย</small></h2>
-  <div class="art-slot"><img src="art-howto-hero.jpg" alt="" onerror="this.parentNode.style.display='none'"></div>
   <div class="mpick">
     <button class="mp" id="mp-wash" onclick="howSeg('wash')">
       <img src="ic-wash.jpg" alt="" onerror="this.style.display='none'">
@@ -292,74 +303,49 @@ h2 small{ font-weight:300; font-size:13.5px; color:var(--muted); display:block; 
     </button>
   </div>
   <div id="how-wash">
-    <div class="callout co-red">🚫 งดซักรองเท้าในเครื่องซักของร้าน — เศษทราย/พื้นยางทำถังเสียหาย และไม่ถูกสุขอนามัยกับผ้าของคนถัดไป (แนะนำแปรงซักมือแล้วผึ่งลม)</div>
-    <div class="step"><div class="n">1</div><div class="e">👕</div><div><b>แยกผ้าก่อนซัก</b><p>ผ้าขาว / ผ้าสี / ผ้าสีเข้มตัวใหม่ แยกกัน — ไม่แน่ใจไปเล่นเกมแยกผ้าได้เลย</p></div></div>
-    <div class="step"><div class="n">2</div><div class="e">🧺</div><div><b>ใส่ผ้าหลวมๆ ไม่อัดแน่น</b><p>ผ้าควรไม่เกิน 3/4 ของถัง เหลือที่ให้ผ้าหมุน ซักถึงจะสะอาด</p></div></div>
-    <div class="step"><div class="n">3</div><div class="e">🧴</div><div><b>เติมน้ำยาในลิ้นชักช่องที่ถูก</b><p>ช่อง "ซัก" ใส่น้ำยาซักผ้า · ช่อง "นุ่ม" ใส่น้ำยาปรับผ้านุ่ม (ดูสติกเกอร์บนฝากล่อง) — ปริมาณดูตารางท้ายหน้านี้ 👇</p></div></div>
-    <div class="step"><div class="n">4</div><div class="e">🌡️</div><div><b>เลือกอุณหภูมิน้ำ</b><p>เย็น = ผ้าสีทั่วไป · อุ่น = ผ้าขาว/เหงื่อเยอะ · ร้อน = ผ้าปูที่นอน ฆ่าไรฝุ่น</p></div></div>
-    <div class="step"><div class="n">5</div><div class="e">🪙</div><div><b>หยอดเหรียญ หรือสแกนจ่าย</b><p>ราคาโชว์ที่จอบนเครื่อง · เครื่องเริ่มทำงานเอง</p></div></div>
-    <div class="step"><div class="n">6</div><div class="e">⏰</div><div><b>รอประมาณ 30–40 นาที</b><p>ระหว่างรอ แวะจิบชานม Owl Cha ข้างๆ ได้น้า 🧋</p></div></div>
-    <div class="card">
-      <b style="font-size:16.5px; color:var(--navy)">⚖️ เลข 12 / 17 กก. หมายถึงอะไร?</b>
-      <p style="font-size:14px; line-height:1.7; margin-top:7px">คือน้ำหนัก <b>ผ้าแห้ง</b> สูงสุดที่ใส่ได้ (ไม่ใช่ขนาดถัง ไม่ใช่น้ำหนักตอนเปียก)</p>
-      <div class="callout co-blue" style="margin:11px 0">
-        <b>แต่อย่าใส่เต็มพิกัด!</b> ผ้าต้องมีที่ตีลังกา ใส่จริงประมาณ <b>3/4 ของตัวเลข</b><br>12 กก. → ใส่ ~8–9 กก. · 17 กก. → ใส่ ~12–13 กก.
-      </div>
-      <b style="font-size:16.5px; color:var(--navy); display:block; margin-top:14px">🤔 แล้วจะรู้ได้ไงว่าใช้เครื่องไหน?</b>
-      <div class="callout co-blue" style="margin:9px 0">
-        <b>วิธีเช็คแม่นสุด — ไม่ต้องชั่ง:</b> ใส่ผ้าแห้งหลวมๆ แล้วกดเบาๆ ควรเหลือช่องว่างเหนือผ้า <b>ประมาณ 1 ฝ่ามือ</b> · ถ้าแน่นจนกดไม่ลง = เปลี่ยนเครื่องใหญ่ขึ้น
-      </div>
-      <table class="price-tbl" style="margin-top:6px">
-        <tr><th>ซักอะไร</th><th>ใช้เครื่อง</th></tr>
+    <div class="callout co-red">🚫 งดซักรองเท้าในเครื่อง — เศษทราย/พื้นยางทำถังเสียหาย และไม่ถูกสุขอนามัยกับผ้าของคนถัดไป</div>
+    <div class="stp2" id="sw0"><div class="stp2h" onclick="stepTog('sw',0)"><span class="n">1</span><b>แยกผ้าก่อนซัก</b><span class="arw">⌄</span></div><div class="stp2b"><p>แยก 3 กอง: ผ้าขาว · ผ้าสี · ผ้าสีเข้มตัวใหม่ — ไม่แน่ใจไปลองเกมแยกผ้าได้เลย</p></div></div>
+    <div class="stp2" id="sw1"><div class="stp2h" onclick="stepTog('sw',1)"><span class="n">2</span><b>ใส่ผ้าหลวมๆ</b><span class="arw">⌄</span></div><div class="stp2b"><p>ไม่เกิน 3/4 ของถัง เหลือที่ให้ผ้าหมุน · เหลือช่องว่างเหนือผ้าประมาณ 1 ฝ่ามือ</p></div></div>
+    <div class="stp2" id="sw2"><div class="stp2h" onclick="stepTog('sw',2)"><span class="n">3</span><b>เติมน้ำยาในลิ้นชัก</b><span class="arw">⌄</span></div><div class="stp2b"><p>ช่อง "ซัก" = น้ำยาซักผ้า · ช่อง "นุ่ม" = ปรับผ้านุ่ม (ดูสติกเกอร์บนฝากล่อง)<br>12 กก. 1.5–2 ฝา · 17 กก. 2–2.5 ฝา — ดูตารางเต็มด้านล่าง</p></div></div>
+    <div class="stp2" id="sw3"><div class="stp2h" onclick="stepTog('sw',3)"><span class="n">4</span><b>เลือกอุณหภูมิน้ำ</b><span class="arw">⌄</span></div><div class="stp2b"><p>🧊 เย็น = ผ้าสีทั่วไป กันสีตก<br>🌤️ อุ่น = ผ้าขาว คราบเหงื่อ<br>🔥 ร้อน = ผ้าปูที่นอน ฆ่าไรฝุ่น</p></div></div>
+    <div class="stp2" id="sw4"><div class="stp2h" onclick="stepTog('sw',4)"><span class="n">5</span><b>หยอดเหรียญ หรือสแกนจ่าย</b><span class="arw">⌄</span></div><div class="stp2b"><p>ราคาโชว์ที่จอบนเครื่อง · จ่ายครบเครื่องเริ่มทำงานเอง · ถ้าไม่เริ่ม เช็คว่าปิดฝาสนิทแล้วหรือยัง</p></div></div>
+    <div class="stp2" id="sw5"><div class="stp2h" onclick="stepTog('sw',5)"><span class="n">6</span><b>รอ 30–40 นาที</b><span class="arw">⌄</span></div><div class="stp2b"><p>ซักเสร็จรีบเอาออก ทิ้งไว้นานผ้าจะเหม็นอับ · ระหว่างรอแวะจิบชานม Owl Cha ข้างๆ ได้น้า 🧋</p></div></div>
+
+
+    <div class="stp2" id="sw6"><div class="stp2h" onclick="stepTog('sw',6)"><span class="n">⚖️</span><b>เลข 12/17 กก. คืออะไร? เลือกยังไง</b><span class="arw">⌄</span></div><div class="stp2b">
+      <p><b>คือน้ำหนักผ้าแห้งสูงสุด</b> (ไม่ใช่ขนาดถัง ไม่ใช่น้ำหนักตอนเปียก) — แต่อย่าใส่เต็มพิกัด ใส่จริงราว <b>3/4 ของตัวเลข</b> (12 กก. → ~8–9 กก. · 17 กก. → ~12–13 กก.)</p>
+      <p style="margin-top:8px"><b>วิธีเช็คไม่ต้องชั่ง:</b> ใส่ผ้าแห้งหลวมๆ กดเบาๆ ควรเหลือช่องว่างเหนือผ้า <b>ประมาณ 1 ฝ่ามือ</b></p>
+      <table class="price-tbl" style="margin-top:9px">
+        <tr><th>ซักอะไร</th><th>เครื่อง</th></tr>
         <tr><td>ผ้า 1 คน / 1 สัปดาห์</td><td class="num">12 กก.</td></tr>
         <tr><td>ผ้าปูที่นอน + ปลอกหมอน</td><td class="num">12 กก.</td></tr>
-        <tr><td>ผ้า 2 คน หรือสะสม 2 สัปดาห์</td><td class="num">17 กก.</td></tr>
-        <tr><td>ผ้านวม / ผ้าห่มหนา 1 ผืน</td><td class="num">17 กก.</td></tr>
-        <tr><td>ยีนส์ / ฮู้ดดี้ ผ้าหนาเยอะ</td><td class="num">ขยับขึ้น 1 ขนาด</td></tr>
+        <tr><td>ผ้า 2 คน / สะสม 2 สัปดาห์</td><td class="num">17 กก.</td></tr>
+        <tr><td>ผ้านวม ผ้าห่มหนา 1 ผืน</td><td class="num">17 กก.</td></tr>
+        <tr><td>ยีนส์ ฮู้ดดี้ ผ้าหนาเยอะ</td><td class="num">ขยับขึ้น 1 ขนาด</td></tr>
       </table>
-      <p style="font-size:13px; color:var(--muted); font-weight:300; line-height:1.7; margin-top:8px">💡 ผ้าเปียกหนักขึ้น 2–3 เท่า — ยกไม่ไหวตอนเอาออกเป็นเรื่องปกติ ไม่ได้แปลว่าใส่เยอะไป</p>
-    </div>
+      <p style="margin-top:8px">💡 ผ้าเปียกหนักขึ้น 2–3 เท่า — ยกไม่ไหวตอนเอาออกเป็นเรื่องปกติ</p>
+    </div></div>
 
-    <div class="card">
-      <img class="card-art" src="art-detergent.jpg" alt="" onerror="this.style.display='none'">
-      <b style="font-size:16.5px; color:var(--navy)">🧴 ใช้น้ำยาแบบไหนดี?</b>
-      <p style="font-size:14px; line-height:1.7; margin-top:7px">เครื่องที่ร้านเป็น <b>ฝาหน้า (Front Load)</b> ใช้น้ำน้อย ต้องใช้น้ำยา <b>สูตรฟองน้อย</b> เท่านั้น</p>
-      <div class="callout co-blue" style="margin:11px 0 8px">
-        <b>✓ ใช้ได้ดี</b><br>
-        • น้ำยาซักผ้า <b>ชนิดน้ำ</b> — ละลายไว ไม่ตกค้าง (ดีที่สุด)<br>
-        • ขวดที่เขียน <b>"สำหรับเครื่องซักฝาหน้า"</b> หรือ <b>Front Load / HE</b><br>
-        • สูตรเข้มข้น (Concentrate) — ใส่น้อยลงครึ่งหนึ่งตามฉลาก
-      </div>
-      <div class="callout co-red" style="margin:0 0 8px">
-        <b>✕ เลี่ยง</b><br>
-        • <b>ผงซักฟอกธรรมดา</b> (สูตรฝาบน/ซักมือ) — ฟองล้นเกิน ล้างไม่ออก ผงตกค้างเป็นคราบขาว<br>
-        • <b>น้ำยาซักมือ</b> — ฟองเยอะมาก เครื่องอาจหยุดกลางคัน<br>
-        • <b>น้ำยาฟอกขาว (คลอรีน)</b> ผสมกับผ้าสี — ด่างถาวรทันที
-      </div>
-      <p style="font-size:13px; color:var(--muted); font-weight:300; line-height:1.7">💡 ผ้าเหม็นอับ/ผ้ากีฬา เติมน้ำยาฆ่าเชื้อ (เช่น Dettol ชนิดซักผ้า) ลงช่อง "นุ่ม" ได้ · คราบฝังลึกให้ทาน้ำยาขจัดคราบตรงจุดทิ้งไว้ 5 นาทีก่อนใส่เครื่อง</p>
-    </div>
-
-    <div class="card">
-      <b style="font-size:16.5px; color:var(--navy)">🧴 เติมน้ำยาเท่าไหร่ถึงพอดี</b>
-      <table class="price-tbl" style="margin-top:8px">
-        <tr><th>เครื่อง</th><th>น้ำยาซักผ้า</th><th>น้ำยาปรับผ้านุ่ม</th></tr>
-        <tr><td>12 กก.</td><td class="num">1.5–2 ฝา<br><span style="font-weight:300;color:var(--muted);font-size:12px">(~60 มล.)</span></td><td class="num">1 ฝา<br><span style="font-weight:300;color:var(--muted);font-size:12px">(~35–40 มล.)</span></td></tr>
-        <tr><td>17 กก.</td><td class="num">2–2.5 ฝา<br><span style="font-weight:300;color:var(--muted);font-size:12px">(~80 มล.)</span></td><td class="num">1.5 ฝา<br><span style="font-weight:300;color:var(--muted);font-size:12px">(~50–55 มล.)</span></td></tr>
+    <div class="stp2" id="sw7"><div class="stp2h" onclick="stepTog('sw',7)"><span class="n">🧴</span><b>เติมน้ำยาเท่าไหร่ · ใช้แบบไหนดี</b><span class="arw">⌄</span></div><div class="stp2b">
+      <table class="price-tbl">
+        <tr><th>เครื่อง</th><th>น้ำยาซัก</th><th>ปรับผ้านุ่ม</th></tr>
+        <tr><td>12 กก.</td><td class="num">1.5–2 ฝา<br><span style="font-weight:300;color:var(--muted);font-size:12px">~60 มล.</span></td><td class="num">1 ฝา<br><span style="font-weight:300;color:var(--muted);font-size:12px">~35–40 มล.</span></td></tr>
+        <tr><td>17 กก.</td><td class="num">2–2.5 ฝา<br><span style="font-weight:300;color:var(--muted);font-size:12px">~80 มล.</span></td><td class="num">1.5 ฝา<br><span style="font-weight:300;color:var(--muted);font-size:12px">~50–55 มล.</span></td></tr>
       </table>
-      <p style="font-size:12px; color:var(--muted); font-weight:300; line-height:1.7; margin-top:8px">อิงฝาขวดมาตรฐาน ~40 มล. · ผ้าเปื้อนมาก/เต็มถัง เพิ่มได้อีกครึ่งฝา · สูตรเข้มข้น (concentrate) ลดลงตามฉลากข้างขวด</p>
-      <div class="callout co-blue" style="margin:10px 0 2px">
-        <b>น้อยไป</b> คราบไม่หลุด · <b>มากไป</b> ฟองล้างไม่ออก ผ้ากระด้าง คันผิว<br>
-        <span style="font-size:13px; opacity:.85">อ่านเหตุผลเต็มๆ ที่แท็บ 💡 เทคนิค</span>
-      </div>
-    </div>
+      <p style="margin-top:9px">อิงฝาขวดมาตรฐาน ~40 มล. · ผ้าเปื้อนมากเพิ่มได้อีกครึ่งฝา · สูตรเข้มข้นลดลงตามฉลาก</p>
+      <p style="margin-top:9px"><b style="color:var(--pos-d)">✓ ใช้ได้ดี</b> — น้ำยา<b>ชนิดน้ำ</b> สูตรฟองน้อย หรือขวดที่เขียน "เครื่องฝาหน้า / Front Load / HE"</p>
+      <p style="margin-top:6px"><b style="color:var(--neg)">✕ เลี่ยง</b> — ผงซักฟอกธรรมดา (ฝาบน) และน้ำยาซักมือ ฟองล้นเกิน ล้างไม่ออก เหลือคราบขาว · น้ำยาฟอกขาวคลอรีนปนผ้าสี = ด่างถาวร</p>
+      <p style="margin-top:6px"><b>น้อยไป</b> คราบ/กลิ่นอับไม่หลุด · <b>มากไป</b> ฟองล้างไม่ออก ผ้ากระด้าง คันผิว เก็บไว้เหม็นอับ · ปรับผ้านุ่มเกิน = ผ้าขนหนูซับน้ำไม่อยู่</p>
+    </div></div>
   </div>
+
   <div id="how-dry" style="display:none">
-    <div class="callout co-red">⚠️ ห้ามอบ: รองเท้า · ผ้าที่มียาง/โฟม · ผ้าเปื้อนน้ำมัน · ชุดชั้นในโครงเหล็ก · ผ้าขนสัตว์/ผ้าไหม — เสี่ยงไฟไหม้และผ้าพัง</div>
-    <div class="step dry"><div class="n">1</div><div class="e">🌀</div><div><b>สะบัดผ้าก่อนใส่</b><p>ผ้าที่พันกันเป็นก้อนจะแห้งไม่ทั่ว สะบัดให้คลายก่อน</p></div></div>
-    <div class="step dry"><div class="n">2</div><div class="e">🧺</div><div><b>ใส่หลวมๆ ครึ่งถังกำลังดี</b><p>ยิ่งหลวม ยิ่งแห้งไว ประหยัดเงินกว่าอัดเต็มถัง</p></div></div>
-    <div class="step dry"><div class="n">3</div><div class="e">🌡️</div><div><b>เลือกอุณหภูมิอบ: เย็น / อุ่น / ร้อน</b><p>เย็น = ผ้าบอบบาง ผ้ายืด (ไม่หดชัวร์) · อุ่น = ผ้าทั่วไป ปลอดภัยสุด · ร้อน = ผ้าหนา ผ้าขนหนู ผ้าปู แห้งไว ฆ่าไรฝุ่น</p></div></div>
-    <div class="step dry"><div class="n">4</div><div class="e">🪙</div><div><b>หยอดเหรียญ หรือสแกนจ่าย</b><p>12 กก. เริ่ม 50฿ · 17 กก. เริ่ม 60฿</p></div></div>
-    <div class="step dry"><div class="n">5</div><div class="e">➕</div><div><b>ยังไม่แห้ง? เพิ่มได้</b><p>หยอดเพิ่ม 10฿ = เพิ่มเวลา (12กก. +7 นาที · 17กก. +6 นาที)</p></div></div>
+    <div class="callout co-red">⚠️ ห้ามอบ: รองเท้า · ผ้าที่มียาง/โฟม · ผ้าเปื้อนน้ำมัน · ชุดชั้นในโครงเหล็ก · ผ้าขนสัตว์/ผ้าไหม</div>
+    <div class="stp2 dry" id="sd0"><div class="stp2h" onclick="stepTog('sd',0)"><span class="n">1</span><b>สะบัดผ้าก่อนใส่</b><span class="arw">⌄</span></div><div class="stp2b"><p>ผ้าที่พันกันเป็นก้อนจะแห้งไม่ทั่ว สะบัดให้คลายก่อนใส่</p></div></div>
+    <div class="stp2 dry" id="sd1"><div class="stp2h" onclick="stepTog('sd',1)"><span class="n">2</span><b>ใส่ครึ่งถังกำลังดี</b><span class="arw">⌄</span></div><div class="stp2b"><p>เครื่องอบต้องการที่ว่างมากกว่าเครื่องซัก ยิ่งหลวมยิ่งแห้งไว ประหยัดกว่าอัดเต็มถัง</p></div></div>
+    <div class="stp2 dry" id="sd2"><div class="stp2h" onclick="stepTog('sd',2)"><span class="n">3</span><b>เลือกอุณหภูมิ เย็น/อุ่น/ร้อน</b><span class="arw">⌄</span></div><div class="stp2b"><p>🌬️ เย็น = ผ้ายืด ผ้าบอบบาง (ไม่หดชัวร์ แต่ช้าสุด)<br>♨️ อุ่น = ผ้าทั่วไป คุ้มที่สุด<br>🔥 ร้อน = ผ้าหนา ผ้าปู ผ้าขนหนู แห้งไว</p></div></div>
+    <div class="stp2 dry" id="sd3"><div class="stp2h" onclick="stepTog('sd',3)"><span class="n">4</span><b>หยอดเหรียญ หรือสแกนจ่าย</b><span class="arw">⌄</span></div><div class="stp2b"><p>12 กก. เริ่ม 50฿ · 17 กก. เริ่ม 60฿</p></div></div>
+    <div class="stp2 dry" id="sd4"><div class="stp2h" onclick="stepTog('sd',4)"><span class="n">5</span><b>ยังไม่แห้ง? หยอดเพิ่มได้</b><span class="arw">⌄</span></div><div class="stp2b"><p>+10฿ = 12กก. +7 นาที · 17กก. +6 นาที<br>💡 อบให้เกือบแห้งแล้วแขวนผึ่งต่อ 10 นาที ประหยัดกว่าและผ้าไม่ยับ</p></div></div>
 
     <div class="card">
       <b style="font-size:16.5px; color:var(--navy)">⚖️ ถนอมผ้า vs ประหยัดเวลา — เลือกยังไง?</b>
@@ -706,6 +692,12 @@ function howSeg(k){
   document.getElementById('mp-wash').className = 'mp' + (k==='wash'?' on':'');
   document.getElementById('mp-dry').className  = 'mp' + (k==='dry'?' on':'');
 }
+function stepTog(pre, i){
+  var el = document.getElementById(pre+i);
+  if(!el) return;
+  var base = (pre==='sd') ? 'stp2 dry' : 'stp2';
+  el.className = (el.className.indexOf('open')>=0) ? base : base+' open';
+}
 function faqTog(i){
   var el = document.getElementById('fq'+i);
   if(!el) return;
@@ -814,23 +806,23 @@ function gRender(){
 
   else if(gs.step==='wash'){
     h += '<div class="card pop">';
-    h += '<div class="g-q">เลือกเครื่องซัก</div>';
-    h += '<div class="g-sub">ในตะกร้ามี '+selKg()+' กก. — เลือกให้พอดี ไม่แน่นไป ไม่เปลืองไป</div>';
+    h += '<div class="g-q">เลือกเครื่องซัก <span style="font-size:12.5px;font-weight:300;color:var(--muted)">· ในตะกร้า '+selKg()+' กก.</span></div>';
+    h += '<div style="height:7px"></div>';
     h += '<div class="choice">';
-    h += '<div class="ch'+(gs.mc===12?' sel':'')+'" onclick="gSetMc(12)"><img class="ic-img" src="ic-wash.jpg" alt="" onerror="this.style.display=\'none\'"><b>12 กก.</b><span>ผ้า 1 คน/สัปดาห์<br>50–70฿</span></div>';
-    h += '<div class="ch'+(gs.mc===17?' sel':'')+'" onclick="gSetMc(17)"><img class="ic-img" src="ic-wash.jpg" alt="" onerror="this.style.display=\'none\'"><b>17 กก.</b><span>ผ้านวม/กองใหญ่<br>60–80฿</span></div>';
+    h += '<div class="ch'+(gs.mc===12?' sel':'')+'" onclick="gSetMc(12)"><img class="ic-img" src="ic-wash.jpg" alt="" onerror="this.style.display=\'none\'"><b>12 กก.</b><span>1 คน/สัปดาห์ · 50–70฿</span></div>';
+    h += '<div class="ch'+(gs.mc===17?' sel':'')+'" onclick="gSetMc(17)"><img class="ic-img" src="ic-wash.jpg" alt="" onerror="this.style.display=\'none\'"><b>17 กก.</b><span>ผ้านวม/กองใหญ่ · 60–80฿</span></div>';
     h += '</div>';
-    h += '<div class="g-q" style="margin-top:6px">เลือกอุณหภูมิน้ำ</div>';
+    h += '<div class="g-q" style="margin-top:2px">อุณหภูมิน้ำ</div><div style="height:6px"></div>';
     h += '<div class="choice">';
     h += '<div class="ch'+(gs.temp==='cold'?' sel':'')+'" onclick="gSetTemp(\'cold\')"><span class="e">🧊</span><b>เย็น</b></div>';
     h += '<div class="ch'+(gs.temp==='warm'?' sel':'')+'" onclick="gSetTemp(\'warm\')"><span class="e">🌤️</span><b>อุ่น</b></div>';
     h += '<div class="ch'+(gs.temp==='hot'?' sel':'')+'" onclick="gSetTemp(\'hot\')"><span class="e">🔥</span><b>ร้อน</b></div>';
     h += '</div>';
-    h += '<div class="g-q" style="margin-top:6px">เติมน้ำยาซักเท่าไหร่?</div>';
+    h += '<div class="g-q" style="margin-top:2px">น้ำยาซัก</div><div style="height:6px"></div>';
     h += '<div class="choice">';
-    h += '<div class="ch'+(gs.det==='low'?' sel':'')+'" onclick="gSetDet(\'low\')"><span class="e">🥄</span><b>นิดเดียว</b><span>ประหยัดไว้ก่อน</span></div>';
-    h += '<div class="ch'+(gs.det==='ok'?' sel':'')+'" onclick="gSetDet(\'ok\')"><span class="e">🧴</span><b>ตามฝาแนะนำ</b><span>พอดีๆ</span></div>';
-    h += '<div class="ch'+(gs.det==='high'?' sel':'')+'" onclick="gSetDet(\'high\')"><span class="e">🫗</span><b>เทเยอะๆ</b><span>ให้หอมสะอาดสุด</span></div>';
+    h += '<div class="ch'+(gs.det==='low'?' sel':'')+'" onclick="gSetDet(\'low\')"><span class="e">🥄</span><b>นิดเดียว</b></div>';
+    h += '<div class="ch'+(gs.det==='ok'?' sel':'')+'" onclick="gSetDet(\'ok\')"><span class="e">🧴</span><b>ตามฝา</b></div>';
+    h += '<div class="ch'+(gs.det==='high'?' sel':'')+'" onclick="gSetDet(\'high\')"><span class="e">🫗</span><b>เทเยอะ</b></div>';
     h += '</div>';
     if(gs.mc && gs.temp) h += '<div class="g-sub" style="margin:2px 0 0">ค่าซักรอบนี้: <b style="color:var(--blue-d)">'+WASH_PRICE[gs.mc][gs.temp]+'฿</b></div>';
     h += '</div>';
