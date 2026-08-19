@@ -40,8 +40,8 @@ nav{ position:fixed; bottom:0; left:0; right:0; background:rgba(255,255,255,.92)
   backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
   border-top:1px solid var(--line); box-shadow:0 -6px 20px rgba(17,62,108,.05); z-index:50; }
 nav .wrap{ display:flex; }
-nav button{ flex:1; border:none; background:none; font-family:'Kanit'; padding:9px 0 10px; font-size:11px; color:var(--muted); cursor:pointer; }
-nav button .ic{ display:block; font-size:21px; margin-bottom:2px; transition:transform .15s; }
+nav button{ flex:1; border:none; background:none; font-family:'Kanit'; padding:9px 0 10px; font-size:10px; color:var(--muted); cursor:pointer; }
+nav button .ic{ display:block; font-size:19px; margin-bottom:2px; transition:transform .15s; }
 nav button.on{ color:var(--blue-d); font-weight:600; }
 nav button.on .ic{ transform:translateY(-2px) scale(1.12); }
 
@@ -254,6 +254,7 @@ h2 small{ font-weight:300; font-size:13.5px; color:var(--muted); display:block; 
 .art-slot{ text-align:center; margin:2px 0 10px; }
 .art-slot:empty{ display:none; }
 .art-slot img{ max-width:100%; border-radius:18px; box-shadow:var(--shadow-s); }
+.faq-art{ display:block; width:130px; margin:2px auto 10px; mix-blend-mode:multiply; }
 .rank-art{ width:158px; height:auto; display:block; margin:0 auto 2px; animation:bounceIn .6s ease both; }
 .card-art{ display:block; width:calc(100% + 32px); margin:-16px -16px 12px; border-radius:20px 20px 0 0; }
 .ic-img{ width:44px; height:44px; object-fit:contain; display:block; margin:0 auto 2px; mix-blend-mode:multiply; }
@@ -294,6 +295,7 @@ h2 small{ font-weight:300; font-size:13.5px; color:var(--muted); display:block; 
 <!-- ═══════════ HOW TO ═══════════ -->
 <section class="page" id="pg-howto">
   <h2>🧺 ขั้นตอนการใช้งาน <small>ง่ายมาก ทำตามทีละข้อได้เลย</small></h2>
+  <div class="art-slot"><img src="art-howto-hero.jpg" alt="" onerror="this.parentNode.style.display='none'"></div>
   <div class="mpick">
     <button class="mp" id="mp-wash" onclick="howSeg('wash')">
       <img src="ic-wash.jpg" alt="" onerror="this.style.display='none'">
@@ -373,6 +375,24 @@ h2 small{ font-weight:300; font-size:13.5px; color:var(--muted); display:block; 
     <div class="step dry"><div class="n">3</div><div class="e">🌡️</div><div><b>เลือกอุณหภูมิอบ: เย็น / อุ่น / ร้อน</b><p>เย็น = ผ้าบอบบาง ผ้ายืด (ไม่หดชัวร์) · อุ่น = ผ้าทั่วไป ปลอดภัยสุด · ร้อน = ผ้าหนา ผ้าขนหนู ผ้าปู แห้งไว ฆ่าไรฝุ่น</p></div></div>
     <div class="step dry"><div class="n">4</div><div class="e">🪙</div><div><b>หยอดเหรียญ หรือสแกนจ่าย</b><p>12 กก. เริ่ม 50฿ · 17 กก. เริ่ม 60฿</p></div></div>
     <div class="step dry"><div class="n">5</div><div class="e">➕</div><div><b>ยังไม่แห้ง? เพิ่มได้</b><p>หยอดเพิ่ม 10฿ = เพิ่มเวลา (12กก. +7 นาที · 17กก. +6 นาที)</p></div></div>
+
+    <div class="card">
+      <b style="font-size:16.5px; color:var(--navy)">⚖️ ถนอมผ้า vs ประหยัดเวลา — เลือกยังไง?</b>
+      <p style="font-size:14px; line-height:1.7; margin-top:7px">ลมยิ่งเย็น ยิ่งถนอมผ้าจริง <b>แต่แห้งช้ากว่า ต้องหยอดเพิ่ม</b> — เครื่องอบคิดเงินตามเวลา</p>
+      <table class="price-tbl" style="margin-top:10px">
+        <tr><th>ลม</th><th>ถนอมผ้า</th><th>เวลา / ค่าใช้จ่าย</th></tr>
+        <tr><td><b>🌬️ เย็น</b></td><td>ดีที่สุด</td><td>ช้าสุด · อาจหยอดเพิ่ม 2–4 รอบ</td></tr>
+        <tr><td><b>♨️ อุ่น</b></td><td>ดี</td><td>กลางๆ · คุ้มสุดสำหรับผ้าทั่วไป</td></tr>
+        <tr><td><b>🔥 ร้อน</b></td><td>พอใช้</td><td>เร็วสุด · ประหยัดเงินถ้าผ้าหนา</td></tr>
+      </table>
+      <div class="callout co-blue" style="margin:11px 0 8px">
+        <b>เลือกแบบนี้ไม่พลาด</b><br>
+        • ผ้ายืด ผ้าบอบบาง ผ้าพันคอ เสื้อสกรีน → <b>เย็น</b> (ยอมช้า ดีกว่าผ้าพัง)<br>
+        • เสื้อยืด กางเกง ผ้าทั่วไป → <b>อุ่น</b> (จุดคุ้มที่สุด)<br>
+        • ผ้าปู ผ้าขนหนู ยีนส์ ผ้านวม → <b>ร้อน</b> (ผ้าหนาทนได้ แถมแห้งสนิท)
+      </div>
+      <p style="font-size:13px; color:var(--muted); font-weight:300; line-height:1.7">💡 อยากถนอมผ้าแต่ไม่อยากรอนาน: <b>อบร้อน/อุ่นให้เกือบแห้ง แล้วแขวนผึ่งต่อ 10 นาที</b> — ประหยัดกว่าอบจนแห้งสนิท และผ้าไม่ยับด้วย</p>
+    </div>
   </div>
   <a class="btn btn-line" href="https://lin.ee/tLp9JME">💬 ไม่แน่ใจตรงไหน ทักแชทถามได้เลย</a>
 </section>
@@ -456,7 +476,8 @@ h2 small{ font-weight:300; font-size:13.5px; color:var(--muted); display:block; 
       <div class="dl d-ok"><span class="di">✓</span><p>ซัก: เย็น=ผ้าสี · อุ่น=ผ้าขาว · ร้อน=ผ้าปูฆ่าไรฝุ่น</p></div>
       <div class="dl d-ok"><span class="di">✓</span><p>อบ: เย็น=ผ้ายืด/บอบบาง · อุ่น=ผ้าทั่วไป · ร้อน=ผ้าหนา</p></div>
       <div class="dl d-no"><span class="di">✕</span><p>ร้อนกับผ้าสี = ซีดเร็ว · ร้อนกับผ้ายืด = หดย้วยถาวร</p></div>
-      <div class="dl d-mn"><span class="di">💰</span><p>เสื้อฮู้ดดี้หดเสียทรง = เสียทั้งตัว 500–900฿</p></div>
+      <div class="dl d-ex"><span class="di">💡</span><p>ลมยิ่งเย็นยิ่งถนอมผ้า <b>แต่แห้งช้ากว่า ต้องหยอดเพิ่ม</b> — ผ้าบอบบางยอมช้าดีกว่าผ้าพัง ผ้าทั่วไปใช้อุ่นคุ้มสุด</p></div>
+      <div class="dl d-mn"><span class="di">💰</span><p>เสื้อฮู้ดดี้หดเสียทรง = เสียทั้งตัว 500–900฿ · เลือกลมผิดอบไม่แห้ง = หยอดเพิ่มรอบละ 10฿</p></div>
     </div>
   </div>
   <div class="tip" id="tp6">
@@ -499,6 +520,121 @@ h2 small{ font-weight:300; font-size:13.5px; color:var(--muted); display:block; 
   <a class="btn btn-blue" onclick="go('game')">🎮 ลองเล่นเกมซักผ้า ทดสอบตัวเอง</a>
 </section>
 
+<!-- ═══════════ FAQ ═══════════ -->
+<section class="page" id="pg-faq">
+  <h2>❓ คำถามที่พบบ่อย <small>แตะหัวข้อเพื่อดูสาเหตุและวิธีป้องกัน</small></h2>
+  <div class="art-slot"><img src="art-faq.jpg" alt="" onerror="this.parentNode.style.display='none'"></div>
+  <div class="tip" id="fq0">
+    <div class="tip-h" onclick="faqTog(0)"><span class="e">👖</span><b>ลืมของไว้ในกระเป๋า ทำไงดี?</b><span class="arw">⌄</span></div>
+    <div class="tip-b">
+      <img class="faq-art" src="art-safe.jpg" alt="" onerror="this.style.display='none'">
+      <div class="dl d-ex"><span class="di">💡</span><p>ทิชชู่ 1 แผ่นที่ลืมไว้ จะป่นเป็นขุยขาวติดผ้าทั้งกอง · ลิปมัน/ปากกา ละลายด้วยความร้อนแล้วเลอะยาว · เหรียญกับกุญแจกระแทกกระจกฝาเสียงดัง</p></div>
+      <div class="dl d-ok"><span class="di">✓</span><p>เขี่ยกระเป๋าทุกใบก่อนใส่เครื่อง 10 วินาที ช่วยได้เกือบ 100% — ของเล็กอย่างแอร์ป็อดกับบัตรมักหล่นอยู่ก้นกระเป๋า</p></div>
+      <div class="dl d-mn"><span class="di">💰</span><p>เจอทิชชู่ป่นแล้ว ต้องซักใหม่ + สะบัดทีละตัว เสียเวลาเป็นชั่วโมง</p></div>
+      <div class="dl d-mn"><span class="di">ℹ</span><p>ของที่ลืมไว้ในกระเป๋าเสื้อผ้า ทางร้านไม่สามารถรับผิดชอบได้นะคะ แต่ถ้าเจอในเครื่อง เราเก็บไว้ให้ที่เคาน์เตอร์ ทักไลน์ถามได้เลย</p></div>
+    </div>
+  </div>
+  <div class="tip" id="fq1">
+    <div class="tip-h" onclick="faqTog(1)"><span class="e">🕳️</span><b>ผ้าเป็นรู / ยืด หลังซัก เกิดจากอะไร?</b><span class="arw">⌄</span></div>
+    <div class="tip-b">
+      <div class="dl d-ex"><span class="di">💡</span><p>ส่วนใหญ่มาจากซิปที่เปิดอยู่เกี่ยวผ้าตัวอื่น · ตะขอชุดชั้นในเกี่ยวผ้าบาง · หรือผ้าที่เปื่อยตามอายุอยู่แล้ว เจอแรงปั่นเลยขาด</p></div>
+      <div class="dl d-ok"><span class="di">✓</span><p>รูดซิปให้สุด ปลดตะขอ กลับด้านในออก · ผ้าบางกับชุดชั้นในใส่ถุงซัก · ผ้าเก่ามากแนะนำซักมือ</p></div>
+      <div class="dl d-ex"><span class="di">💡</span><p>เครื่องฝาหน้าอ่อนโยนกว่าเครื่องฝาบนมาก (ไม่มีแกนกลางเหวี่ยง) ผ้าจึงเสียหายจากการเกี่ยวกันเองมากกว่าจากเครื่อง</p></div>
+      <div class="dl d-mn"><span class="di">💰</span><p>ถุงซัก 30–60฿ ใช้ได้เป็นปี ป้องกันได้แทบทุกเคส</p></div>
+    </div>
+  </div>
+  <div class="tip" id="fq2">
+    <div class="tip-h" onclick="faqTog(2)"><span class="e">🪙</span><b>หยอดเงินแล้วเครื่องไม่ทำงาน?</b><span class="arw">⌄</span></div>
+    <div class="tip-b">
+      <div class="dl d-ok"><span class="di">✓</span><p>เช็ค 3 อย่างก่อน: ปิดฝาให้สนิทจนได้ยินเสียงคลิก · กดปุ่ม Start อีกครั้ง · ดูจอว่าขึ้นราคาครบหรือยัง</p></div>
+      <div class="dl d-ex"><span class="di">💡</span><p>เครื่องจะไม่เริ่มถ้าฝาไม่ล็อก เป็นระบบความปลอดภัย ไม่ใช่เครื่องเสีย</p></div>
+      <div class="dl d-ok"><span class="di">✓</span><p>ยังไม่ทำงาน — ถ่ายรูปหน้าจอเครื่อง + เลขเครื่อง ทักไลน์มาได้ทันที ทางร้านคืนเงินหรือเปิดเครื่องให้ใหม่</p></div>
+      <div class="dl d-mn"><span class="di">💰</span><p>ช่วง 21:00–09:00 ไม่มีแม่บ้าน แต่แอดมินไลน์ตอบและแก้ให้ได้เหมือนกันค่ะ</p></div>
+    </div>
+  </div>
+  <div class="tip" id="fq3">
+    <div class="tip-h" onclick="faqTog(3)"><span class="e">🧺</span><b>ผ้าหายจากเครื่อง / มีคนหยิบออก</b><span class="arw">⌄</span></div>
+    <div class="tip-b">
+      <img class="faq-art" src="art-clock.jpg" alt="" onerror="this.style.display='none'">
+      <div class="dl d-ex"><span class="di">💡</span><p>เมื่อรอบซักจบแล้วมีคนรอใช้เครื่อง เขามักหยิบผ้าออกมาวางบนโต๊ะเพื่อใช้เครื่องต่อ ซึ่งเสี่ยงต่อการปะปนหรือหล่นหาย</p></div>
+      <div class="dl d-ok"><span class="di">✓</span><p>ตั้งนาฬิกาปลุกไว้ตามเวลาที่เครื่องบอก แล้วกลับมารับภายใน 10–15 นาที</p></div>
+      <div class="dl d-ok"><span class="di">✓</span><p>ถ้าต้องออกไปธุระนาน แนะนำใช้บริการ ฝากซัก-อบ-พับ (ฟรีค่าบริการ) แม่บ้านดูแลให้ตลอด ปลอดภัยกว่า</p></div>
+      <div class="dl d-mn"><span class="di">ℹ</span><p>ผ้าที่ทิ้งไว้ในเครื่องหลังรอบซักจบ ทางร้านดูแลไม่ทั่วถึงจริงๆ นะคะ</p></div>
+    </div>
+  </div>
+  <div class="tip" id="fq4">
+    <div class="tip-h" onclick="faqTog(4)"><span class="e">🎽</span><b>ผ้ามีคราบ/สีแปลกๆ ที่ไม่ได้มาจากผ้าเรา</b><span class="arw">⌄</span></div>
+    <div class="tip-b">
+      <div class="dl d-ex"><span class="di">💡</span><p>อาจมีสีตกค้างจากผ้าย้อมหรือผ้าเปื้อนสีของรอบก่อนหน้า แม้เครื่องจะล้างตัวเองทุกรอบก็ตาม</p></div>
+      <div class="dl d-ok"><span class="di">✓</span><p>ถ้าจะซักผ้าขาวหรือผ้าสีอ่อนสำคัญๆ ให้เปิดฝาดูในถังก่อน ถ้าเห็นคราบให้เปลี่ยนเครื่อง หรือแจ้งแม่บ้านล้างถังให้</p></div>
+      <div class="dl d-ok"><span class="di">✓</span><p>ทางร้านล้างถังเครื่องเป็นประจำ ถ้าเจอถังสกปรกทักไลน์บอกได้ทันที เราไปจัดการให้เลย</p></div>
+      <div class="dl d-mn"><span class="di">💰</span><p>เช็ค 3 วินาทีก่อนใส่ผ้า ป้องกันได้ทั้งกอง</p></div>
+    </div>
+  </div>
+  <div class="tip" id="fq5">
+    <div class="tip-h" onclick="faqTog(5)"><span class="e">💨</span><b>อบแล้วยังไม่แห้ง หยอดหลายรอบแล้ว</b><span class="arw">⌄</span></div>
+    <div class="tip-b">
+      <div class="dl d-ex"><span class="di">💡</span><p>สาเหตุหลักคือผ้าแน่นเกินไป ลมร้อนวิ่งผ่านไม่ทั่ว — เครื่องอบต้องการที่ว่างมากกว่าเครื่องซัก</p></div>
+      <div class="dl d-ok"><span class="di">✓</span><p>ใส่แค่ครึ่งถัง สะบัดผ้าให้คลายก่อนใส่ · ผ้าหนา (ยีนส์ ผ้านวม ผ้าขนหนู) เลือกลมร้อน</p></div>
+      <div class="dl d-ex"><span class="di">💡</span><p>ลมเย็น/อุ่นถนอมผ้ากว่าจริง แต่ใช้เวลานานกว่า ต้องเผื่องบเพิ่ม</p></div>
+      <div class="dl d-mn"><span class="di">💰</span><p>แบ่งอบ 2 รอบหลวมๆ มักถูกกว่าอัดรอบเดียวแล้วหยอดต่อ 4 รอบ</p></div>
+    </div>
+  </div>
+  <div class="tip" id="fq6">
+    <div class="tip-h" onclick="faqTog(6)"><span class="e">👃</span><b>ซักแล้วผ้ายังเหม็นอับ</b><span class="arw">⌄</span></div>
+    <div class="tip-b">
+      <div class="dl d-ex"><span class="di">💡</span><p>ผ้าเปียกที่ทิ้งไว้ในถังเกิน 1–2 ชม. จะเริ่มมีกลิ่นจากเชื้อรา · น้ำยาที่น้อยเกินก็ทำให้กลิ่นเหงื่อฝังไม่หลุด</p></div>
+      <div class="dl d-ok"><span class="di">✓</span><p>ซักเสร็จรีบเอาออก แล้วอบต่อเลยยิ่งดี · ใส่น้ำยาตามฝาแนะนำ ไม่ต้องประหยัดเกินไป</p></div>
+      <div class="dl d-ex"><span class="di">💡</span><p>ผ้ากีฬา/ผ้าที่หมักไว้หลายวัน แนะนำน้ำอุ่น + น้ำยาฆ่าเชื้อลงช่อง "นุ่ม"</p></div>
+      <div class="dl d-mn"><span class="di">💰</span><p>ต้องซักใหม่ = จ่ายซ้ำอีก 50–80฿</p></div>
+    </div>
+  </div>
+  <div class="tip" id="fq7">
+    <div class="tip-h" onclick="faqTog(7)"><span class="e">⚪</span><b>มีคราบขาวๆ บนผ้าสีเข้ม</b><span class="arw">⌄</span></div>
+    <div class="tip-b">
+      <div class="dl d-ex"><span class="di">💡</span><p>เกิดจากน้ำยาที่ละลายไม่หมด — มักมาจากผงซักฟอกสูตรฝาบน หรือใส่น้ำยาเยอะเกินไป</p></div>
+      <div class="dl d-ok"><span class="di">✓</span><p>ใช้น้ำยาชนิดน้ำ สูตรฟองน้อย (Front Load / HE) และใส่ตามปริมาณที่แนะนำ</p></div>
+      <div class="dl d-ok"><span class="di">✓</span><p>ผ้าที่เป็นคราบแล้ว ซักซ้ำอีกรอบโดยไม่ใส่น้ำยา คราบจะหลุดออกได้</p></div>
+      <div class="dl d-mn"><span class="di">💰</span><p>น้ำยาถูกชนิดใช้น้อยกว่า ประหยัดกว่า และผ้าสะอาดกว่าด้วย</p></div>
+    </div>
+  </div>
+  <div class="tip" id="fq8">
+    <div class="tip-h" onclick="faqTog(8)"><span class="e">📏</span><b>ผ้าหด / เสียทรงหลังอบ</b><span class="arw">⌄</span></div>
+    <div class="tip-b">
+      <div class="dl d-ex"><span class="di">💡</span><p>ความร้อนสูงทำให้เส้นใยผ้าฝ้ายและผ้ายืดหดตัว โดยเฉพาะเสื้อฮู้ดดี้ ผ้ายืด และเสื้อที่มีสกรีน</p></div>
+      <div class="dl d-ok"><span class="di">✓</span><p>ผ้ากลุ่มนี้เลือกลมเย็นหรืออุ่น · หรืออบให้เกือบแห้งแล้วแขวนผึ่งต่อ</p></div>
+      <div class="dl d-ex"><span class="di">💡</span><p>ดูป้ายในเสื้อได้ สัญลักษณ์วงกลมมีจุด = อบได้ · วงกลมมีกากบาท = ห้ามอบ</p></div>
+      <div class="dl d-mn"><span class="di">💰</span><p>เสื้อตัวโปรดหดแล้วคืนไม่ได้ — เลือกลมให้ตรงผ้าคุ้มกว่า</p></div>
+    </div>
+  </div>
+  <div class="tip" id="fq9">
+    <div class="tip-h" onclick="faqTog(9)"><span class="e">👜</span><b>ฝากซักแล้วผ้าไม่ครบ / เสียหาย</b><span class="arw">⌄</span></div>
+    <div class="tip-b">
+      <div class="dl d-ok"><span class="di">✓</span><p>ตอนรับผ้า แม่บ้านจะนับจำนวนชิ้นและถ่ายรูปไว้ทุกครั้ง เพื่อยืนยันร่วมกันทั้งสองฝ่าย</p></div>
+      <div class="dl d-ok"><span class="di">✓</span><p>ถ้ามีผ้าที่ต้องดูแลพิเศษ (ผ้าไหม ผ้าแบรนด์ ผ้าสีตกง่าย) แจ้งตอนฝากได้เลย เราจะแยกซักให้</p></div>
+      <div class="dl d-ok"><span class="di">✓</span><p>พบปัญหาจากการฝากซัก ทักไลน์ได้ทันที ทางร้านรับผิดชอบตามความเหมาะสมค่ะ</p></div>
+      <div class="dl d-mn"><span class="di">💰</span><p>บริการฝากซัก-อบ-พับ ฟรีค่าบริการ จ่ายแค่ค่าเครื่อง</p></div>
+    </div>
+  </div>
+  <div class="tip" id="fq10">
+    <div class="tip-h" onclick="faqTog(10)"><span class="e">🎒</span><b>ของมีค่าในร้าน</b><span class="arw">⌄</span></div>
+    <div class="tip-b">
+      <div class="dl d-ok"><span class="di">✓</span><p>ร้านมีกล้องวงจรปิดตลอด 24 ชม. แต่ของส่วนตัวแนะนำให้พกติดตัวไว้นะคะ</p></div>
+      <div class="dl d-ex"><span class="di">💡</span><p>ช่วงรอผ้าหลายคนวางมือถือ/กระเป๋าไว้บนโต๊ะแล้วเดินออกไป ซึ่งเสี่ยงต่อการสูญหาย</p></div>
+      <div class="dl d-ok"><span class="di">✓</span><p>ถ้าลืมของไว้ ทักไลน์บอกเวลาโดยประมาณ เราช่วยดูกล้องและหาให้ได้</p></div>
+    </div>
+  </div>
+  <div class="tip" id="fq11">
+    <div class="tip-h" onclick="faqTog(11)"><span class="e">👶</span><b>พาเด็กมาด้วย ต้องระวังอะไร</b><span class="arw">⌄</span></div>
+    <div class="tip-b">
+      <div class="dl d-ok"><span class="di">✓</span><p>ฝากดูแลไม่ให้เด็กปีนเครื่องหรือเข้าไปในถังนะคะ — ฝาเครื่องล็อกอัตโนมัติเมื่อเริ่มทำงาน</p></div>
+      <div class="dl d-ex"><span class="di">💡</span><p>ระหว่างอบ กระจกฝาจะร้อน อาจทำให้เด็กเผลอไปสัมผัสแล้วเจ็บได้</p></div>
+      <div class="dl d-ok"><span class="di">✓</span><p>พื้นเปียกลื่นง่าย ถ้าเห็นน้ำหกบอกแม่บ้านได้เลย เราเช็ดให้ทันที</p></div>
+    </div>
+  </div>
+  <div class="callout co-blue" style="margin-top:14px">ไม่เจอคำตอบที่ต้องการ? ทักไลน์มาได้เลยค่ะ ยินดีช่วยเสมอ 🧸</div>
+  <a class="btn btn-line" href="https://lin.ee/tLp9JME">💬 สอบถามเพิ่มเติม</a>
+</section>
 <!-- ═══════════ PROMO & SERVICE ═══════════ -->
 <section class="page" id="pg-promo">
   <h2>🏷️ โปรโมชั่น <small>โชว์หน้าจอไลน์กับแม่บ้านเพื่อรับสิทธิ์</small></h2>
@@ -537,6 +673,7 @@ h2 small{ font-weight:300; font-size:13.5px; color:var(--muted); display:block; 
     <div class="svc"><div class="e">📞</div><div><b>ติดต่อร้าน</b><p>โทร 083-145-6588 หรือทักไลน์ด้านล่างเลย</p></div></div>
   </div>
 
+  <div class="art-slot" style="margin-top:14px"><img src="art-love.jpg" alt="" onerror="this.parentNode.style.display='none'"></div>
   <a class="btn btn-line" href="https://lin.ee/tLp9JME">💬 ทักแชทร้าน · ฝากซัก / เรียกเดลิเวอรี่</a>
   <div class="foot-note">Teddy Wash &amp; Dry สาขา ม.ศิลปากร<br>ซัก อบ พับ ครบจบที่เดียว 🧸</div>
 </section>
@@ -554,13 +691,14 @@ h2 small{ font-weight:300; font-size:13.5px; color:var(--muted); display:block; 
     <button id="nb-game" onclick="go('game')"><span class="ic">🎮</span>เกมซักผ้า</button>
     <button id="nb-howto" onclick="go('howto')"><span class="ic">🧺</span>วิธีใช้</button>
     <button id="nb-tips" onclick="go('tips')"><span class="ic">💡</span>เทคนิค</button>
+    <button id="nb-faq" onclick="go('faq')"><span class="ic">❓</span>คำถาม</button>
     <button id="nb-promo" onclick="go('promo')"><span class="ic">🏷️</span>โปร·บริการ</button>
   </div>
 </nav>
 
 <script>
 /* ══════════ ROUTER ══════════ */
-var PAGES = ['game','howto','tips','promo'];
+var PAGES = ['game','howto','tips','faq','promo'];
 function go(p, scrollId){
   if(PAGES.indexOf(p) < 0) p = 'game';
   for(var i=0;i<PAGES.length;i++){
@@ -587,6 +725,11 @@ function howSeg(k){
   document.getElementById('how-dry').style.display  = (k==='dry'?'':'none');
   document.getElementById('mp-wash').className = 'mp' + (k==='wash'?' on':'');
   document.getElementById('mp-dry').className  = 'mp' + (k==='dry'?' on':'');
+}
+function faqTog(i){
+  var el = document.getElementById('fq'+i);
+  if(!el) return;
+  el.className = (el.className.indexOf('open')>=0) ? 'tip' : 'tip open';
 }
 function tipTog(i){
   var el = document.getElementById('tp'+i);
@@ -679,6 +822,7 @@ function gRender(){
     });
     h += '</div>';
     var kg = selKg();
+    if(kg === 0) h += '<div style="text-align:center;margin:12px 0 2px"><img src="art-empty.jpg" alt="" style="width:112px;mix-blend-mode:multiply" onerror="this.style.display=\'none\'"><div class="g-sub" style="margin:2px 0 0">ตะกร้ายังว่างอยู่ แตะเลือกผ้าด้านบนได้เลย</div></div>';
     h += '<div class="meter"><div class="m-lab"><span>น้ำหนักในตะกร้า</span><span><b>'+kg+'</b> กก.</span></div>';
     h += '<div class="m-bar"><div class="m-fill'+(kg>17?' over':'')+'" style="width:'+Math.min(100, kg/17*100)+'%"></div></div></div>';
     if(hasTag('delicate')){
@@ -732,11 +876,11 @@ function gRender(){
     h += '<div class="card pop">';
     h += '<img class="ic-img" src="ic-dry.jpg" alt="" style="width:74px;margin-bottom:6px" onerror="this.style.display=\'none\'">';
     h += '<div class="g-q">ซักเสร็จแล้ว! เอาผ้าไปไหนต่อ?</div>';
-    h += '<div class="g-sub">เครื่องอบ '+gs.mc+' กก. อยู่ชั้นบนของแท่นเดียวกันเลย ('+(gs.mc===12?'50':'60')+'฿)</div>';
+    h += '<div class="g-sub">เครื่องอบ '+gs.mc+' กก. ชั้นบนแท่นเดียวกัน เริ่ม '+(gs.mc===12?'50':'60')+'฿ · ลมยิ่งเย็นยิ่งถนอมผ้า แต่แห้งช้า ต้องหยอดเพิ่ม</div>';
     h += '<div class="choice">';
-    h += '<div class="ch'+(gs.dry==='cool'?' sel-g':'')+'" onclick="gSetDry(\'cool\')"><span class="e">🌬️</span><b>เย็น</b><span>ผ้าบอบบาง<br>ผ้ายืด</span></div>';
-    h += '<div class="ch'+(gs.dry==='warm'?' sel-g':'')+'" onclick="gSetDry(\'warm\')"><span class="e">♨️</span><b>อุ่น</b><span>ผ้าทั่วไป<br>ปลอดภัยสุด</span></div>';
-    h += '<div class="ch'+(gs.dry==='hot'?' sel-g':'')+'" onclick="gSetDry(\'hot\')"><span class="e">🔥</span><b>ร้อน</b><span>ผ้าหนา<br>แห้งไว</span></div>';
+    h += '<div class="ch'+(gs.dry==='cool'?' sel-g':'')+'" onclick="gSetDry(\'cool\')"><span class="e">🌬️</span><b>เย็น</b><span>ถนอมสุด<br>แต่ช้าสุด</span></div>';
+    h += '<div class="ch'+(gs.dry==='warm'?' sel-g':'')+'" onclick="gSetDry(\'warm\')"><span class="e">♨️</span><b>อุ่น</b><span>ผ้าทั่วไป<br>คุ้มสุด</span></div>';
+    h += '<div class="ch'+(gs.dry==='hot'?' sel-g':'')+'" onclick="gSetDry(\'hot\')"><span class="e">🔥</span><b>ร้อน</b><span>ผ้าหนา<br>แห้งไวสุด</span></div>';
     h += '</div>';
     h += '<div class="choice">';
     h += '<div class="ch'+(gs.dry==='none'?' sel-g':'')+'" onclick="gSetDry(\'none\')"><span class="e">🌤️</span><b>ไม่อบ — หิ้วกลับไปตากเอง</b></div>';
@@ -921,7 +1065,7 @@ function evalRun(){
       if(has('bulky')||has('bedding')){ sc -= 4; F.push({k:1, t:'ผ้าหนา/ผ้าปูกับไฟอุ่น อาจต้องหยอดเพิ่มเวลากว่าจะแห้งสนิทข้างใน — ไฟร้อนจะไวกว่า'}); }
     }else if(dry==='cool'){
       if(has('delicate')||has('heat')){ sc += 4; F.push({k:2, t:'ลมเย็นกับผ้าบอบบาง/ผ้ายืด — ถูกต้อง! ไม่หดแน่นอน ทรงสวยเหมือนเดิม'}); }
-      if(has('bulky')||has('bedding')){ sc -= 8; F.push({k:1, t:'ผ้าหนากับลมเย็นแห้งยากมาก ต้องหยอดหลายรอบ เปลืองกว่าเดิม — ผ้าหนาใช้ไฟร้อนคุ้มสุด'}); }
+      if(has('bulky')||has('bedding')){ sc -= 8; F.push({k:1, t:'ผ้าหนากับลมเย็นแห้งยากมาก อาจต้องหยอดเพิ่ม 3–4 รอบ (รอบละ 10฿) — ผ้าหนาใช้ไฟร้อนคุ้มกว่าเยอะ'}); }
       else if(!has('delicate') && !has('heat')){ sc -= 5; F.push({k:1, t:'ลมเย็นแห้งช้าสุด ผ้าทั่วไปใช้ไฟอุ่นจะคุ้มเวลากับเงินกว่า'}); }
     }
   }else{
