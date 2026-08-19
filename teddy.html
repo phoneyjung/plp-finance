@@ -49,9 +49,9 @@ nav button.on .ic{ transform:translateY(-2px) scale(1.12); }
 .page.on{ display:block; animation:fadeUp .3s ease both; }
 @keyframes fadeUp{ 0%{ opacity:0; transform:translateY(8px) } 100%{ opacity:1; transform:none } }
 
-h2{ font-size:18px; font-weight:600; margin:4px 0 12px; color:var(--navy); }
-h2 small{ font-weight:300; font-size:12.5px; color:var(--muted); display:block; margin-top:1px; }
-.card{ background:#fff; border:none; box-shadow:var(--shadow); border-radius:20px; padding:16px; margin-bottom:13px; }
+h2{ font-size:20px; font-weight:600; margin:4px 0 12px; color:var(--navy); }
+h2 small{ font-weight:300; font-size:13.5px; color:var(--muted); display:block; margin-top:2px; }
+.card{ background:#fff; border:none; box-shadow:var(--shadow); border-radius:20px; padding:14px; margin-bottom:11px; }
 
 .btn{ display:block; width:100%; border:none; border-radius:15px; padding:13.5px; font-family:'Kanit';
   font-size:15.5px; font-weight:600; cursor:pointer; text-align:center; text-decoration:none; }
@@ -71,36 +71,36 @@ h2 small{ font-weight:300; font-size:12.5px; color:var(--muted); display:block; 
 .g-hero .ey{ font-size:9.5px; letter-spacing:.24em; color:#9CCBEE; font-weight:500; margin-bottom:3px; }
 .g-hero p{ font-size:12.5px; color:#C9DDF2; margin-top:4px; line-height:1.6; font-weight:300; }
 
-.stp{ display:flex; gap:4px; margin-bottom:14px; }
+.stp{ display:flex; gap:4px; margin-bottom:11px; }
 .stp .s{ flex:1; text-align:center; }
-.stp .dot{ width:32px; height:32px; border-radius:50%; background:#EFE8D9; color:#B9AE97; margin:0 auto 4px;
+.stp .dot{ width:28px; height:28px; border-radius:50%; background:#EFE8D9; color:#B9AE97; margin:0 auto 4px;
   display:flex; align-items:center; justify-content:center; font-size:14px; transition:all .25s; }
 .stp .t{ font-size:10px; color:var(--muted); }
 .stp .s.on .dot{ background:var(--blue); color:#fff; transform:scale(1.12); box-shadow:0 4px 10px rgba(91,184,232,.4); }
 .stp .s.on .t{ color:var(--blue-d); font-weight:600; }
 .stp .s.done .dot{ background:var(--pos); color:#fff; }
 
-.g-q{ font-size:16px; font-weight:600; margin-bottom:2px; color:var(--navy); }
-.g-sub{ font-size:12.5px; color:var(--muted); font-weight:300; line-height:1.6; margin-bottom:12px; }
+.g-q{ font-size:17px; font-weight:600; margin-bottom:2px; color:var(--navy); }
+.g-sub{ font-size:13.5px; color:var(--muted); font-weight:300; line-height:1.62; margin-bottom:12px; }
 
-.items{ display:grid; grid-template-columns:1fr 1fr; gap:9px; }
-.item{ background:#fff; border:2px solid var(--line); border-radius:16px; padding:11px 9px; text-align:center;
+.items{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:7px; }
+.item{ background:#fff; border:2px solid var(--line); border-radius:13px; padding:7px 4px; text-align:center;
   cursor:pointer; transition:all .12s; position:relative; }
-.item .e{ font-size:29px; display:block; }
-.item b{ font-size:12px; font-weight:500; display:block; margin-top:4px; line-height:1.35; }
-.item span{ font-size:10.5px; color:var(--muted); font-weight:300; }
+.item .e{ font-size:23px; display:block; line-height:1.15; }
+.item b{ font-size:10.5px; font-weight:500; display:block; margin-top:2px; line-height:1.3; }
+.item span{ font-size:9.5px; color:var(--muted); font-weight:300; }
 .item.sel{ border-color:var(--blue); background:#F2FAFE; box-shadow:0 4px 12px rgba(91,184,232,.18); }
-.item.sel::after{ content:'✓'; position:absolute; top:6px; right:8px; width:20px; height:20px; border-radius:50%;
-  background:var(--blue); color:#fff; font-size:12px; display:flex; align-items:center; justify-content:center; }
+.item.sel::after{ content:'✓'; position:absolute; top:3px; right:4px; width:16px; height:16px; border-radius:50%;
+  background:var(--blue); color:#fff; font-size:10px; display:flex; align-items:center; justify-content:center; }
 .item:active{ transform:scale(.96); }
 
-.meter{ margin:13px 0 4px; }
+.meter{ margin:10px 0 2px; }
 .meter .m-lab{ display:flex; justify-content:space-between; font-size:11.5px; color:var(--muted); margin-bottom:5px; }
 .meter .m-bar{ height:10px; border-radius:5px; background:#EFE8D9; overflow:hidden; }
 .meter .m-fill{ height:100%; border-radius:5px; background:linear-gradient(90deg,var(--blue),var(--blue-d)); transition:width .3s; }
 .meter .m-fill.over{ background:linear-gradient(90deg,#E0864F,var(--neg)); }
 
-.togg{ display:flex; align-items:center; gap:10px; background:#FBF7EE; border-radius:14px; padding:11px 13px; margin-top:11px; cursor:pointer; }
+.togg{ display:flex; align-items:center; gap:9px; background:#FBF7EE; border-radius:13px; padding:8px 11px; margin-top:9px; cursor:pointer; }
 .togg .tk{ flex:none; width:44px; height:26px; border-radius:13px; background:#DDD4C2; position:relative; transition:.2s; }
 .togg .tk::after{ content:''; position:absolute; top:3px; left:3px; width:20px; height:20px; border-radius:50%; background:#fff; transition:.2s; }
 .togg.on .tk{ background:var(--pos); }
@@ -147,7 +147,7 @@ h2 small{ font-weight:300; font-size:12.5px; color:var(--muted); display:block; 
 .fnd:last-child{ border-bottom:none; }
 .fnd .fi{ flex:none; width:26px; height:26px; border-radius:50%; font-size:13px; display:flex; align-items:center; justify-content:center; }
 .f2 .fi{ background:var(--pos-bg); } .f1 .fi{ background:var(--warn-bg); } .f0 .fi{ background:var(--neg-bg); }
-.fnd p{ font-size:13px; line-height:1.6; flex:1; }
+.fnd p{ font-size:14px; line-height:1.62; flex:1; }
 .f2 p{ color:#2C6E45; } .f1 p{ color:#8A6410; } .f0 p{ color:#A83646; }
 
 /* ───────── HOWTO ───────── */
@@ -158,27 +158,44 @@ h2 small{ font-weight:300; font-size:12.5px; color:var(--muted); display:block; 
 .step .n{ flex:none; width:40px; height:40px; border-radius:13px; background:linear-gradient(135deg,var(--blue),var(--blue-d)); color:#fff; font-size:16px; font-weight:700; display:flex; align-items:center; justify-content:center; }
 .step.dry .n{ background:linear-gradient(135deg,#D19A5C,var(--gold)); }
 .step .e{ flex:none; font-size:29px; width:37px; text-align:center; }
-.step b{ font-size:14.5px; font-weight:600; display:block; }
-.step p{ font-size:12.5px; color:var(--muted); line-height:1.62; margin-top:2px; font-weight:300; }
-.callout{ border-radius:15px; padding:12px 14px; font-size:12.5px; line-height:1.65; margin-bottom:12px; }
+.step b{ font-size:16px; font-weight:600; display:block; }
+.step p{ font-size:14px; color:var(--muted); line-height:1.65; margin-top:3px; font-weight:300; }
+.callout{ border-radius:15px; padding:13px 15px; font-size:14px; line-height:1.68; margin-bottom:12px; }
 .co-blue{ background:#EAF5FC; color:#1F6E9C; }
 .co-red{ background:var(--neg-bg); color:#A83646; }
 
 /* ───────── TIPS ───────── */
-.tip{ background:#fff; box-shadow:var(--shadow-s); border-radius:18px; padding:13px 14px; margin-bottom:10px; display:flex; gap:12px; }
-.tip .e{ flex:none; font-size:27px; width:35px; text-align:center; }
-.tip b{ font-size:14px; font-weight:600; display:block; }
-.tip p{ font-size:12.5px; color:var(--muted); line-height:1.62; margin-top:2px; font-weight:300; }
+.tip{ background:#fff; box-shadow:var(--shadow-s); border-radius:18px; margin-bottom:10px; overflow:hidden; }
+.tip-h{ display:flex; gap:12px; align-items:center; padding:15px 14px; cursor:pointer; }
+.tip-h .e{ flex:none; font-size:29px; width:38px; text-align:center; }
+.tip-h b{ font-size:15.5px; font-weight:600; flex:1; line-height:1.35; }
+.tip-h .arw{ flex:none; color:var(--muted); font-size:15px; transition:transform .25s; }
+.tip.open .tip-h .arw{ transform:rotate(180deg); }
+.tip.open .tip-h{ padding-bottom:6px; }
+.tip-b{ display:none; padding:0 15px 15px; }
+.tip.open .tip-b{ display:block; animation:fadeUp .25s ease both; }
+.dl{ display:flex; gap:9px; padding:8px 0; border-top:1px dashed var(--line); }
+.dl:first-child{ border-top:none; padding-top:2px; }
+.dl .di{ flex:none; width:24px; height:24px; border-radius:50%; font-size:12.5px; display:flex; align-items:center; justify-content:center; }
+.dl p{ font-size:14px; line-height:1.62; flex:1; }
+.d-ok .di{ background:var(--pos-bg); color:var(--pos-d); }
+.d-ok p{ color:#2C6E45; }
+.d-no .di{ background:var(--neg-bg); color:var(--neg); }
+.d-no p{ color:#A83646; }
+.d-ex .di{ background:#EAF2FA; color:var(--blue-d); }
+.d-ex p{ color:#4A5C6D; }
+.d-mn .di{ background:var(--warn-bg); color:#8A6410; }
+.d-mn p{ color:#7A6428; font-weight:500; }
 .temp-row{ display:flex; gap:9px; margin-bottom:13px; }
 .temp{ flex:1; border-radius:16px; padding:12px 8px; text-align:center; color:#fff; box-shadow:var(--shadow-s); }
-.temp b{ font-size:14.5px; font-weight:700; display:block; }
-.temp span{ font-size:11px; line-height:1.5; display:block; margin-top:3px; opacity:.95; font-weight:300; }
+.temp b{ font-size:15.5px; font-weight:700; display:block; }
+.temp span{ font-size:12.5px; line-height:1.5; display:block; margin-top:3px; opacity:.95; font-weight:300; }
 .t-cold{ background:linear-gradient(135deg,#6BB7E0,#3E93C9); }
 .t-warm{ background:linear-gradient(135deg,#E9B052,#CE8F27); }
 .t-hot{ background:linear-gradient(135deg,#E58170,#C9564B); }
 
 /* ───────── PROMO ───────── */
-.price-tbl{ width:100%; border-collapse:collapse; font-size:14px; }
+.price-tbl{ width:100%; border-collapse:collapse; font-size:15px; }
 .price-tbl th{ text-align:left; font-weight:500; color:var(--muted); font-size:12px; padding:5px 4px; border-bottom:1px solid var(--line); }
 .price-tbl td{ padding:9px 4px; border-bottom:1px solid #F5F0E4; }
 .price-tbl td.num{ font-weight:700; color:var(--blue-d); }
@@ -186,12 +203,12 @@ h2 small{ font-weight:300; font-size:12.5px; color:var(--muted); display:block; 
 .promo-big::before{ content:'✦'; position:absolute; right:-8px; top:-14px; font-size:70px; color:rgba(198,139,74,.12); }
 .promo-big .p-title{ font-size:16.5px; font-weight:700; color:#8A6410; }
 .promo-big .p-dis{ float:right; background:linear-gradient(135deg,#D19A5C,var(--gold)); color:#fff; border-radius:999px; padding:4px 15px; font-size:14px; font-weight:700; box-shadow:0 4px 10px rgba(198,139,74,.3); }
-.promo-big p{ font-size:12.5px; color:#7A6428; line-height:1.65; margin-top:5px; font-weight:300; }
+.promo-big p{ font-size:14px; color:#7A6428; line-height:1.68; margin-top:6px; font-weight:300; }
 .svc{ display:flex; gap:12px; align-items:flex-start; padding:12px 0; border-bottom:1px dashed var(--line); }
 .svc:last-child{ border-bottom:none; }
 .svc .e{ flex:none; font-size:25px; width:33px; text-align:center; }
-.svc b{ font-size:14px; font-weight:600; display:block; }
-.svc p{ font-size:12px; color:var(--muted); line-height:1.6; margin-top:1px; font-weight:300; }
+.svc b{ font-size:15.5px; font-weight:600; display:block; }
+.svc p{ font-size:13.5px; color:var(--muted); line-height:1.65; margin-top:2px; font-weight:300; }
 .foot-note{ text-align:center; font-size:11.5px; color:var(--muted); margin:16px 0 6px; line-height:1.8; font-weight:300; }
 
 /* ───────── FX ───────── */
@@ -203,15 +220,36 @@ h2 small{ font-weight:300; font-size:12.5px; color:var(--muted); display:block; 
 #cf{ position:fixed; inset:0; pointer-events:none; z-index:99; overflow:hidden; }
 #cf span{ position:absolute; top:0; width:10px; height:14px; border-radius:3px; animation:cfFall linear both; }
 /* ปุ่มลอย LINE */
-.fab{ position:fixed; right:14px; bottom:98px; z-index:60; display:flex; align-items:center; gap:8px;
-  background:#06C755; color:#fff; text-decoration:none; border-radius:999px; padding:7px 15px 7px 7px;
-  box-shadow:0 6px 18px rgba(6,199,85,.4); animation:fabIn .5s ease both .8s; }
-.fab img{ width:32px; height:32px; border-radius:50%; background:#fff; flex:none; }
-.fab b{ font-size:12.5px; font-weight:600; line-height:1.25; white-space:nowrap; }
-.fab b i{ display:block; font-style:normal; font-size:10px; font-weight:300; opacity:.9; }
+.fab{ position:fixed; right:12px; bottom:92px; z-index:60; display:flex; align-items:center; gap:6px;
+  background:#06C755; color:#fff; text-decoration:none; border-radius:999px; padding:4px 11px 4px 4px;
+  box-shadow:0 4px 12px rgba(6,199,85,.35); animation:fabIn .5s ease both .8s; }
+.fab img{ width:24px; height:24px; border-radius:50%; background:#fff; flex:none; }
+.fab b{ font-size:11px; font-weight:600; line-height:1.15; white-space:nowrap; }
 .fab:active{ transform:scale(.95); }
 @keyframes fabIn{ 0%{ opacity:0; transform:translateY(14px) scale(.85) } 100%{ opacity:1; transform:none } }
 @media (max-width:340px){ .fab b{ display:none } .fab{ padding:7px } }
+
+/* เลือกเครื่อง (แท็บวิธีใช้) */
+.mpick{ display:flex; gap:8px; align-items:flex-end; justify-content:center;
+  background:#fff; box-shadow:var(--shadow); border-radius:20px; padding:14px 10px 12px; margin-bottom:13px; }
+.mp{ flex:1; border:none; background:none; font-family:'Kanit'; cursor:pointer; padding:6px 2px;
+  border-radius:16px; transition:all .28s cubic-bezier(.3,1.4,.5,1); opacity:.42; filter:grayscale(.45); }
+.mp img{ display:block; width:82px; height:auto; margin:0 auto 4px; transition:width .28s cubic-bezier(.3,1.4,.5,1); mix-blend-mode:multiply; }
+.mp b{ font-size:12.5px; font-weight:500; color:var(--muted); transition:all .2s; }
+.mp.on{ opacity:1; filter:none; background:#F4FAFE; }
+.mp.on img{ width:126px; }
+.mp.on b{ font-size:15px; font-weight:700; color:var(--blue-d); }
+#mp-dry.on{ background:#FDF8F0; }
+#mp-dry.on b{ color:var(--gold); }
+.mp:active{ transform:scale(.96); }
+
+/* how-to-play ในหน้า intro */
+.how2{ text-align:left; }
+.h2r{ display:flex; gap:10px; align-items:center; padding:7px 0; border-bottom:1px dashed var(--line); }
+.h2r:last-child{ border-bottom:none; }
+.h2n{ flex:none; width:26px; height:26px; border-radius:50%; background:var(--blue); color:#fff; font-size:13px; font-weight:700; display:flex; align-items:center; justify-content:center; }
+.h2r b{ font-size:13.5px; font-weight:600; display:block; }
+.h2r i{ font-style:normal; font-size:11.5px; color:var(--muted); font-weight:300; }
 
 .art-slot{ text-align:center; margin:2px 0 10px; }
 .art-slot:empty{ display:none; }
@@ -241,7 +279,7 @@ h2 small{ font-weight:300; font-size:12.5px; color:var(--muted); display:block; 
 <!-- ═══════════ GAME ═══════════ -->
 <section class="page" id="pg-game">
   <div class="art-slot" id="art-hero"></div>
-  <div class="g-hero">
+  <div class="g-hero" id="g-hero">
     <span class="bub" style="width:42px;height:42px;right:16px;top:12px"></span>
     <span class="bub" style="width:20px;height:20px;right:72px;top:52px;animation-delay:1.1s"></span>
     <span class="bub" style="width:13px;height:13px;right:42px;bottom:14px;animation-delay:1.8s"></span>
@@ -256,10 +294,15 @@ h2 small{ font-weight:300; font-size:12.5px; color:var(--muted); display:block; 
 <!-- ═══════════ HOW TO ═══════════ -->
 <section class="page" id="pg-howto">
   <h2>🧺 ขั้นตอนการใช้งาน <small>ง่ายมาก ทำตามทีละข้อได้เลย</small></h2>
-  <div class="art-slot" id="art-howto"></div>
-  <div class="seg">
-    <button id="sg-wash" class="on" onclick="howSeg('wash')"><img class="ic-sm" src="ic-wash.jpg" alt="" onerror="this.style.display='none'">เครื่องซัก</button>
-    <button id="sg-dry" onclick="howSeg('dry')"><img class="ic-sm" src="ic-dry.jpg" alt="" onerror="this.style.display='none'">เครื่องอบ</button>
+  <div class="mpick">
+    <button class="mp" id="mp-wash" onclick="howSeg('wash')">
+      <img src="ic-wash.jpg" alt="" onerror="this.style.display='none'">
+      <b>เครื่องซัก</b>
+    </button>
+    <button class="mp" id="mp-dry" onclick="howSeg('dry')">
+      <img src="ic-dry.jpg" alt="" onerror="this.style.display='none'">
+      <b>เครื่องอบ</b>
+    </button>
   </div>
   <div id="how-wash">
     <div class="callout co-red">🚫 งดซักรองเท้าในเครื่องซักของร้าน — เศษทราย/พื้นยางทำถังเสียหาย และไม่ถูกสุขอนามัยกับผ้าของคนถัดไป (แนะนำแปรงซักมือแล้วผึ่งลม)</div>
@@ -270,19 +313,56 @@ h2 small{ font-weight:300; font-size:12.5px; color:var(--muted); display:block; 
     <div class="step"><div class="n">5</div><div class="e">🪙</div><div><b>หยอดเหรียญ หรือสแกนจ่าย</b><p>ราคาโชว์ที่จอบนเครื่อง · เครื่องเริ่มทำงานเอง</p></div></div>
     <div class="step"><div class="n">6</div><div class="e">⏰</div><div><b>รอประมาณ 30–40 นาที</b><p>ระหว่างรอ แวะจิบชานม Owl Cha ข้างๆ ได้น้า 🧋</p></div></div>
     <div class="card">
+      <b style="font-size:16.5px; color:var(--navy)">⚖️ เลข 12 / 17 กก. หมายถึงอะไร?</b>
+      <p style="font-size:14px; line-height:1.7; margin-top:7px">คือน้ำหนัก <b>ผ้าแห้ง</b> สูงสุดที่ใส่ได้ (ไม่ใช่ขนาดถัง ไม่ใช่น้ำหนักตอนเปียก)</p>
+      <div class="callout co-blue" style="margin:11px 0">
+        <b>แต่อย่าใส่เต็มพิกัด!</b> ผ้าต้องมีที่ตีลังกา ใส่จริงประมาณ <b>3/4 ของตัวเลข</b><br>12 กก. → ใส่ ~8–9 กก. · 17 กก. → ใส่ ~12–13 กก.
+      </div>
+      <b style="font-size:16.5px; color:var(--navy); display:block; margin-top:14px">🤔 แล้วจะรู้ได้ไงว่าใช้เครื่องไหน?</b>
+      <div class="callout co-blue" style="margin:9px 0">
+        <b>วิธีเช็คแม่นสุด — ไม่ต้องชั่ง:</b> ใส่ผ้าแห้งหลวมๆ แล้วกดเบาๆ ควรเหลือช่องว่างเหนือผ้า <b>ประมาณ 1 ฝ่ามือ</b> · ถ้าแน่นจนกดไม่ลง = เปลี่ยนเครื่องใหญ่ขึ้น
+      </div>
+      <table class="price-tbl" style="margin-top:6px">
+        <tr><th>ซักอะไร</th><th>ใช้เครื่อง</th></tr>
+        <tr><td>ผ้า 1 คน / 1 สัปดาห์</td><td class="num">12 กก.</td></tr>
+        <tr><td>ผ้าปูที่นอน + ปลอกหมอน</td><td class="num">12 กก.</td></tr>
+        <tr><td>ผ้า 2 คน หรือสะสม 2 สัปดาห์</td><td class="num">17 กก.</td></tr>
+        <tr><td>ผ้านวม / ผ้าห่มหนา 1 ผืน</td><td class="num">17 กก.</td></tr>
+        <tr><td>ยีนส์ / ฮู้ดดี้ ผ้าหนาเยอะ</td><td class="num">ขยับขึ้น 1 ขนาด</td></tr>
+      </table>
+      <p style="font-size:13px; color:var(--muted); font-weight:300; line-height:1.7; margin-top:8px">💡 ผ้าเปียกหนักขึ้น 2–3 เท่า — ยกไม่ไหวตอนเอาออกเป็นเรื่องปกติ ไม่ได้แปลว่าใส่เยอะไป</p>
+    </div>
+
+    <div class="card">
       <img class="card-art" src="art-detergent.jpg" alt="" onerror="this.style.display='none'">
-      <b style="font-size:15px; color:var(--navy)">🧴 เติมน้ำยาเท่าไหร่ถึงพอดี</b>
+      <b style="font-size:16.5px; color:var(--navy)">🧴 ใช้น้ำยาแบบไหนดี?</b>
+      <p style="font-size:14px; line-height:1.7; margin-top:7px">เครื่องที่ร้านเป็น <b>ฝาหน้า (Front Load)</b> ใช้น้ำน้อย ต้องใช้น้ำยา <b>สูตรฟองน้อย</b> เท่านั้น</p>
+      <div class="callout co-blue" style="margin:11px 0 8px">
+        <b>✓ ใช้ได้ดี</b><br>
+        • น้ำยาซักผ้า <b>ชนิดน้ำ</b> — ละลายไว ไม่ตกค้าง (ดีที่สุด)<br>
+        • ขวดที่เขียน <b>"สำหรับเครื่องซักฝาหน้า"</b> หรือ <b>Front Load / HE</b><br>
+        • สูตรเข้มข้น (Concentrate) — ใส่น้อยลงครึ่งหนึ่งตามฉลาก
+      </div>
+      <div class="callout co-red" style="margin:0 0 8px">
+        <b>✕ เลี่ยง</b><br>
+        • <b>ผงซักฟอกธรรมดา</b> (สูตรฝาบน/ซักมือ) — ฟองล้นเกิน ล้างไม่ออก ผงตกค้างเป็นคราบขาว<br>
+        • <b>น้ำยาซักมือ</b> — ฟองเยอะมาก เครื่องอาจหยุดกลางคัน<br>
+        • <b>น้ำยาฟอกขาว (คลอรีน)</b> ผสมกับผ้าสี — ด่างถาวรทันที
+      </div>
+      <p style="font-size:13px; color:var(--muted); font-weight:300; line-height:1.7">💡 ผ้าเหม็นอับ/ผ้ากีฬา เติมน้ำยาฆ่าเชื้อ (เช่น Dettol ชนิดซักผ้า) ลงช่อง "นุ่ม" ได้ · คราบฝังลึกให้ทาน้ำยาขจัดคราบตรงจุดทิ้งไว้ 5 นาทีก่อนใส่เครื่อง</p>
+    </div>
+
+    <div class="card">
+      <b style="font-size:16.5px; color:var(--navy)">🧴 เติมน้ำยาเท่าไหร่ถึงพอดี</b>
       <table class="price-tbl" style="margin-top:8px">
         <tr><th>เครื่อง</th><th>น้ำยาซักผ้า</th><th>น้ำยาปรับผ้านุ่ม</th></tr>
         <tr><td>12 กก.</td><td class="num">1.5–2 ฝา<br><span style="font-weight:300;color:var(--muted);font-size:12px">(~60 มล.)</span></td><td class="num">1 ฝา<br><span style="font-weight:300;color:var(--muted);font-size:12px">(~35–40 มล.)</span></td></tr>
         <tr><td>17 กก.</td><td class="num">2–2.5 ฝา<br><span style="font-weight:300;color:var(--muted);font-size:12px">(~80 มล.)</span></td><td class="num">1.5 ฝา<br><span style="font-weight:300;color:var(--muted);font-size:12px">(~50–55 มล.)</span></td></tr>
       </table>
       <p style="font-size:12px; color:var(--muted); font-weight:300; line-height:1.7; margin-top:8px">อิงฝาขวดมาตรฐาน ~40 มล. · ผ้าเปื้อนมาก/เต็มถัง เพิ่มได้อีกครึ่งฝา · สูตรเข้มข้น (concentrate) ลดลงตามฉลากข้างขวด</p>
-      <div class="callout co-blue" style="margin:10px 0 6px">
-        <b>ทำไม "น้อยไป" ไม่ดี:</b> สิ่งสกปรกและแบคทีเรียหลุดไม่หมด คราบเหงื่อ/กลิ่นอับยังฝังในผ้า — เสียเงินซักแต่ได้ผ้าไม่สะอาด
-      </div>
-      <div class="callout co-red" style="margin-bottom:2px">
-        <b>ทำไม "มากไป" ยิ่งแย่:</b> เครื่องร้านเป็นระบบประหยัดน้ำ ฟองที่เยอะเกินจะล้างออกไม่หมดในรอบเดียว → คราบน้ำยาตกค้างทำผ้ากระด้าง ใส่แล้วระคายผิว เก็บไว้กลับเหม็นอับ · ส่วนน้ำยาปรับผ้านุ่มถ้าเกิน จะเคลือบเส้นใยจนผ้าขนหนูซับน้ำแย่ลง — เติมเกิน = จ่ายแพงขึ้นเพื่อผลที่แย่ลง
+      <div class="callout co-blue" style="margin:10px 0 2px">
+        <b>น้อยไป</b> คราบไม่หลุด · <b>มากไป</b> ฟองล้างไม่ออก ผ้ากระด้าง คันผิว<br>
+        <span style="font-size:13px; opacity:.85">อ่านเหตุผลเต็มๆ ที่แท็บ 💡 เทคนิค</span>
       </div>
     </div>
   </div>
@@ -299,7 +379,7 @@ h2 small{ font-weight:300; font-size:12.5px; color:var(--muted); display:block; 
 
 <!-- ═══════════ TIPS ═══════════ -->
 <section class="page" id="pg-tips">
-  <h2>💡 เทคนิคซักผ้า <small>รู้ไว้ ผ้าสวยเหมือนใหม่ไปอีกนาน</small></h2>
+  <h2>💡 เทคนิคซักผ้า <small>แตะหัวข้อเพื่อดูเหตุผล · ผลดี-ผลเสีย · ตัวอย่าง</small></h2>
   <div class="art-slot" id="art-tips"></div>
 
   <div class="g-sub" style="margin-bottom:6px; font-weight:500; color:var(--navy)">🫧 อุณหภูมิน้ำ — เครื่องซัก</div>
@@ -315,15 +395,106 @@ h2 small{ font-weight:300; font-size:12.5px; color:var(--muted); display:block; 
     <div class="temp t-hot"><b>🔥 ร้อน</b><span>ผ้าหนา ผ้าขนหนู<br>แห้งไว ฆ่าไรฝุ่น</span></div>
   </div>
 
-  <div class="tip"><div class="e">🎨</div><div><b>ผ้าสีเข้มตัวใหม่ = ตัวอันตราย</b><p>ยีนส์ใหม่ เสื้อแดง/ดำตัวใหม่ สีตกแน่นอน 2–3 ครั้งแรก — ซักแยกด้วยน้ำเย็น กลับด้านในออก</p></div></div>
-  <div class="tip"><div class="e">🤍</div><div><b>ผ้าขาวอย่าซักรวมผ้าสี</b><p>ต่อให้น้ำเย็นก็เสี่ยงหม่น ซักผ้าขาวแยกด้วยน้ำอุ่นจะขาวสุด</p></div></div>
-  <div class="tip"><div class="e">🧥</div><div><b>สีซีดเพราะน้ำร้อน + ตากแดดจัด</b><p>ผ้าสีใช้น้ำเย็นพอ แล้วกลับด้านในออกก่อนซัก-ตาก สีจะอยู่ทนกว่าเยอะ</p></div></div>
-  <div class="tip"><div class="e">🪝</div><div><b>รูดซิป ปลดตะขอ กลับด้าน</b><p>ซิปที่เปิดอยู่จะเกี่ยวผ้าตัวอื่นเป็นรู กระดุมให้ติดไว้ เสื้อสกรีนกลับด้านในออก</p></div></div>
-  <div class="tip"><div class="e">🩲</div><div><b>ชุดชั้นใน/ผ้าบาง ใส่ถุงซัก</b><p>กันยืด กันเกี่ยว — ไม่มีถุงซัก ใส่ปลอกหมอนมัดปากแทนได้</p></div></div>
-  <div class="tip"><div class="e">⚖️</div><div><b>เลือกขนาดเครื่องให้พอดี</b><p>ผ้า 1 สัปดาห์ของ 1 คน = 12 กก. พอ · ผ้านวม/ผ้าห่ม/ซักรวม 2 คน = 17 กก. — อัดแน่นเกิน ซักไม่สะอาด เปลืองเงินฟรี</p></div></div>
-  <div class="tip"><div class="e">🫧</div><div><b>น้ำยาไม่ต้องเยอะ</b><p>เครื่องหน้าร้านเป็นระบบประหยัดน้ำ ใส่เกินฟองล้างไม่หมด ผ้ากระด้างคันผิว — ดูตารางปริมาณพอดีได้ที่แท็บ 🧺 วิธีใช้</p></div></div>
-  <div class="tip"><div class="e">🌧️</div><div><b>หน้าฝนผ้าเหม็นอับ = อบเลย</b><p>ตากในหอไม่แห้ง กลิ่นอับจากเชื้อรา — เครื่องอบ 40 นาที แห้งหอมทันที</p></div></div>
-  <div class="tip"><div class="e">⏱️</div><div><b>ซักเสร็จรีบเอาออก</b><p>ผ้าเปียกทิ้งไว้ในถังเกิน 1–2 ชม. จะเริ่มเหม็นอับ ต้องซักใหม่</p></div></div>
+  <div class="tip" id="tp0">
+    <div class="tip-h" onclick="tipTog(0)"><span class="e">🎨</span><b>ผ้าสีเข้มตัวใหม่ ต้องซักแยก</b><span class="arw">⌄</span></div>
+    <div class="tip-b">
+      <div class="dl d-ok"><span class="di">✓</span><p>แยกซัก + น้ำเย็น + กลับด้านใน = สีอยู่ทน ไม่เลอะใคร</p></div>
+      <div class="dl d-no"><span class="di">✕</span><p>ซักรวมผ้าอ่อน = สีตกทั้งกอง ผ้าขาวกลายเป็นเทาหม่น ซักคืนไม่ได้</p></div>
+      <div class="dl d-ex"><span class="di">💡</span><p>ยีนส์ใหม่ เสื้อแดง/ดำตัวใหม่ ตกสีแรง 2–3 ครั้งแรกเสมอ</p></div>
+      <div class="dl d-mn"><span class="di">💰</span><p>เสียเสื้อ 1 ตัว = 300–500฿ · แยกซักเพิ่มแค่ 50฿</p></div>
+    </div>
+  </div>
+  <div class="tip" id="tp1">
+    <div class="tip-h" onclick="tipTog(1)"><span class="e">🤍</span><b>ผ้าขาวซักแยก น้ำอุ่น</b><span class="arw">⌄</span></div>
+    <div class="tip-b">
+      <div class="dl d-ok"><span class="di">✓</span><p>แยกซักน้ำอุ่น = คราบเหงื่อคอเสื้อหลุด ขาวสะอาด</p></div>
+      <div class="dl d-no"><span class="di">✕</span><p>ซักรวมผ้าสี ต่อให้น้ำเย็นก็หม่นทีละนิด สะสมจนเหลือง</p></div>
+      <div class="dl d-ex"><span class="di">💡</span><p>เสื้อนักศึกษา เสื้อยืดขาว ปลอกหมอนขาว</p></div>
+      <div class="dl d-mn"><span class="di">💰</span><p>ผ้าขาวหม่นแล้วฟอกคืนยาก มักต้องซื้อใหม่</p></div>
+    </div>
+  </div>
+  <div class="tip" id="tp2">
+    <div class="tip-h" onclick="tipTog(2)"><span class="e">⚖️</span><b>เลือกขนาดเครื่องให้พอดี</b><span class="arw">⌄</span></div>
+    <div class="tip-b">
+      <div class="dl d-ok"><span class="di">✓</span><p>ใส่ ~3/4 ถัง ผ้ามีที่หมุน น้ำยาเข้าถึงทุกชิ้น สะอาดจริง</p></div>
+      <div class="dl d-no"><span class="di">✕</span><p>อัดแน่น = ผ้าขัดกันไม่หมุน ซักไม่สะอาด น้ำยาล้างไม่ออก ต้องซักซ้ำ</p></div>
+      <div class="dl d-ex"><span class="di">💡</span><p>ผ้า 1 คน/สัปดาห์ → 12 กก. · ผ้านวม 1 ผืน → 17 กก.</p></div>
+      <div class="dl d-mn"><span class="di">💰</span><p>ซักซ้ำ = จ่าย 2 รอบ 100–140฿ · เลือกถูกจ่ายรอบเดียว</p></div>
+    </div>
+  </div>
+  <div class="tip" id="tp3">
+    <div class="tip-h" onclick="tipTog(3)"><span class="e">🧴</span><b>น้ำยาซัก ไม่มาก ไม่น้อย</b><span class="arw">⌄</span></div>
+    <div class="tip-b">
+      <div class="dl d-ok"><span class="di">✓</span><p>12 กก. ใส่ 1.5–2 ฝา · 17 กก. ใส่ 2–2.5 ฝา = สะอาดพอดี ล้างหมด</p></div>
+      <div class="dl d-no"><span class="di">✕</span><p>น้อยไป: คราบ/กลิ่นอับหลุดไม่หมด · มากไป: ฟองล้างไม่ออก ผ้ากระด้าง คันผิว เก็บไว้เหม็นอับ</p></div>
+      <div class="dl d-ex"><span class="di">💡</span><p>เครื่องร้านเป็นระบบประหยัดน้ำ ใช้น้ำน้อยกว่าเครื่องบ้าน ฟองจึงล้างยากกว่า</p></div>
+      <div class="dl d-mn"><span class="di">💰</span><p>เทเกินทุกครั้ง = เปลืองน้ำยาปีละหลายร้อย แถมผ้าแย่ลง</p></div>
+    </div>
+  </div>
+  <div class="tip" id="tp10">
+    <div class="tip-h" onclick="tipTog(10)"><span class="e">🏷️</span><b>เลือกน้ำยาให้ถูกชนิด</b><span class="arw">⌄</span></div>
+    <div class="tip-b">
+      <div class="dl d-ok"><span class="di">✓</span><p>ใช้น้ำยา <b>ชนิดน้ำ</b> สูตรฟองน้อย หรือขวดที่เขียน "เครื่องฝาหน้า / Front Load / HE"</p></div>
+      <div class="dl d-no"><span class="di">✕</span><p>ผงซักฟอกธรรมดาและน้ำยาซักมือ ฟองล้นเกิน ล้างไม่ออก เหลือคราบขาวบนผ้าสีเข้ม</p></div>
+      <div class="dl d-ex"><span class="di">💡</span><p>เครื่องฝาหน้าใช้น้ำน้อยกว่าเครื่องฝาบนมาก ฟองจึงล้างยากกว่า · สูตรเข้มข้นใส่แค่ครึ่งเดียว</p></div>
+      <div class="dl d-mn"><span class="di">💰</span><p>น้ำยาถูกชนิดใช้น้อยกว่า คุ้มกว่าในระยะยาว แถมผ้าไม่พัง</p></div>
+    </div>
+  </div>
+
+  <div class="tip" id="tp4">
+    <div class="tip-h" onclick="tipTog(4)"><span class="e">💜</span><b>น้ำยาปรับผ้านุ่ม ใส่ช่องแยก</b><span class="arw">⌄</span></div>
+    <div class="tip-b">
+      <div class="dl d-ok"><span class="di">✓</span><p>12 กก. 1 ฝา · 17 กก. 1.5 ฝา ใส่ช่อง "นุ่ม" เครื่องจะปล่อยตอนรอบล้างสุดท้าย</p></div>
+      <div class="dl d-no"><span class="di">✕</span><p>ใส่เกิน = เคลือบเส้นใยจนผ้าขนหนูซับน้ำไม่อยู่ ผ้ากีฬาอับชื้น</p></div>
+      <div class="dl d-ex"><span class="di">💡</span><p>ผ้าเช็ดตัว ผ้าออกกำลังกาย ไม่ควรใส่น้ำยานุ่มเลยยิ่งดี</p></div>
+      <div class="dl d-mn"><span class="di">💰</span><p>ใส่พอดี 1 ฝา ประหยัดกว่าครึ่ง ผลลัพธ์ดีกว่า</p></div>
+    </div>
+  </div>
+  <div class="tip" id="tp5">
+    <div class="tip-h" onclick="tipTog(5)"><span class="e">🌡️</span><b>อุณหภูมิเลือกให้ตรงผ้า</b><span class="arw">⌄</span></div>
+    <div class="tip-b">
+      <div class="dl d-ok"><span class="di">✓</span><p>ซัก: เย็น=ผ้าสี · อุ่น=ผ้าขาว · ร้อน=ผ้าปูฆ่าไรฝุ่น</p></div>
+      <div class="dl d-ok"><span class="di">✓</span><p>อบ: เย็น=ผ้ายืด/บอบบาง · อุ่น=ผ้าทั่วไป · ร้อน=ผ้าหนา</p></div>
+      <div class="dl d-no"><span class="di">✕</span><p>ร้อนกับผ้าสี = ซีดเร็ว · ร้อนกับผ้ายืด = หดย้วยถาวร</p></div>
+      <div class="dl d-mn"><span class="di">💰</span><p>เสื้อฮู้ดดี้หดเสียทรง = เสียทั้งตัว 500–900฿</p></div>
+    </div>
+  </div>
+  <div class="tip" id="tp6">
+    <div class="tip-h" onclick="tipTog(6)"><span class="e">🩲</span><b>ชิ้นบอบบาง ใส่ถุงซัก</b><span class="arw">⌄</span></div>
+    <div class="tip-b">
+      <div class="dl d-ok"><span class="di">✓</span><p>ถุงซักกันยืด กันเกี่ยว ถุงเท้าไม่หายข้างเดียว</p></div>
+      <div class="dl d-no"><span class="di">✕</span><p>โยนรวม = ชุดชั้นในเสียทรง โดนซิปเกี่ยวเป็นรู</p></div>
+      <div class="dl d-ex"><span class="di">💡</span><p>ไม่มีถุงซัก ใช้ปลอกหมอนมัดปากแทนได้</p></div>
+      <div class="dl d-mn"><span class="di">💰</span><p>ถุงซักซื้อครั้งเดียว 30–60฿ ใช้ได้เป็นปี</p></div>
+    </div>
+  </div>
+  <div class="tip" id="tp7">
+    <div class="tip-h" onclick="tipTog(7)"><span class="e">🪝</span><b>รูดซิป ปลดตะขอ กลับด้าน</b><span class="arw">⌄</span></div>
+    <div class="tip-b">
+      <div class="dl d-ok"><span class="di">✓</span><p>ซิปปิด กระดุมติด เสื้อสกรีนกลับด้านใน = ไม่มีอะไรเกี่ยวกัน</p></div>
+      <div class="dl d-no"><span class="di">✕</span><p>ซิปเปิดจะเกี่ยวผ้าตัวอื่นเป็นรู · สกรีนถูกันจนแตกลอก</p></div>
+      <div class="dl d-ex"><span class="di">💡</span><p>ยีนส์ กระโปรง เสื้อฮู้ดดี้มีซิป เสื้อทีมสกรีนลาย</p></div>
+      <div class="dl d-mn"><span class="di">💰</span><p>ใช้เวลา 10 วินาที ป้องกันเสื้อพังทั้งกอง</p></div>
+    </div>
+  </div>
+  <div class="tip" id="tp8">
+    <div class="tip-h" onclick="tipTog(8)"><span class="e">👟</span><b>ห้ามซักรองเท้าในเครื่อง</b><span class="arw">⌄</span></div>
+    <div class="tip-b">
+      <div class="dl d-no"><span class="di">✕</span><p>เศษทราย/หินทำถังเป็นรอย · ไม่ถูกสุขอนามัยกับผ้าคนถัดไป · ห้ามอบเด็ดขาด ยางละลายเสี่ยงไฟไหม้</p></div>
+      <div class="dl d-ok"><span class="di">✓</span><p>แปรงซักมือ แล้วผึ่งลม ยัดกระดาษหนังสือพิมพ์ข้างในดูดความชื้น</p></div>
+      <div class="dl d-ex"><span class="di">💡</span><p>เป็นกติกาของร้าน ขอความร่วมมือทุกท่านนะคะ</p></div>
+      <div class="dl d-mn"><span class="di">💰</span><p>เครื่องเสียหาย = ทุกคนเดือดร้อน ร้านต้องปิดซ่อม</p></div>
+    </div>
+  </div>
+  <div class="tip" id="tp9">
+    <div class="tip-h" onclick="tipTog(9)"><span class="e">🌧️</span><b>ผ้าเปียกอย่าทิ้งไว้</b><span class="arw">⌄</span></div>
+    <div class="tip-b">
+      <div class="dl d-ok"><span class="di">✓</span><p>ซักเสร็จรีบเอาออก ต่ออบเลยยิ่งดี — หน้าฝนแห้งหอมใน 40 นาที</p></div>
+      <div class="dl d-no"><span class="di">✕</span><p>ทิ้งในถังเกิน 1–2 ชม. เชื้อราขึ้น เหม็นอับ ต้องซักใหม่</p></div>
+      <div class="dl d-ex"><span class="di">💡</span><p>ตากในหอหน้าฝนไม่แห้ง = กลิ่นอับเหมือนกัน</p></div>
+      <div class="dl d-mn"><span class="di">💰</span><p>ซักใหม่ = จ่ายซ้ำอีก 50–80฿</p></div>
+    </div>
+  </div>
 
   <a class="btn btn-blue" onclick="go('game')">🎮 ลองเล่นเกมซักผ้า ทดสอบตัวเอง</a>
 </section>
@@ -375,7 +546,7 @@ h2 small{ font-weight:300; font-size:12.5px; color:var(--muted); display:block; 
 
 <a class="fab" href="https://lin.ee/tLp9JME">
   <img src="line-icon.png" alt="LINE" onerror="this.style.display='none'">
-  <b>คุยกับร้าน<i>ฝากซัก · เดลิเวอรี่</i></b>
+  <b>คุยกับร้าน</b>
 </a>
 
 <nav>
@@ -414,8 +585,13 @@ function initRoute(){
 function howSeg(k){
   document.getElementById('how-wash').style.display = (k==='wash'?'':'none');
   document.getElementById('how-dry').style.display  = (k==='dry'?'':'none');
-  document.getElementById('sg-wash').className = (k==='wash'?'on':'');
-  document.getElementById('sg-dry').className  = (k==='dry'?'on':'');
+  document.getElementById('mp-wash').className = 'mp' + (k==='wash'?' on':'');
+  document.getElementById('mp-dry').className  = 'mp' + (k==='dry'?' on':'');
+}
+function tipTog(i){
+  var el = document.getElementById('tp'+i);
+  if(!el) return;
+  el.className = (el.className.indexOf('open')>=0) ? 'tip' : 'tip open';
 }
 function esc(t){ return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
 
@@ -450,9 +626,10 @@ var TEMP_TH = { cold:'น้ำเย็น', warm:'น้ำอุ่น', hot:
 var DRY_TH = { cool:'ลมเย็น', warm:'ไฟอุ่น', hot:'ไฟร้อน' };
 
 /* ══════════ STATE ══════════ */
-var gs;
+var gs, gLastStep = '';
 function gReset(){
-  gs = { step:'pick', sel:{}, bag:false, mc:0, temp:'', det:'', dry:'' };
+  gs = { step:'intro', sel:{}, bag:false, mc:0, temp:'', det:'', dry:'' };
+  gLastStep = '';
   gRender();
 }
 function selItems(){ return ITEMS.filter(function(it){ return gs.sel[it.id]; }); }
@@ -461,6 +638,7 @@ function hasTag(t){ return selItems().some(function(it){ return it.tags.indexOf(
 
 function stepper(cur){
   var steps = [ ['🧺','เลือกผ้า'], ['🫧','ซัก'], ['🔥','อบ'], ['🏁','ผล'] ];
+  if(cur === 'intro') return '';
   var idx = { pick:0, wash:1, spin:1, dry:2, dspin:2, result:3 }[cur];
   var h = '<div class="stp">';
   for(var i=0;i<4;i++){
@@ -475,11 +653,25 @@ function gRender(){
   var el = document.getElementById('g-body');
   var h = stepper(gs.step);
 
-  if(gs.step==='pick'){
-    h += '<div class="card pop">';
+  if(gs.step==='intro'){
+    h += '<div class="card pop" style="text-align:center">';
     h += '<img class="card-art" src="art-basket.jpg" alt="" onerror="this.style.display=\'none\'">';
+    h += '<div class="g-q" style="font-size:19px">แยกผ้าเป็นมั้ย? มาลองกัน</div>';
+    h += '<div class="g-sub" style="margin-bottom:14px">จำลองซักผ้าจริงที่ร้าน 4 ขั้น — ตัดสินใจเอง แล้วดูว่าผ้าจะออกมาเป็นยังไง</div>';
+    h += '<div class="how2">';
+    h += '<div class="h2r"><span class="h2n">1</span><div><b>เลือกผ้าลงตะกร้า</b><i>ระวังผ้าสีตกปนผ้าขาว</i></div></div>';
+    h += '<div class="h2r"><span class="h2n">2</span><div><b>ตั้งเครื่องซัก</b><i>ขนาด · อุณหภูมิน้ำ · น้ำยา</i></div></div>';
+    h += '<div class="h2r"><span class="h2n">3</span><div><b>เลือกอบ</b><i>เย็น · อุ่น · ร้อน หรือไม่อบ</i></div></div>';
+    h += '<div class="h2r"><span class="h2n">4</span><div><b>ดูผลคะแนน</b><i>บอกเหตุผลทุกการตัดสินใจ</i></div></div>';
+    h += '</div>';
+    h += '</div>';
+    h += '<button class="btn btn-blue" onclick="gGo(\'pick\')">🎮 เริ่มเล่นเลย</button>';
+  }
+
+  else if(gs.step==='pick'){
+    h += '<div class="card pop">';
     h += '<div class="g-q">วันนี้จะซักอะไรบ้าง?</div>';
-    h += '<div class="g-sub">แตะเลือกผ้าลงตะกร้า (เลือกได้หลายอย่าง) — คิดดีๆ ว่าอะไรควรไปด้วยกัน</div>';
+    h += '<div class="g-sub" style="margin-bottom:9px">แตะเลือกผ้าลงตะกร้า เลือกได้หลายอย่าง</div>';
     h += '<div class="items">';
     ITEMS.forEach(function(it){
       h += '<div class="item'+(gs.sel[it.id]?' sel':'')+'" onclick="gTogItem(\''+it.id+'\')">';
@@ -585,7 +777,12 @@ function gRender(){
   }
 
   el.innerHTML = h;
-  window.scrollTo(0,0);
+  /* โชว์ hero + หัวเกม เฉพาะหน้าแนะนำ เพื่อให้ตอนเล่นจบในหน้าเดียว */
+  var intro = (gs.step === 'intro');
+  var hEl = document.getElementById('art-hero'); if(hEl) hEl.style.display = intro ? '' : 'none';
+  var gEl = document.getElementById('g-hero');   if(gEl) gEl.style.display = intro ? '' : 'none';
+  var nEl = document.getElementById('art-night');if(nEl) nEl.style.display = intro ? '' : 'none';
+  if(gs.step !== gLastStep){ gLastStep = gs.step; window.scrollTo(0,0); }
 
   if(gs.step==='spin'){
     setTimeout(function(){
@@ -787,6 +984,7 @@ function confetti(n){
 
 /* ══════════ INIT ══════════ */
 initArt();
+howSeg('wash');
 gReset();
 initRoute();
 window.addEventListener('hashchange', initRoute);
