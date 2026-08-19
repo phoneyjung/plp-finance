@@ -720,6 +720,7 @@ function go(p, scrollId){
   }else{
     window.scrollTo(0,0);
   }
+  try{ setTimeout(fabWatch, 80); }catch(e){}
 }
 function initRoute(){
   var h = (location.hash||'').replace('#','');
@@ -934,6 +935,7 @@ function gRender(){
   var gEl = document.getElementById('g-hero');   if(gEl) gEl.style.display = intro ? '' : 'none';
   var nEl = document.getElementById('art-night');if(nEl) nEl.style.display = intro ? '' : 'none';
   if(gs.step !== gLastStep){ gLastStep = gs.step; window.scrollTo(0,0); }
+  try{ setTimeout(fabWatch, 60); }catch(e){}
 
   if(gs.step==='spin'){
     setTimeout(function(){
@@ -1134,28 +1136,31 @@ function confetti(n){
 }
 
 /* ซ่อนปุ่มลอยเมื่อใกล้ปุ่มไลน์ใหญ่ท้ายหน้า (กันทับกัน) */
+function rectHit(a, b){
+  return !(a.right < b.left || a.left > b.right || a.bottom < b.top || a.top > b.bottom);
+}
 function fabWatch(){
   var fab = document.querySelector('.fab');
   if(!fab) return;
-  /* ถ้าปุ่มไลน์ใหญ่โผล่ในจอ → ซ่อนปุ่มลอยไปเลย */
-  var btns = document.querySelectorAll('.btn-line');
-  for(var i=0;i<btns.length;i++){
-    var b = btns[i];
-    if(b.offsetParent === null) continue;
-    var r = b.getBoundingClientRect();
-    if(r.top < window.innerHeight && r.bottom > 0){
-      fab.className = 'fab gone';
-      return;
-    }
+  var full = fab.getBoundingClientRect();
+  /* กรอบเต็มความกว้างที่ปุ่มจะกิน (เผื่อระยะ 6px) */
+  var zone = { left: full.right - 150, right: full.right + 6,
+               top: full.top - 6, bottom: full.bottom + 6 };
+  /* กรอบเฉพาะโลโก้ (โหมด mini) */
+  var mzone = { left: full.right - 40, right: full.right + 6,
+                top: full.top - 6, bottom: full.bottom + 6 };
+
+  var els = document.querySelectorAll('.btn, .item, .ch, .tip-h, .mp, .price-tbl');
+  var hitFull = false, hitMini = false;
+  for(var i=0;i<els.length;i++){
+    var el = els[i];
+    if(el.offsetParent === null) continue;
+    var r = el.getBoundingClientRect();
+    if(r.bottom < 0 || r.top > window.innerHeight) continue;
+    if(rectHit(r, zone)) hitFull = true;
+    if(rectHit(r, mzone)){ hitMini = true; break; }
   }
-  /* ถ้ามีเนื้อหาอยู่ใต้ปุ่มลอย → ยุบเหลือโลโก้ กันบัง */
-  var mini = false;
-  try{
-    var fr = fab.getBoundingClientRect();
-    var el = document.elementFromPoint(fr.left + 8, fr.top + fr.height/2);
-    if(el && !fab.contains(el)) mini = true;
-  }catch(e){}
-  fab.className = mini ? 'fab mini' : 'fab';
+  fab.className = hitMini ? 'fab gone' : (hitFull ? 'fab mini' : 'fab');
 }
 
 /* ══════════ INIT ══════════ */
@@ -1163,7 +1168,7 @@ initArt();
 howSeg('wash');
 try{
   window.addEventListener('scroll', fabWatch, { passive:true });
-  setInterval(fabWatch, 700);
+  setInterval(fabWatch, 400);
 }catch(e){}
 gReset();
 initRoute();
