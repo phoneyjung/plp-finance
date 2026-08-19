@@ -202,6 +202,17 @@ h2 small{ font-weight:300; font-size:12.5px; color:var(--muted); display:block; 
 .pop{ animation:fadeUp .3s ease both; }
 #cf{ position:fixed; inset:0; pointer-events:none; z-index:99; overflow:hidden; }
 #cf span{ position:absolute; top:0; width:10px; height:14px; border-radius:3px; animation:cfFall linear both; }
+/* ปุ่มลอย LINE */
+.fab{ position:fixed; right:14px; bottom:98px; z-index:60; display:flex; align-items:center; gap:8px;
+  background:#06C755; color:#fff; text-decoration:none; border-radius:999px; padding:7px 15px 7px 7px;
+  box-shadow:0 6px 18px rgba(6,199,85,.4); animation:fabIn .5s ease both .8s; }
+.fab img{ width:32px; height:32px; border-radius:50%; background:#fff; flex:none; }
+.fab b{ font-size:12.5px; font-weight:600; line-height:1.25; white-space:nowrap; }
+.fab b i{ display:block; font-style:normal; font-size:10px; font-weight:300; opacity:.9; }
+.fab:active{ transform:scale(.95); }
+@keyframes fabIn{ 0%{ opacity:0; transform:translateY(14px) scale(.85) } 100%{ opacity:1; transform:none } }
+@media (max-width:340px){ .fab b{ display:none } .fab{ padding:7px } }
+
 .art-slot{ text-align:center; margin:2px 0 10px; }
 .art-slot:empty{ display:none; }
 .art-slot img{ max-width:100%; border-radius:18px; box-shadow:var(--shadow-s); }
@@ -361,6 +372,11 @@ h2 small{ font-weight:300; font-size:12.5px; color:var(--muted); display:block; 
 
 <div class="art-slot" id="art-night" style="margin-top:16px"></div>
 </div>
+
+<a class="fab" href="https://lin.ee/tLp9JME">
+  <img src="line-icon.png" alt="LINE" onerror="this.style.display='none'">
+  <b>คุยกับร้าน<i>ฝากซัก · เดลิเวอรี่</i></b>
+</a>
 
 <nav>
   <div class="wrap">
