@@ -205,6 +205,10 @@ h2 small{ font-weight:300; font-size:12.5px; color:var(--muted); display:block; 
 .art-slot{ text-align:center; margin:2px 0 10px; }
 .art-slot:empty{ display:none; }
 .art-slot img{ max-width:100%; border-radius:18px; box-shadow:var(--shadow-s); }
+.rank-art{ width:158px; height:auto; display:block; margin:0 auto 2px; animation:bounceIn .6s ease both; }
+.card-art{ display:block; width:calc(100% + 32px); margin:-16px -16px 12px; border-radius:20px 20px 0 0; }
+.ic-img{ width:44px; height:44px; object-fit:contain; display:block; margin:0 auto 2px; mix-blend-mode:multiply; }
+.seg .ic-sm{ width:22px; height:22px; object-fit:contain; vertical-align:-5px; margin-right:3px; mix-blend-mode:multiply; }
 </style>
 </head>
 <body>
@@ -243,22 +247,39 @@ h2 small{ font-weight:300; font-size:12.5px; color:var(--muted); display:block; 
   <h2>🧺 ขั้นตอนการใช้งาน <small>ง่ายมาก ทำตามทีละข้อได้เลย</small></h2>
   <div class="art-slot" id="art-howto"></div>
   <div class="seg">
-    <button id="sg-wash" class="on" onclick="howSeg('wash')">🫧 เครื่องซัก</button>
-    <button id="sg-dry" onclick="howSeg('dry')">🔥 เครื่องอบ</button>
+    <button id="sg-wash" class="on" onclick="howSeg('wash')"><img class="ic-sm" src="ic-wash.jpg" alt="" onerror="this.style.display='none'">เครื่องซัก</button>
+    <button id="sg-dry" onclick="howSeg('dry')"><img class="ic-sm" src="ic-dry.jpg" alt="" onerror="this.style.display='none'">เครื่องอบ</button>
   </div>
   <div id="how-wash">
+    <div class="callout co-red">🚫 งดซักรองเท้าในเครื่องซักของร้าน — เศษทราย/พื้นยางทำถังเสียหาย และไม่ถูกสุขอนามัยกับผ้าของคนถัดไป (แนะนำแปรงซักมือแล้วผึ่งลม)</div>
     <div class="step"><div class="n">1</div><div class="e">👕</div><div><b>แยกผ้าก่อนซัก</b><p>ผ้าขาว / ผ้าสี / ผ้าสีเข้มตัวใหม่ แยกกัน — ไม่แน่ใจไปเล่นเกมแยกผ้าได้เลย</p></div></div>
     <div class="step"><div class="n">2</div><div class="e">🧺</div><div><b>ใส่ผ้าหลวมๆ ไม่อัดแน่น</b><p>ผ้าควรไม่เกิน 3/4 ของถัง เหลือที่ให้ผ้าหมุน ซักถึงจะสะอาด</p></div></div>
-    <div class="step"><div class="n">3</div><div class="e">🧴</div><div><b>เติมน้ำยาในลิ้นชักช่องที่ถูก</b><p>ช่อง "ซัก" ใส่น้ำยาซักผ้า · ช่อง "นุ่ม" ใส่น้ำยาปรับผ้านุ่ม (ดูสติกเกอร์บนฝากล่อง)</p></div></div>
+    <div class="step"><div class="n">3</div><div class="e">🧴</div><div><b>เติมน้ำยาในลิ้นชักช่องที่ถูก</b><p>ช่อง "ซัก" ใส่น้ำยาซักผ้า · ช่อง "นุ่ม" ใส่น้ำยาปรับผ้านุ่ม (ดูสติกเกอร์บนฝากล่อง) — ปริมาณดูตารางท้ายหน้านี้ 👇</p></div></div>
     <div class="step"><div class="n">4</div><div class="e">🌡️</div><div><b>เลือกอุณหภูมิน้ำ</b><p>เย็น = ผ้าสีทั่วไป · อุ่น = ผ้าขาว/เหงื่อเยอะ · ร้อน = ผ้าปูที่นอน ฆ่าไรฝุ่น</p></div></div>
     <div class="step"><div class="n">5</div><div class="e">🪙</div><div><b>หยอดเหรียญ หรือสแกนจ่าย</b><p>ราคาโชว์ที่จอบนเครื่อง · เครื่องเริ่มทำงานเอง</p></div></div>
     <div class="step"><div class="n">6</div><div class="e">⏰</div><div><b>รอประมาณ 30–40 นาที</b><p>ระหว่างรอ แวะจิบชานม Owl Cha ข้างๆ ได้น้า 🧋</p></div></div>
+    <div class="card">
+      <img class="card-art" src="art-detergent.jpg" alt="" onerror="this.style.display='none'">
+      <b style="font-size:15px; color:var(--navy)">🧴 เติมน้ำยาเท่าไหร่ถึงพอดี</b>
+      <table class="price-tbl" style="margin-top:8px">
+        <tr><th>เครื่อง</th><th>น้ำยาซักผ้า</th><th>น้ำยาปรับผ้านุ่ม</th></tr>
+        <tr><td>12 กก.</td><td class="num">1.5–2 ฝา<br><span style="font-weight:300;color:var(--muted);font-size:12px">(~60 มล.)</span></td><td class="num">1 ฝา<br><span style="font-weight:300;color:var(--muted);font-size:12px">(~35–40 มล.)</span></td></tr>
+        <tr><td>17 กก.</td><td class="num">2–2.5 ฝา<br><span style="font-weight:300;color:var(--muted);font-size:12px">(~80 มล.)</span></td><td class="num">1.5 ฝา<br><span style="font-weight:300;color:var(--muted);font-size:12px">(~50–55 มล.)</span></td></tr>
+      </table>
+      <p style="font-size:12px; color:var(--muted); font-weight:300; line-height:1.7; margin-top:8px">อิงฝาขวดมาตรฐาน ~40 มล. · ผ้าเปื้อนมาก/เต็มถัง เพิ่มได้อีกครึ่งฝา · สูตรเข้มข้น (concentrate) ลดลงตามฉลากข้างขวด</p>
+      <div class="callout co-blue" style="margin:10px 0 6px">
+        <b>ทำไม "น้อยไป" ไม่ดี:</b> สิ่งสกปรกและแบคทีเรียหลุดไม่หมด คราบเหงื่อ/กลิ่นอับยังฝังในผ้า — เสียเงินซักแต่ได้ผ้าไม่สะอาด
+      </div>
+      <div class="callout co-red" style="margin-bottom:2px">
+        <b>ทำไม "มากไป" ยิ่งแย่:</b> เครื่องร้านเป็นระบบประหยัดน้ำ ฟองที่เยอะเกินจะล้างออกไม่หมดในรอบเดียว → คราบน้ำยาตกค้างทำผ้ากระด้าง ใส่แล้วระคายผิว เก็บไว้กลับเหม็นอับ · ส่วนน้ำยาปรับผ้านุ่มถ้าเกิน จะเคลือบเส้นใยจนผ้าขนหนูซับน้ำแย่ลง — เติมเกิน = จ่ายแพงขึ้นเพื่อผลที่แย่ลง
+      </div>
+    </div>
   </div>
   <div id="how-dry" style="display:none">
     <div class="callout co-red">⚠️ ห้ามอบ: รองเท้า · ผ้าที่มียาง/โฟม · ผ้าเปื้อนน้ำมัน · ชุดชั้นในโครงเหล็ก · ผ้าขนสัตว์/ผ้าไหม — เสี่ยงไฟไหม้และผ้าพัง</div>
     <div class="step dry"><div class="n">1</div><div class="e">🌀</div><div><b>สะบัดผ้าก่อนใส่</b><p>ผ้าที่พันกันเป็นก้อนจะแห้งไม่ทั่ว สะบัดให้คลายก่อน</p></div></div>
     <div class="step dry"><div class="n">2</div><div class="e">🧺</div><div><b>ใส่หลวมๆ ครึ่งถังกำลังดี</b><p>ยิ่งหลวม ยิ่งแห้งไว ประหยัดเงินกว่าอัดเต็มถัง</p></div></div>
-    <div class="step dry"><div class="n">3</div><div class="e">🌡️</div><div><b>เลือกระดับความร้อน</b><p>ผ้าหนา = ร้อนสูง · ผ้าบาง/ผ้ายืด = ร้อนต่ำ กันผ้าหด</p></div></div>
+    <div class="step dry"><div class="n">3</div><div class="e">🌡️</div><div><b>เลือกอุณหภูมิอบ: เย็น / อุ่น / ร้อน</b><p>เย็น = ผ้าบอบบาง ผ้ายืด (ไม่หดชัวร์) · อุ่น = ผ้าทั่วไป ปลอดภัยสุด · ร้อน = ผ้าหนา ผ้าขนหนู ผ้าปู แห้งไว ฆ่าไรฝุ่น</p></div></div>
     <div class="step dry"><div class="n">4</div><div class="e">🪙</div><div><b>หยอดเหรียญ หรือสแกนจ่าย</b><p>12 กก. เริ่ม 50฿ · 17 กก. เริ่ม 60฿</p></div></div>
     <div class="step dry"><div class="n">5</div><div class="e">➕</div><div><b>ยังไม่แห้ง? เพิ่มได้</b><p>หยอดเพิ่ม 10฿ = เพิ่มเวลา (12กก. +7 นาที · 17กก. +6 นาที)</p></div></div>
   </div>
@@ -270,10 +291,17 @@ h2 small{ font-weight:300; font-size:12.5px; color:var(--muted); display:block; 
   <h2>💡 เทคนิคซักผ้า <small>รู้ไว้ ผ้าสวยเหมือนใหม่ไปอีกนาน</small></h2>
   <div class="art-slot" id="art-tips"></div>
 
+  <div class="g-sub" style="margin-bottom:6px; font-weight:500; color:var(--navy)">🫧 อุณหภูมิน้ำ — เครื่องซัก</div>
   <div class="temp-row">
     <div class="temp t-cold"><b>🧊 เย็น</b><span>ผ้าสีทั่วไป<br>กันสีตก สีซีด</span></div>
     <div class="temp t-warm"><b>🌤️ อุ่น</b><span>ผ้าขาว<br>คราบเหงื่อ</span></div>
     <div class="temp t-hot"><b>🔥 ร้อน</b><span>ผ้าปูที่นอน<br>ฆ่าไรฝุ่น</span></div>
+  </div>
+  <div class="g-sub" style="margin-bottom:6px; font-weight:500; color:var(--navy)">💨 อุณหภูมิลม — เครื่องอบ</div>
+  <div class="temp-row">
+    <div class="temp t-cold"><b>🌬️ เย็น</b><span>ผ้าบอบบาง ผ้ายืด<br>ไม่หดชัวร์ (แห้งช้า)</span></div>
+    <div class="temp t-warm"><b>♨️ อุ่น</b><span>ผ้าทั่วไป<br>ปลอดภัยสุด</span></div>
+    <div class="temp t-hot"><b>🔥 ร้อน</b><span>ผ้าหนา ผ้าขนหนู<br>แห้งไว ฆ่าไรฝุ่น</span></div>
   </div>
 
   <div class="tip"><div class="e">🎨</div><div><b>ผ้าสีเข้มตัวใหม่ = ตัวอันตราย</b><p>ยีนส์ใหม่ เสื้อแดง/ดำตัวใหม่ สีตกแน่นอน 2–3 ครั้งแรก — ซักแยกด้วยน้ำเย็น กลับด้านในออก</p></div></div>
@@ -282,7 +310,7 @@ h2 small{ font-weight:300; font-size:12.5px; color:var(--muted); display:block; 
   <div class="tip"><div class="e">🪝</div><div><b>รูดซิป ปลดตะขอ กลับด้าน</b><p>ซิปที่เปิดอยู่จะเกี่ยวผ้าตัวอื่นเป็นรู กระดุมให้ติดไว้ เสื้อสกรีนกลับด้านในออก</p></div></div>
   <div class="tip"><div class="e">🩲</div><div><b>ชุดชั้นใน/ผ้าบาง ใส่ถุงซัก</b><p>กันยืด กันเกี่ยว — ไม่มีถุงซัก ใส่ปลอกหมอนมัดปากแทนได้</p></div></div>
   <div class="tip"><div class="e">⚖️</div><div><b>เลือกขนาดเครื่องให้พอดี</b><p>ผ้า 1 สัปดาห์ของ 1 คน = 12 กก. พอ · ผ้านวม/ผ้าห่ม/ซักรวม 2 คน = 17 กก. — อัดแน่นเกิน ซักไม่สะอาด เปลืองเงินฟรี</p></div></div>
-  <div class="tip"><div class="e">🫧</div><div><b>น้ำยาไม่ต้องเยอะ</b><p>เครื่องหน้าร้านเป็นระบบประหยัดน้ำ ใส่น้ำยาเกินจะล้างไม่หมด ผ้าเหนียวเหนอะ ใส่ตามฝาเดียวพอ</p></div></div>
+  <div class="tip"><div class="e">🫧</div><div><b>น้ำยาไม่ต้องเยอะ</b><p>เครื่องหน้าร้านเป็นระบบประหยัดน้ำ ใส่เกินฟองล้างไม่หมด ผ้ากระด้างคันผิว — ดูตารางปริมาณพอดีได้ที่แท็บ 🧺 วิธีใช้</p></div></div>
   <div class="tip"><div class="e">🌧️</div><div><b>หน้าฝนผ้าเหม็นอับ = อบเลย</b><p>ตากในหอไม่แห้ง กลิ่นอับจากเชื้อรา — เครื่องอบ 40 นาที แห้งหอมทันที</p></div></div>
   <div class="tip"><div class="e">⏱️</div><div><b>ซักเสร็จรีบเอาออก</b><p>ผ้าเปียกทิ้งไว้ในถังเกิน 1–2 ชม. จะเริ่มเหม็นอับ ต้องซักใหม่</p></div></div>
 
@@ -320,6 +348,7 @@ h2 small{ font-weight:300; font-size:12.5px; color:var(--muted); display:block; 
 
   <h2 id="service" style="margin-top:18px">🧸 บริการของร้าน</h2>
   <div class="card">
+    <img class="card-art" src="art-service.jpg" alt="" onerror="this.style.display='none'">
     <div class="svc"><div class="e">🧺</div><div><b>ฝากซัก อบ พับ — ฟรีค่าบริการ</b><p>จ่ายแค่ค่าเครื่อง! ส่งผ้าก่อน 18:00 รับคืนวันเดียวกัน · หลัง 18:00 รับวันถัดไป</p></div></div>
     <div class="svc"><div class="e">🛵</div><div><b>เดลิเวอรี่ถึงหอ</b><p>รับ-ส่งผ้าถึงที่ เริ่ม 20฿ (บวกเพิ่มตามระยะทาง) — ทักไลน์นัดเวลาได้เลย</p></div></div>
     <div class="svc"><div class="e">🕐</div><div><b>เปิด 24 ชั่วโมง</b><p>แม่บ้านประจำร้าน 09:00–21:00 · แอดมินไลน์ตอบ 09:00–21:00</p></div></div>
@@ -375,7 +404,8 @@ function howSeg(k){
 function esc(t){ return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
 
 /* ══════════ ART (ใส่ชื่อไฟล์รูปเมื่อพร้อม เช่น game:'art-game.jpg') ══════════ */
-var ART = { hero:'art-hero.jpg', game:'', howto:'art-machines.jpg', tips:'', promo:'', win:'art-win.jpg', fail:'', night:'art-night.jpg' };
+var ART = { hero:'art-hero.jpg', game:'', howto:'art-machines.jpg', tips:'art-tips.jpg', promo:'art-promo.jpg', night:'art-night.jpg' };
+var ART_RANK = ['art-rank0.jpg','art-rank1.jpg','art-rank2.jpg','art-rank3.jpg'];
 function artImg(k, extra){
   return ART[k] ? '<div class="art-slot"><img src="'+ART[k]+'" alt="" '+(extra||'')+'></div>' : '';
 }
@@ -388,24 +418,25 @@ function initArt(){
 
 /* ══════════ GAME DATA ══════════ */
 var ITEMS = [
-  { id:'tee',      e:'👕', n:'เสื้อยืดสีอ่อน 4–5 ตัว',  kg:2,   tags:['light'] },
-  { id:'white',    e:'🤍', n:'เสื้อ/ชุดขาวล้วน',        kg:1.5, tags:['white'] },
-  { id:'jeans',    e:'👖', n:'ยีนส์ใหม่ 2 ตัว',         kg:2,   tags:['bleed','dark'] },
-  { id:'blacknew', e:'🖤', n:'เสื้อดำตัวใหม่',          kg:0.5, tags:['bleed','dark'] },
+  { id:'tee',      e:'👕', n:'เสื้อยืดสีอ่อน 5 ตัว',    kg:1,   tags:['light'] },
+  { id:'white',    e:'🤍', n:'เสื้อ/ชุดขาวล้วน 4 ตัว',  kg:1,   tags:['white'] },
+  { id:'jeans',    e:'👖', n:'ยีนส์ใหม่ 2 ตัว',         kg:1.6, tags:['bleed','dark'] },
+  { id:'blacknew', e:'🖤', n:'เสื้อดำตัวใหม่ 2 ตัว',    kg:0.5, tags:['bleed','dark'] },
   { id:'under',    e:'🧦', n:'ชุดชั้นใน + ถุงเท้า',     kg:0.5, tags:['delicate','heat'] },
-  { id:'bed',      e:'🛏️', n:'ผ้าปูที่นอน + ปลอกหมอน',  kg:3,   tags:['bedding'] },
-  { id:'duvet',    e:'🧸', n:'ผ้านวม 6 ฟุต',            kg:6,   tags:['bulky'] },
-  { id:'hoodie',   e:'🧥', n:'ฮู้ดดี้/ผ้าหนา 2 ตัว',    kg:2.5, tags:['heavy','heat'] },
-  { id:'shoes',    e:'👟', n:'รองเท้าผ้าใบ 1 คู่',      kg:1,   tags:['shoes'] },
+  { id:'bed',      e:'🛏️', n:'ผ้าปูที่นอน + ปลอกหมอน',  kg:2,   tags:['bedding'] },
+  { id:'duvet',    e:'🧸', n:'ผ้านวม 6 ฟุต',            kg:4.5, tags:['bulky'] },
+  { id:'hoodie',   e:'🧥', n:'ฮู้ดดี้/ผ้าหนา 2 ตัว',    kg:1.4, tags:['heavy','heat'] },
+  { id:'shoes',    e:'👟', n:'รองเท้าผ้าใบ 1 คู่',      kg:0.8, tags:['shoes'] },
   { id:'scarf',    e:'🧣', n:'ผ้าพันคอขนนุ่ม',          kg:0.3, tags:['delicate','heat'] }
 ];
 var WASH_PRICE = { 12:{cold:50,warm:60,hot:70}, 17:{cold:60,warm:70,hot:80} };
 var TEMP_TH = { cold:'น้ำเย็น', warm:'น้ำอุ่น', hot:'น้ำร้อน' };
+var DRY_TH = { cool:'ลมเย็น', warm:'ไฟอุ่น', hot:'ไฟร้อน' };
 
 /* ══════════ STATE ══════════ */
 var gs;
 function gReset(){
-  gs = { step:'pick', sel:{}, bag:false, mc:0, temp:'', dry:'' };
+  gs = { step:'pick', sel:{}, bag:false, mc:0, temp:'', det:'', dry:'' };
   gRender();
 }
 function selItems(){ return ITEMS.filter(function(it){ return gs.sel[it.id]; }); }
@@ -430,6 +461,7 @@ function gRender(){
 
   if(gs.step==='pick'){
     h += '<div class="card pop">';
+    h += '<img class="card-art" src="art-basket.jpg" alt="" onerror="this.style.display=\'none\'">';
     h += '<div class="g-q">วันนี้จะซักอะไรบ้าง?</div>';
     h += '<div class="g-sub">แตะเลือกผ้าลงตะกร้า (เลือกได้หลายอย่าง) — คิดดีๆ ว่าอะไรควรไปด้วยกัน</div>';
     h += '<div class="items">';
@@ -454,8 +486,8 @@ function gRender(){
     h += '<div class="g-q">เลือกเครื่องซัก</div>';
     h += '<div class="g-sub">ในตะกร้ามี '+selKg()+' กก. — เลือกให้พอดี ไม่แน่นไป ไม่เปลืองไป</div>';
     h += '<div class="choice">';
-    h += '<div class="ch'+(gs.mc===12?' sel':'')+'" onclick="gSetMc(12)"><span class="e">🫧</span><b>12 กก.</b><span>ผ้า 1 คน/สัปดาห์<br>50–70฿</span></div>';
-    h += '<div class="ch'+(gs.mc===17?' sel':'')+'" onclick="gSetMc(17)"><span class="e">🌊</span><b>17 กก.</b><span>ผ้านวม/กองใหญ่<br>60–80฿</span></div>';
+    h += '<div class="ch'+(gs.mc===12?' sel':'')+'" onclick="gSetMc(12)"><img class="ic-img" src="ic-wash.jpg" alt="" onerror="this.style.display=\'none\'"><b>12 กก.</b><span>ผ้า 1 คน/สัปดาห์<br>50–70฿</span></div>';
+    h += '<div class="ch'+(gs.mc===17?' sel':'')+'" onclick="gSetMc(17)"><img class="ic-img" src="ic-wash.jpg" alt="" onerror="this.style.display=\'none\'"><b>17 กก.</b><span>ผ้านวม/กองใหญ่<br>60–80฿</span></div>';
     h += '</div>';
     h += '<div class="g-q" style="margin-top:6px">เลือกอุณหภูมิน้ำ</div>';
     h += '<div class="choice">';
@@ -463,9 +495,15 @@ function gRender(){
     h += '<div class="ch'+(gs.temp==='warm'?' sel':'')+'" onclick="gSetTemp(\'warm\')"><span class="e">🌤️</span><b>อุ่น</b></div>';
     h += '<div class="ch'+(gs.temp==='hot'?' sel':'')+'" onclick="gSetTemp(\'hot\')"><span class="e">🔥</span><b>ร้อน</b></div>';
     h += '</div>';
+    h += '<div class="g-q" style="margin-top:6px">เติมน้ำยาซักเท่าไหร่?</div>';
+    h += '<div class="choice">';
+    h += '<div class="ch'+(gs.det==='low'?' sel':'')+'" onclick="gSetDet(\'low\')"><span class="e">🥄</span><b>นิดเดียว</b><span>ประหยัดไว้ก่อน</span></div>';
+    h += '<div class="ch'+(gs.det==='ok'?' sel':'')+'" onclick="gSetDet(\'ok\')"><span class="e">🧴</span><b>ตามฝาแนะนำ</b><span>พอดีๆ</span></div>';
+    h += '<div class="ch'+(gs.det==='high'?' sel':'')+'" onclick="gSetDet(\'high\')"><span class="e">🫗</span><b>เทเยอะๆ</b><span>ให้หอมสะอาดสุด</span></div>';
+    h += '</div>';
     if(gs.mc && gs.temp) h += '<div class="g-sub" style="margin:2px 0 0">ค่าซักรอบนี้: <b style="color:var(--blue-d)">'+WASH_PRICE[gs.mc][gs.temp]+'฿</b></div>';
     h += '</div>';
-    h += '<button class="btn btn-blue" '+((gs.mc&&gs.temp)?'':'disabled ')+'onclick="gGo(\'spin\')">🪙 หยอดเหรียญ เริ่มซัก!</button>';
+    h += '<button class="btn btn-blue" '+((gs.mc&&gs.temp&&gs.det)?'':'disabled ')+'onclick="gGo(\'spin\')">🪙 หยอดเหรียญ เริ่มซัก!</button>';
     h += '<button class="btn btn-ghost" onclick="gGo(\'pick\')">⬅ กลับไปเลือกผ้า</button>';
   }
 
@@ -484,12 +522,16 @@ function gRender(){
 
   else if(gs.step==='dry'){
     h += '<div class="card pop">';
+    h += '<img class="ic-img" src="ic-dry.jpg" alt="" style="width:74px;margin-bottom:6px" onerror="this.style.display=\'none\'">';
     h += '<div class="g-q">ซักเสร็จแล้ว! เอาผ้าไปไหนต่อ?</div>';
     h += '<div class="g-sub">เครื่องอบ '+gs.mc+' กก. อยู่ชั้นบนของแท่นเดียวกันเลย ('+(gs.mc===12?'50':'60')+'฿)</div>';
     h += '<div class="choice">';
-    h += '<div class="ch'+(gs.dry==='low'?' sel-g':'')+'" onclick="gSetDry(\'low\')"><span class="e">♨️</span><b>อบร้อนต่ำ</b><span>ถนอมผ้า</span></div>';
-    h += '<div class="ch'+(gs.dry==='high'?' sel-g':'')+'" onclick="gSetDry(\'high\')"><span class="e">🔥</span><b>อบร้อนสูง</b><span>แห้งไว</span></div>';
-    h += '<div class="ch'+(gs.dry==='none'?' sel-g':'')+'" onclick="gSetDry(\'none\')"><span class="e">🌤️</span><b>ไม่อบ</b><span>เอาไปตากเอง</span></div>';
+    h += '<div class="ch'+(gs.dry==='cool'?' sel-g':'')+'" onclick="gSetDry(\'cool\')"><span class="e">🌬️</span><b>เย็น</b><span>ผ้าบอบบาง<br>ผ้ายืด</span></div>';
+    h += '<div class="ch'+(gs.dry==='warm'?' sel-g':'')+'" onclick="gSetDry(\'warm\')"><span class="e">♨️</span><b>อุ่น</b><span>ผ้าทั่วไป<br>ปลอดภัยสุด</span></div>';
+    h += '<div class="ch'+(gs.dry==='hot'?' sel-g':'')+'" onclick="gSetDry(\'hot\')"><span class="e">🔥</span><b>ร้อน</b><span>ผ้าหนา<br>แห้งไว</span></div>';
+    h += '</div>';
+    h += '<div class="choice">';
+    h += '<div class="ch'+(gs.dry==='none'?' sel-g':'')+'" onclick="gSetDry(\'none\')"><span class="e">🌤️</span><b>ไม่อบ — หิ้วกลับไปตากเอง</b></div>';
     h += '</div>';
     h += '</div>';
     h += '<button class="btn btn-gold" '+(gs.dry?'':'disabled ')+'onclick="gDryGo()">'+(gs.dry==='none'?'หิ้วผ้ากลับไปตาก ➜':'🪙 หยอดเหรียญ เริ่มอบ!')+'</button>';
@@ -498,7 +540,7 @@ function gRender(){
   else if(gs.step==='dspin'){
     var em2 = selItems().slice(0,3).map(function(it){ return it.e; }).join('');
     h += '<div class="card pop" style="text-align:center">';
-    h += '<div class="g-q">เครื่องอบ '+gs.mc+' กก. กำลังอบ · '+(gs.dry==='high'?'ร้อนสูง':'ร้อนต่ำ')+'</div>';
+    h += '<div class="g-q">เครื่องอบ '+gs.mc+' กก. กำลังอบ · '+DRY_TH[gs.dry]+'</div>';
     h += '<div class="machine"><div class="m-top"><i class="go"></i><i></i><i></i><span class="m-name">DRY</span></div>';
     h += '<div class="door dry spin" id="dryDoor"><span class="drum">'+em2+'</span></div></div>';
     h += '<div id="dryMsg" class="g-sub">กำลังอบ… ♨️</div>';
@@ -509,13 +551,12 @@ function gRender(){
   else if(gs.step==='result'){
     var r = evalRun();
     h += '<div class="card pop"><div class="verdict-hero">';
+    h += '<img class="rank-art" src="'+ART_RANK[r.grade]+'" alt="" onerror="this.style.display=\'none\'">';
     h += '<div style="font-size:13px;color:var(--muted);font-weight:300">คะแนนรอบนี้</div>';
     h += '<div class="big"><span id="cnt">0</span><span class="of"> / 100</span></div>';
     h += '<div class="rank rk'+r.grade+'">'+r.rankTxt+'</div>';
     h += '<div class="cost-line">จ่ายจริงรอบนี้ '+r.cost+'฿ ('+r.costDetail+')</div>';
     h += '</div></div>';
-    if(r.grade >= 2) h += artImg('win');
-    if(r.grade === 0) h += artImg('fail');
     h += '<div class="card pop"><div class="g-q" style="margin-bottom:6px">📋 สรุปการตัดสินใจของคุณ</div>';
     r.F.forEach(function(f){
       var ic = f.k===2?'✓':(f.k===1?'!':'✕');
@@ -571,6 +612,7 @@ function gTogItem(id){ gs.sel[id] = !gs.sel[id]; gRender(); }
 function gTogBag(){ gs.bag = !gs.bag; gRender(); }
 function gSetMc(v){ gs.mc = v; gRender(); }
 function gSetTemp(v){ gs.temp = v; gRender(); }
+function gSetDet(v){ gs.det = v; gRender(); }
 function gSetDry(v){ gs.dry = v; gRender(); }
 function gGo(st){ gs.step = st; gRender(); }
 function gDryGo(){ gs.step = (gs.dry==='none' ? 'result' : 'dspin'); gRender(); }
@@ -593,27 +635,44 @@ function evalRun(){
     F.push({k:1, t:'ผ้าขาวปนผ้าสีอ่อน พอไหว แต่ถ้าอยากขาวจั๊วะ แยกซักผ้าขาวต่างหากดีกว่า'});
   }
   if(has('shoes')){
-    sc -= 20;
-    F.push({k:1, t:'รองเท้าไม่ควรลงเครื่องซักรวมกับเสื้อผ้า — เชื้อโรคปน กระแทกถังเสียงดัง ควรแปรงซักมือ'});
+    fatal = true; sc -= 60;
+    F.push({k:0, t:'ร้านห้ามซักรองเท้าในเครื่องซัก! เศษทราย/ยางทำถังเสียหาย ไม่ถูกสุขอนามัยกับผ้าคนถัดไป — แนะนำแปรงซักมือ แล้วค่อยผึ่งลม'});
   }
 
-  if(kg > mc*0.55){
-    sc -= 30;
-    F.push({k:0, t:'ผ้าแน่นเกินไปสำหรับเครื่อง '+mc+' กก. — ผ้าหมุนไม่ได้ ซักไม่สะอาด น้ำยาล้างไม่หมด'});
-  }else if(has('bulky') && mc===12){
-    sc -= 35;
-    F.push({k:0, t:'ผ้านวม 6 ฟุตต้องเครื่อง 17 กก. — ยัดลง 12 กก. แน่นเกิน ซักไม่ทั่ว เปลืองเงินฟรี'});
+  var tight = 0; /* 0=พอดี 1=ค่อนข้างเต็ม 2=แน่นเกิน */
+  if(has('bulky') && mc===12){
+    tight = 2; sc -= 35;
+    F.push({k:0, t:'ผ้านวม 6 ฟุตกินพื้นที่ถังมาก ต้องเครื่อง 17 กก. — ยัดลง 12 กก. น้ำ+น้ำยาซึมไม่ทั่วผืน ซักไม่สะอาด'});
+  }else if(kg > mc*0.8){
+    tight = 2; sc -= 30;
+    F.push({k:0, t:'ผ้า '+kg+' กก. แน่นเกินไปสำหรับเครื่อง '+mc+' กก. (ควรใส่ไม่เกิน ~3/4 ถัง) — ผ้าไม่มีที่หมุนขัดกัน ซักไม่สะอาด น้ำยาล้างไม่หมด'});
+  }else if(kg > mc*0.65){
+    tight = 1; sc -= 8;
+    F.push({k:1, t:'ผ้าค่อนข้างเต็มถัง ('+kg+'/'+mc+' กก.) — ซักได้แต่ถ้าลดลงอีกนิดจะสะอาดทั่วถึงกว่า'});
   }else{
-    F.push({k:2, t:'ปริมาณผ้าพอดีเครื่อง '+mc+' กก. ผ้ามีที่หมุน ซักสะอาดทั่วถึง'});
-    if(mc===17 && kg<=5 && !has('bulky') && !has('bedding')){
+    F.push({k:2, t:'ปริมาณผ้าพอดีเครื่อง '+mc+' กก. ผ้ามีที่หมุน น้ำยาเข้าถึงทุกชิ้น'});
+    if(mc===17 && kg<=6 && !has('bulky') && !has('bedding')){
       sc -= 8;
-      F.push({k:1, t:'ผ้าแค่ '+kg+' กก. ใช้เครื่อง 12 กก. ก็พอ — ประหยัดได้ 10฿'});
+      F.push({k:1, t:'ผ้าแค่ '+kg+' กก. ใช้เครื่อง 12 กก. ก็เหลือเฟือ — ประหยัดได้ 10฿'});
     }
   }
 
   if(has('delicate')){
     if(gs.bag){ sc += 4; F.push({k:2, t:'ใส่ถุงซักให้ชิ้นบอบบาง — ทรงสวย ไม่ยืด ไม่เกี่ยว ถุงเท้าไม่หาย'}); }
     else{ sc -= 12; F.push({k:1, t:'ชิ้นบอบบางไม่ได้ใส่ถุงซัก — เสี่ยงยืดเสียทรง โดนซิปเกี่ยว หรือหายในเครื่อง'}); }
+  }
+
+  /* -- น้ำยาซัก -- */
+  var det = gs.det;
+  if(det==='ok'){
+    sc += 3;
+    F.push({k:2, t:'เติมน้ำยาตามฝาแนะนำ — สะอาดพอดี ล้างหมดจด ไม่มีคราบตกค้าง'});
+  }else if(det==='low'){
+    sc -= 10;
+    F.push({k:1, t:'น้ำยาน้อยเกินไป — คราบเหงื่อ/กลิ่นอับหลุดไม่หมด เหมือนซักน้ำเปล่าแพงๆ'});
+  }else if(det==='high'){
+    sc -= 15;
+    F.push({k:1, t:'น้ำยาเยอะเกิน! เครื่องร้านเป็นระบบประหยัดน้ำ ฟองเยอะจะล้างไม่หมด — คราบน้ำยาค้างในผ้า ใส่แล้วคัน เก็บไว้เหม็นอับ แถมเปลืองเงินฟรี'});
   }
 
   if(temp==='hot'){
@@ -638,29 +697,52 @@ function evalRun(){
       fatal = true; sc -= 100;
       F.push({k:0, t:'ห้ามอบรองเท้าเด็ดขาด!! พื้นยาง/กาว/โฟมเจอความร้อนจะละลาย เสี่ยงไฟไหม้ในถังอบ'});
     }
-    if(dry==='high'){
-      if(has('delicate')||has('heat')){ sc -= 20; F.push({k:0, t:'อบร้อนสูงทำผ้ายืด/ชิ้นบอบบาง/ฮู้ดดี้หดย้วยเสียทรงถาวร'}); }
-      if(has('bulky')||has('bedding')){ sc += 6; F.push({k:2, t:'ร้อนสูงกับผ้าหนา/ผ้าปู — แห้งสนิทถึงข้างใน หอมฟู'}); }
-      if(!has('delicate') && !has('heat') && !has('bulky') && !has('bedding') && !has('shoes')) F.push({k:2, t:'อบร้อนสูง แห้งไวทันใจ'});
-    }else{
+    if(dry==='hot'){
+      if(has('delicate')||has('heat')){ sc -= 20; F.push({k:0, t:'อบร้อนทำผ้ายืด/ชิ้นบอบบาง/ฮู้ดดี้หดย้วยเสียทรงถาวร — ผ้าพวกนี้ใช้ลมเย็นหรือไฟอุ่น'}); }
+      if(has('bulky')||has('bedding')){ sc += 6; F.push({k:2, t:'อบร้อนกับผ้าหนา/ผ้าปู — แห้งสนิทถึงข้างใน แถมฆ่าไรฝุ่นซ้ำอีกรอบ'}); }
+      if((has('light')||has('dark')) && !has('delicate') && !has('heat')){ sc -= 4; F.push({k:1, t:'ผ้าสีเจออบร้อนบ่อยๆ สีจะซีดเร็วขึ้น — อบอุ่นก็แห้งได้ ถนอมกว่า'}); }
+      else if(!has('delicate') && !has('heat') && !has('bulky') && !has('bedding') && !has('shoes')) F.push({k:2, t:'อบร้อน แห้งไวทันใจ'});
+    }else if(dry==='warm'){
       sc += 4;
-      F.push({k:2, t:'อบร้อนต่ำ ถนอมผ้า แห้งนุ่มกำลังดี'});
-      if(has('bulky')){ sc -= 5; F.push({k:1, t:'ผ้านวมกับร้อนต่ำ อาจต้องหยอดเพิ่มเวลาถึงจะแห้งสนิทข้างใน'}); }
+      F.push({k:2, t:'อบไฟอุ่น — ปลอดภัยกับผ้าเกือบทุกชนิด สีไม่ซีด ไม่หด แห้งนุ่มกำลังดี'});
+      if(has('bulky')||has('bedding')){ sc -= 4; F.push({k:1, t:'ผ้าหนา/ผ้าปูกับไฟอุ่น อาจต้องหยอดเพิ่มเวลากว่าจะแห้งสนิทข้างใน — ไฟร้อนจะไวกว่า'}); }
+    }else if(dry==='cool'){
+      if(has('delicate')||has('heat')){ sc += 4; F.push({k:2, t:'ลมเย็นกับผ้าบอบบาง/ผ้ายืด — ถูกต้อง! ไม่หดแน่นอน ทรงสวยเหมือนเดิม'}); }
+      if(has('bulky')||has('bedding')){ sc -= 8; F.push({k:1, t:'ผ้าหนากับลมเย็นแห้งยากมาก ต้องหยอดหลายรอบ เปลืองกว่าเดิม — ผ้าหนาใช้ไฟร้อนคุ้มสุด'}); }
+      else if(!has('delicate') && !has('heat')){ sc -= 5; F.push({k:1, t:'ลมเย็นแห้งช้าสุด ผ้าทั่วไปใช้ไฟอุ่นจะคุ้มเวลากับเงินกว่า'}); }
     }
   }else{
     if(has('bulky')||has('bedding')){ sc -= 10; F.push({k:1, t:'ผ้าหนา/ผ้าปูตากเองแห้งยากมาก หน้าฝนเสี่ยงเหม็นอับ — เครื่องอบช่วยได้'}); }
     else F.push({k:2, t:'ตากธรรมชาติก็ดี ประหยัดด้วย (หน้าฝนระวังผ้าอับนะ)'});
   }
 
+  /* -- สรุป: รอบนี้ผ้าสะอาดมั้ย -- */
+  var clean = 2;
+  if(tight===1 || det==='low' || det==='high') clean = 1;
+  if(tight===2 || fatal) clean = 0;
+  var cleanTxt = clean===2 ? '🧼 ผลซัก: ผ้าสะอาดหอมฟู ครบทุกชิ้น'
+              : clean===1 ? '🧼 ผลซัก: สะอาดพอใช้ — มีจุดให้ปรับ (ดูรายการด้านล่าง)'
+              : '🧼 ผลซัก: รอบนี้ผ้าไม่สะอาด/เสียหาย อาจต้องซักใหม่ = จ่ายสองต่อ';
+  F.unshift({k:clean, t:cleanTxt});
+
   if(sc > 100) sc = 100;
   if(sc < 0) sc = 0;
   if(fatal && sc > 35) sc = 35;
 
-  var grade, rankTxt;
-  if(fatal || sc < 55){ grade = 0; rankTxt = '⛔ ห้ามทำแบบนี้!'; }
-  else if(sc >= 92){ grade = 3; rankTxt = '🌟 ดีมาก แยกดี!'; }
-  else if(sc >= 75){ grade = 2; rankTxt = '👍 ดี'; }
-  else{ grade = 1; rankTxt = '😐 พอใช้'; }
+  /* เพดานเกรดตามรายการเตือน: มีจุดพัง = ไม่เกินพอใช้ · มีจุดเตือน = ไม่เกินดี */
+  var worst = 2;
+  F.forEach(function(f){ if(f.k < worst) worst = f.k; });
+
+  var grade;
+  if(fatal || sc < 55){ grade = 0; }
+  else if(sc >= 92){ grade = 3; }
+  else if(sc >= 75){ grade = 2; }
+  else{ grade = 1; }
+  if(!fatal){
+    if(worst === 0) grade = Math.min(grade, 1);
+    else if(worst === 1) grade = Math.min(grade, 2);
+  }
+  var rankTxt = grade===0 ? '⛔ ห้ามทำแบบนี้!' : grade===3 ? '🌟 ดีมาก แยกดี!' : grade===2 ? '👍 ดี' : '😐 พอใช้';
 
   var wc = WASH_PRICE[mc][temp];
   var dc = dry==='none' ? 0 : (mc===12?50:60);
