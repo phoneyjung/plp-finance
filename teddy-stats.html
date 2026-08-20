@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>สถิติเว็บ Teddy</title>
+<link rel="icon" href="logo-teddy.jpg">
+<link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore-compat.js"></script>
+<style>
+:root{ --cream:#FAF6EE; --blue:#5BB8E8; --blue-d:#2E8FC4; --gold:#C68B4A; --navy:#113E6C;
+  --ink:#243240; --muted:#8A95A0; --line:#ECE5D6; --pos:#2E9E5B;
+  --shadow:0 8px 26px rgba(17,62,108,.07); --shadow-s:0 3px 12px rgba(17,62,108,.06); }
+*{ margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+body{ background:var(--cream); color:var(--ink); font-family:'Kanit',sans-serif; padding-bottom:40px; }
+.wrap{ max-width:560px; margin:0 auto; padding:0 16px; }
+header{ background:linear-gradient(180deg,#FFFDF8,var(--cream)); padding:20px 0 10px; }
+header h1{ font-size:20px; font-weight:700; color:var(--navy); }
+header .sub{ font-size:12px; color:var(--muted); font-weight:300; margin-top:2px; }
+.card{ background:#fff; box-shadow:var(--shadow); border-radius:20px; padding:16px; margin-bottom:13px; }
+h2{ font-size:16px; font-weight:600; color:var(--navy); margin-bottom:10px; }
+.seg{ display:flex; background:#F1EBDD; border-radius:14px; padding:4px; margin:12px 0; }
+.seg button{ flex:1; border:none; border-radius:11px; padding:9px; font-family:'Kanit'; font-size:13.5px;
+  font-weight:600; background:none; color:var(--muted); cursor:pointer; }
+.seg button.on{ background:#fff; color:var(--blue-d); box-shadow:var(--shadow-s); }
+.kpis{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.kpi{ background:#fff; box-shadow:var(--shadow-s); border-radius:16px; padding:13px; text-align:center; }
+.kpi .v{ font-size:28px; font-weight:800; color:var(--blue-d); line-height:1.1; }
+.kpi .l{ font-size:11.5px; color:var(--muted); font-weight:300; margin-top:2px; }
+.kpi.g .v{ color:var(--pos); } .kpi.o .v{ color:var(--gold); }
+.bar-row{ display:flex; align-items:center; gap:9px; margin-bottom:8px; }
+.bar-row .nm{ flex:none; width:96px; font-size:12.5px; }
+.bar-row .bw{ flex:1; height:20px; background:#F1EBDD; border-radius:10px; overflow:hidden; }
+.bar-row .bf{ height:100%; border-radius:10px; background:linear-gradient(90deg,var(--blue),var(--blue-d)); }
+.bar-row .vv{ flex:none; width:52px; text-align:right; font-size:12.5px; font-weight:600; color:var(--blue-d); }
+table{ width:100%; border-collapse:collapse; font-size:13px; }
+th{ text-align:left; font-size:11.5px; color:var(--muted); font-weight:500; padding:6px 4px; border-bottom:1px solid var(--line); }
+td{ padding:8px 4px; border-bottom:1px solid #F5F0E4; }
+td.n{ text-align:right; font-weight:600; color:var(--blue-d); }
+.msg{ text-align:center; color:var(--muted); font-size:13px; font-weight:300; padding:24px 0; }
+.gbar{ display:flex; height:26px; border-radius:13px; overflow:hidden; margin:8px 0 6px; background:#F1EBDD; }
+.gbar i{ display:block; }
+.glg{ display:flex; flex-wrap:wrap; gap:10px; font-size:11.5px; color:var(--muted); }
+.glg span{ display:flex; align-items:center; gap:4px; }
+.glg em{ width:10px; height:10px; border-radius:3px; display:block; font-style:normal; }
+.foot{ text-align:center; font-size:11px; color:var(--muted); margin-top:14px; font-weight:300; }
+a.btn{ display:block; text-align:center; background:linear-gradient(135deg,var(--blue),var(--blue-d)); color:#fff;
+  text-decoration:none; border-radius:14px; padding:12px; font-weight:600; font-size:14.5px; margin-top:6px; }
+</style>
+</head>
+<body>
+<header><div class="wrap">
+  <h1>📊 สถิติเว็บคู่มือซักผ้า</h1>
+  <div class="sub">Teddy Wash &amp; Dry · สาขา ม.ศิลปากร</div>
+</div></header>
+
+<div class="wrap">
+  <div class="seg" id="segbar" style="display:none">
+    <button id="b7" class="on" onclick="setRange(7)">7 วัน</button>
+    <button id="b30" onclick="setRange(30)">30 วัน</button>
+    <button id="b90" onclick="setRange(90)">90 วัน</button>
+  </div>
+  <div id="gate" class="card" style="text-align:center">
+    <div style="font-size:40px">🔒</div>
+    <h2 style="margin:6px 0 4px">สำหรับเจ้าของร้าน</h2>
+    <div style="font-size:12.5px;color:var(--muted);font-weight:300;margin-bottom:14px">ใส่รหัสเพื่อดูสถิติ</div>
+    <input id="pin" type="password" inputmode="numeric" maxlength="8" placeholder="• • • •"
+      style="width:180px;text-align:center;font-family:'Kanit';font-size:22px;letter-spacing:6px;padding:11px;border:2px solid var(--line);border-radius:14px;outline:none">
+    <div id="perr" style="color:#CE4A5A;font-size:12.5px;height:18px;margin-top:6px"></div>
+    <button onclick="tryPin()" style="width:180px;border:none;border-radius:14px;padding:12px;font-family:'Kanit';font-size:15px;font-weight:600;background:linear-gradient(135deg,var(--blue),var(--blue-d));color:#fff;cursor:pointer;margin-top:4px">เข้าดูสถิติ</button>
+  </div>
+  <div id="main" style="display:none">
+    <div id="body"><div class="msg">กำลังโหลด…</div></div>
+    <a class="btn" href="teddy.html">← กลับไปดูเว็บลูกค้า</a>
+    <div class="foot">ข้อมูลอัปเดตทันทีที่มีคนเข้าใช้งาน</div>
+  </div>
+</div>
+
+<script>
+/* ══ รหัสเข้าดูสถิติ — เปลี่ยนเลขตรงนี้ได้เลย ══ */
+var PIN = '2568';
+
+var DB=null, RANGE=7, ROWS=[], OK=false;
+
+function unlock(){
+  OK = true;
+  try{ sessionStorage.setItem('tw_stat_ok','1'); }catch(e){}
+  document.getElementById('gate').style.display='none';
+  document.getElementById('main').style.display='';
+  document.getElementById('segbar').style.display='';
+  load();
+}
+function tryPin(){
+  var v = (document.getElementById('pin').value||'').trim();
+  if(v === PIN){ unlock(); }
+  else{
+    document.getElementById('perr').textContent = 'รหัสไม่ถูกต้อง';
+    document.getElementById('pin').value = '';
+  }
+}
+var TABS=[['game','🎮 เกมซักผ้า'],['howto','🧺 วิธีใช้'],['tips','💡 เทคนิค'],['faq','❓ คำถาม'],['promo','🏷️ โปร·บริการ']];
+var GC=['#CE4A5A','#C98F16','#5BB8E8','#2E9E5B'];
+var GN=['⛔ ห้ามทำ','😐 พอใช้','👍 ดี','🌟 ดีมาก'];
+
+function day(off){
+  var d=new Date(Date.now()+7*3600*1000 - off*86400000);
+  return d.toISOString().slice(0,10);
+}
+function thDate(s){
+  var p=s.split('-'); return p[2]+'/'+p[1];
+}
+function n(v){ return (v||0).toLocaleString('th-TH'); }
+
+function setRange(r){
+  RANGE=r;
+  [7,30,90].forEach(function(x){ document.getElementById('b'+x).className = (x===r?'on':''); });
+  load();
+}
+
+function load(){
+  if(!DB || !OK){ return; }
+  document.getElementById('body').innerHTML='<div class="msg">กำลังโหลด…</div>';
+  var from=day(RANGE-1);
+  DB.collection('teddyStats').where(firebase.firestore.FieldPath.documentId(),'>=',from)
+    .get().then(function(snap){
+      ROWS=[];
+      snap.forEach(function(d){ var v=d.data()||{}; v._id=d.id; ROWS.push(v); });
+      ROWS.sort(function(a,b){ return a._id<b._id?1:-1; });
+      render();
+    }).catch(function(e){
+      document.getElementById('body').innerHTML='<div class="card"><div class="msg">โหลดข้อมูลไม่ได้<br><span style="font-size:11.5px">'+(e&&e.message?e.message:'')+'</span></div></div>';
+    });
+}
+
+function render(){
+  if(!ROWS.length){
+    document.getElementById('body').innerHTML='<div class="card"><div class="msg">ยังไม่มีข้อมูลในช่วงนี้<br>รอให้ลูกค้าเข้าใช้งานสักพักนะครับ</div></div>';
+    return;
+  }
+  var T={visits:0,uniq:0,gameStart:0,gameFinish:0,score:0,g0:0,g1:0,g2:0,g3:0,tab:{}};
+  TABS.forEach(function(t){ T.tab[t[0]]=0; });
+  ROWS.forEach(function(r){
+    T.visits+=r.visits||0; T.uniq+=r.uniq||0;
+    T.gameStart+=r.gameStart||0; T.gameFinish+=r.gameFinish||0; T.score+=r.score||0;
+    T.g0+=r.grade0||0; T.g1+=r.grade1||0; T.g2+=r.grade2||0; T.g3+=r.grade3||0;
+    TABS.forEach(function(t){ T.tab[t[0]] += r['tab_'+t[0]]||0; });
+  });
+  var h='';
+
+  /* KPI */
+  h+='<div class="kpis">';
+  h+='<div class="kpi"><div class="v">'+n(T.visits)+'</div><div class="l">เปิดเว็บทั้งหมด (ครั้ง)</div></div>';
+  h+='<div class="kpi g"><div class="v">'+n(T.uniq)+'</div><div class="l">คนที่เข้ามา (นับ 1 คน/วัน)</div></div>';
+  h+='<div class="kpi o"><div class="v">'+n(T.gameStart)+'</div><div class="l">กดเริ่มเล่นเกม</div></div>';
+  h+='<div class="kpi g"><div class="v">'+n(T.gameFinish)+'</div><div class="l">เล่นเกมจนจบ</div></div>';
+  h+='</div>';
+
+  /* เกม */
+  var rate = T.gameStart ? Math.round(T.gameFinish/T.gameStart*100) : 0;
+  var avg  = T.gameFinish ? Math.round(T.score/T.gameFinish) : 0;
+  h+='<div class="card" style="margin-top:13px"><h2>🎮 ผลการเล่นเกม</h2>';
+  h+='<div style="display:flex;gap:10px;margin-bottom:12px">';
+  h+='<div style="flex:1;text-align:center"><div style="font-size:24px;font-weight:800;color:var(--blue-d)">'+rate+'%</div><div style="font-size:11.5px;color:var(--muted)">เล่นจนจบ</div></div>';
+  h+='<div style="flex:1;text-align:center"><div style="font-size:24px;font-weight:800;color:var(--gold)">'+avg+'</div><div style="font-size:11.5px;color:var(--muted)">คะแนนเฉลี่ย/100</div></div>';
+  h+='</div>';
+  var gt=T.g0+T.g1+T.g2+T.g3;
+  if(gt){
+    h+='<div class="gbar">';
+    [T.g0,T.g1,T.g2,T.g3].forEach(function(v,i){
+      if(v) h+='<i style="width:'+(v/gt*100)+'%;background:'+GC[i]+'"></i>';
+    });
+    h+='</div><div class="glg">';
+    [T.g0,T.g1,T.g2,T.g3].forEach(function(v,i){
+      h+='<span><em style="background:'+GC[i]+'"></em>'+GN[i]+' '+n(v)+'</span>';
+    });
+    h+='</div>';
+  }else{
+    h+='<div class="msg" style="padding:8px 0">ยังไม่มีคนเล่นจบ</div>';
+  }
+  h+='</div>';
+
+  /* แท็บ */
+  var mx=1; TABS.forEach(function(t){ if(T.tab[t[0]]>mx) mx=T.tab[t[0]]; });
+  h+='<div class="card"><h2>📑 หน้าที่เปิดดูบ่อย</h2>';
+  TABS.forEach(function(t){
+    var v=T.tab[t[0]];
+    h+='<div class="bar-row"><span class="nm">'+t[1]+'</span><span class="bw"><span class="bf" style="width:'+(v/mx*100)+'%"></span></span><span class="vv">'+n(v)+'</span></div>';
+  });
+  h+='</div>';
+
+  /* รายวัน */
+  h+='<div class="card"><h2>📅 รายวัน</h2><table><tr><th>วันที่</th><th style="text-align:right">เปิดเว็บ</th><th style="text-align:right">คน</th><th style="text-align:right">เล่นจบ</th></tr>';
+  ROWS.forEach(function(r){
+    h+='<tr><td>'+thDate(r._id)+'</td><td class="n">'+n(r.visits)+'</td><td class="n">'+n(r.uniq)+'</td><td class="n">'+n(r.gameFinish)+'</td></tr>';
+  });
+  h+='</table></div>';
+
+  document.getElementById('body').innerHTML=h;
+}
+
+try{
+  document.getElementById('pin').addEventListener('keydown', function(e){
+    if(e.key === 'Enter') tryPin();
+  });
+}catch(e){}
+
+try{
+  firebase.initializeApp({
+    apiKey:"AIzaSyAVaizHIgRcgrufwwI1ohbOinOy0DtTiM0",
+    authDomain:"plp-finance.firebaseapp.com",
+    projectId:"plp-finance",
+    storageBucket:"plp-finance.firebasestorage.app",
+    messagingSenderId:"772651276984",
+    appId:"1:772651276984:web:46a5953931ba72c146724d"
+  });
+  DB=firebase.firestore();
+  firebase.auth().signInAnonymously().then(function(){
+    try{ if(sessionStorage.getItem('tw_stat_ok')==='1') unlock(); }catch(e){}
+    load();
+  }).catch(function(e){
+    document.getElementById('body').innerHTML='<div class="card"><div class="msg">เข้าสู่ระบบไม่สำเร็จ</div></div>';
+  });
+}catch(e){
+  document.getElementById('body').innerHTML='<div class="card"><div class="msg">เปิดระบบไม่ได้</div></div>';
+}
+</script>
+</body>
+</html>

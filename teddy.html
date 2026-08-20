@@ -12,6 +12,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore-compat.js"></script>
 <style>
 :root{
   --cream:#FAF6EE; --blue:#5BB8E8; --blue-d:#2E8FC4; --gold:#C68B4A; --gold-l:#E8C9A2;
@@ -698,6 +701,7 @@ function go(p, scrollId){
     document.getElementById('nb-'+k).className = (k===p?'on':'');
   }
   try{ history.replaceState(null,'','#'+(scrollId||p)); }catch(e){}
+  try{ stBump({ ['tab_'+p]: 1 }); }catch(e){}
   if(scrollId){
     var el = document.getElementById(scrollId);
     if(el) setTimeout(function(){ el.scrollIntoView({behavior:'smooth'}); }, 60);
@@ -949,6 +953,10 @@ function gRender(){
   }
   if(gs.step==='result'){
     var r2 = evalRun();
+    if(!gs._logged){
+      gs._logged = 1;
+      stBump({ gameFinish:1, ['grade'+r2.grade]:1, score:r2.score });
+    }
     if(r2.score >= 75) confetti(64);
     if(r2.score > 0){
       var c = 0, iv = setInterval(function(){
@@ -968,7 +976,10 @@ function gSetMc(v){ gs.mc = v; gRender(); }
 function gSetTemp(v){ gs.temp = v; gRender(); }
 function gSetDet(v){ gs.det = v; gRender(); }
 function gSetDry(v){ gs.dry = v; gRender(); }
-function gGo(st){ gs.step = st; gRender(); }
+function gGo(st){
+  if(st === 'pick' && gs.step === 'intro') stBump({ gameStart:1 });
+  gs.step = st; gRender();
+}
 function gDryGo(){ gs.step = (gs.dry==='none' ? 'result' : 'dspin'); gRender(); }
 
 /* ══════════ EVALUATION ══════════ */
@@ -1124,9 +1135,63 @@ function confetti(n){
 }
 
 /* ซ่อนปุ่มลอยเมื่อใกล้ปุ่มไลน์ใหญ่ท้ายหน้า (กันทับกัน) */
+/* ══════════ STATS (นับผู้เข้าชม / การเล่นเกม) ══════════ */
+var ST = { db:null, ready:false, q:[] };
+
+function stDay(){
+  var d = new Date(Date.now() + 7*3600*1000); /* GMT+7 */
+  return d.toISOString().slice(0,10);
+}
+function stVisitor(){
+  try{
+    var k = localStorage.getItem('tw_vid');
+    if(!k){ k = 'v' + Date.now().toString(36) + Math.random().toString(36).slice(2,8); localStorage.setItem('tw_vid', k); }
+    return k;
+  }catch(e){ return null; }
+}
+function stIsNewToday(){
+  try{
+    var d = stDay();
+    if(localStorage.getItem('tw_day') === d) return false;
+    localStorage.setItem('tw_day', d);
+    return true;
+  }catch(e){ return true; }
+}
+function stBump(fields){
+  if(!ST.ready){ ST.q.push(fields); return; }
+  try{
+    var inc = firebase.firestore.FieldValue.increment;
+    var patch = { day: stDay(), at: Date.now() };
+    for(var k in fields) patch[k] = inc(fields[k]);
+    ST.db.collection('teddyStats').doc(stDay()).set(patch, { merge:true });
+  }catch(e){}
+}
+function stInit(){
+  try{
+    if(typeof firebase === 'undefined') return;
+    firebase.initializeApp({
+      apiKey:"AIzaSyAVaizHIgRcgrufwwI1ohbOinOy0DtTiM0",
+      authDomain:"plp-finance.firebaseapp.com",
+      projectId:"plp-finance",
+      storageBucket:"plp-finance.firebasestorage.app",
+      messagingSenderId:"772651276984",
+      appId:"1:772651276984:web:46a5953931ba72c146724d"
+    });
+    ST.db = firebase.firestore();
+    firebase.auth().signInAnonymously().then(function(){
+      ST.ready = true;
+      var q = ST.q; ST.q = [];
+      for(var i=0;i<q.length;i++) stBump(q[i]);
+    }).catch(function(){});
+  }catch(e){}
+}
+
 /* ══════════ INIT ══════════ */
 initArt();
 howSeg('wash');
+stInit();
+stVisitor();
+stBump(stIsNewToday() ? { visits:1, uniq:1 } : { visits:1 });
 gReset();
 initRoute();
 window.addEventListener('hashchange', initRoute);
