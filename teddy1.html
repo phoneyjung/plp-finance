@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Teddy Wash &amp; Dry สาขา 1 · ราคาและบริการ</title>
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --cream:#FBF6EC; --cream2:#F4EDDD; --blue:#5BB8E8; --blue-d:#2E8FC4;
+  --navy:#143A60; --gold:#C68B4A; --muted:#8A95A0; --ink:#243240;
+}
+*{ margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+html,body{ height:100%; }
+body{
+  font-family:'Kanit',sans-serif; color:var(--ink); overflow-x:hidden;
+  background:linear-gradient(180deg,#EAF5FC 0%, var(--cream) 34%, var(--cream2) 100%);
+  min-height:100dvh; display:flex; flex-direction:column;
+}
+
+/* ── ฟองสบู่ลอย ── */
+.bub{ position:fixed; border-radius:50%; pointer-events:none; z-index:0;
+  background:radial-gradient(circle at 32% 30%, rgba(255,255,255,.95), rgba(173,220,246,.35) 60%, rgba(140,200,240,.15));
+  box-shadow:inset -3px -4px 8px rgba(120,190,235,.25);
+  animation:rise linear infinite; opacity:0; }
+@keyframes rise{
+  0%{ transform:translateY(20px) scale(.7); opacity:0 }
+  12%{ opacity:.8 }
+  85%{ opacity:.6 }
+  100%{ transform:translateY(-105dvh) scale(1.08); opacity:0 }
+}
+
+/* ── หัวเว็บ ── */
+header{ position:relative; z-index:2; text-align:center; padding:26px 16px 6px; }
+.logo{ width:76px; height:76px; border-radius:50%; box-shadow:0 8px 22px rgba(20,58,96,.16);
+  border:3px solid #fff; animation:pop .7s cubic-bezier(.3,1.5,.5,1) both; }
+@keyframes pop{ 0%{ transform:scale(.4); opacity:0 } 100%{ transform:scale(1); opacity:1 } }
+h1{ font-size:23px; font-weight:800; color:var(--navy); margin-top:8px; letter-spacing:.2px;
+  animation:fadeUp .6s ease .15s both; }
+.tags{ display:flex; gap:8px; justify-content:center; margin-top:8px; flex-wrap:wrap;
+  animation:fadeUp .6s ease .25s both; }
+.tag{ font-size:12px; font-weight:500; padding:5px 13px; border-radius:999px;
+  background:#fff; color:var(--blue-d); box-shadow:0 3px 10px rgba(20,58,96,.08); }
+.tag.g{ color:#8A6410; }
+@keyframes fadeUp{ 0%{ opacity:0; transform:translateY(10px) } 100%{ opacity:1; transform:none } }
+
+/* ── Carousel ── */
+.stage{ position:relative; z-index:2; flex:1; display:flex; flex-direction:column; justify-content:center; }
+.rail{
+  display:flex; gap:18px; overflow-x:auto; padding:22px calc(50% - min(41vw,235px)) 10px;
+  scroll-snap-type:x mandatory; scrollbar-width:none; -webkit-overflow-scrolling:touch;
+}
+.rail::-webkit-scrollbar{ display:none; }
+.slide{
+  flex:0 0 min(82vw,470px); scroll-snap-align:center; position:relative;
+  border-radius:26px; overflow:hidden; cursor:pointer;
+  box-shadow:0 14px 34px rgba(20,58,96,.16);
+  transform:scale(.9); opacity:.55; filter:saturate(.85);
+  transition:transform .38s cubic-bezier(.25,1,.4,1), opacity .38s, filter .38s;
+}
+.slide.on{ transform:scale(1); opacity:1; filter:none;
+  box-shadow:0 20px 46px rgba(20,58,96,.22); }
+.slide img{ display:block; width:100%; }
+/* แสงวูบผ่านการ์ดที่ active */
+.slide::after{
+  content:''; position:absolute; inset:0; pointer-events:none;
+  background:linear-gradient(115deg, transparent 30%, rgba(255,255,255,.34) 47%, transparent 62%);
+  transform:translateX(-130%);
+}
+.slide.on::after{ animation:shine 1s ease .25s 1; }
+@keyframes shine{ to{ transform:translateX(130%) } }
+
+/* ── จุดบอกตำแหน่ง ── */
+.dots{ display:flex; gap:8px; justify-content:center; padding:16px 0 4px; }
+.dot{ width:8px; height:8px; border-radius:999px; background:#D8CFBB; transition:all .3s; }
+.dot.on{ width:26px; background:linear-gradient(90deg,var(--blue),var(--blue-d)); }
+
+.hint{ text-align:center; font-size:12.5px; color:var(--muted); font-weight:300;
+  padding-bottom:8px; animation:sway 1.6s ease-in-out infinite; }
+@keyframes sway{ 0%,100%{ transform:translateX(0) } 50%{ transform:translateX(7px) } }
+
+.foot{ position:relative; z-index:2; text-align:center; font-size:11.5px; color:#B4AA96;
+  font-weight:300; padding:6px 0 18px; }
+
+/* ── Fullscreen viewer ── */
+.viewer{ position:fixed; inset:0; z-index:50; background:rgba(14,32,52,.92);
+  display:none; align-items:flex-start; justify-content:center; overflow:auto; padding:22px 10px 40px; }
+.viewer.on{ display:flex; animation:vfade .22s ease both; }
+@keyframes vfade{ 0%{ opacity:0 } 100%{ opacity:1 } }
+.viewer img{ width:min(96vw,700px); border-radius:20px; margin:auto; }
+.vclose{ position:fixed; top:14px; right:14px; width:42px; height:42px; border-radius:50%;
+  background:rgba(255,255,255,.16); color:#fff; border:none; font-size:20px; cursor:pointer;
+  backdrop-filter:blur(4px); font-family:'Kanit'; }
+.vhint{ position:fixed; bottom:14px; left:0; right:0; text-align:center;
+  color:rgba(255,255,255,.75); font-size:12px; font-weight:300; }
+</style>
+</head>
+<body>
+
+<header>
+  <img class="logo" src="logo-teddy.jpg" alt="" onerror="this.style.display='none'">
+  <h1>Teddy Wash &amp; Dry</h1>
+  <div class="tags">
+    <span class="tag">สาขา 1</span>
+    <span class="tag g">เปิด 24 ชม.</span>
+    <span class="tag">แม่บ้าน 10:00–21:00</span>
+  </div>
+</header>
+
+<div class="stage">
+  <div class="rail" id="rail">
+    <div class="slide" onclick="openV(0)"><img src="t1-1-price.jpg"    alt="ราคาค่าบริการ"></div>
+    <div class="slide" onclick="openV(1)"><img src="t1-2-promo.jpg"    alt="โปรโมชั่น"></div>
+    <div class="slide" onclick="openV(2)"><img src="t1-3-service.jpg"  alt="ฝากซัก อบ พับ ฟรีค่าบริการ"></div>
+    <div class="slide" onclick="openV(3)"><img src="t1-4-delivery.jpg" alt="เดลิเวอรี่รับส่งผ้า"></div>
+  </div>
+  <div class="dots" id="dots"></div>
+  <div class="hint">ปัดดูได้เลย ➜ · แตะการ์ดเพื่อขยาย</div>
+</div>
+
+<div class="foot">TEDDY WASH &amp; DRY · สาขา 1</div>
+
+<div class="viewer" id="viewer" onclick="closeV(event)">
+  <button class="vclose" onclick="closeV()">✕</button>
+  <img id="vimg" src="" alt="">
+  <div class="vhint">ถ่างนิ้วเพื่อซูม · แตะพื้นมืดเพื่อปิด</div>
+</div>
+
+<script>
+var IMGS = ['t1-1-price.jpg','t1-2-promo.jpg','t1-3-service.jpg','t1-4-delivery.jpg'];
+
+/* ฟองสบู่ */
+(function(){
+  for(var i=0;i<9;i++){
+    var b=document.createElement('div'); b.className='bub';
+    var s=10+Math.random()*26;
+    b.style.width=b.style.height=s+'px';
+    b.style.left=(4+Math.random()*92)+'%';
+    b.style.bottom='-30px';
+    b.style.animationDuration=(9+Math.random()*8)+'s';
+    b.style.animationDelay=(Math.random()*9)+'s';
+    document.body.appendChild(b);
+  }
+})();
+
+/* carousel: การ์ดกลางเด่น + จุดบอกตำแหน่ง */
+var rail=document.getElementById('rail');
+var slides=[].slice.call(rail.children);
+var dotsEl=document.getElementById('dots');
+slides.forEach(function(_,i){
+  var d=document.createElement('span'); d.className='dot'+(i===0?' on':'');
+  dotsEl.appendChild(d);
+});
+var dots=[].slice.call(dotsEl.children);
+var cur=0;
+function update(){
+  var rc=rail.getBoundingClientRect();
+  var mid=rc.left+rc.width/2;
+  var best=0, bd=1e9;
+  slides.forEach(function(s,i){
+    var r=s.getBoundingClientRect();
+    var c=r.left+r.width/2;
+    var dd=Math.abs(c-mid);
+    if(dd<bd){ bd=dd; best=i; }
+  });
+  if(best!==cur){
+    cur=best;
+    slides.forEach(function(s,i){ s.className='slide'+(i===cur?' on':''); });
+    dots.forEach(function(d,i){ d.className='dot'+(i===cur?' on':''); });
+  }
+}
+slides[0].className='slide on';
+var tick=false;
+rail.addEventListener('scroll',function(){
+  if(!tick){ tick=true; requestAnimationFrame(function(){ update(); tick=false; }); }
+},{passive:true});
+window.addEventListener('resize',update);
+
+/* fullscreen viewer */
+function openV(i){
+  document.getElementById('vimg').src=IMGS[i];
+  document.getElementById('viewer').className='viewer on';
+}
+function closeV(e){
+  if(e && e.target && e.target.id==='vimg') return; /* แตะรูปไม่ปิด */
+  document.getElementById('viewer').className='viewer';
+}
+</script>
+</body>
+</html>
