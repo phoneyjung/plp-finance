@@ -3100,12 +3100,24 @@ function attHours(i,o){
   let d=(b-a)/60; if(d<0) d+=24;
   return Math.round(d*10)/10;
 }
+function attFmt(v){
+  const t=String(v||'').trim();
+  if(!t) return '';
+  const m=t.match(/^(\d{1,2})[:.]?(\d{2})$/);
+  if(!m) return t;
+  const h=Math.min(23,+m[1]), mi=Math.min(59,+m[2]);
+  return String(h).padStart(2,'0')+':'+String(mi).padStart(2,'0');
+}
 function AttendPanel({ user }){
   const [ym,setYm]=useState(ymOf(today()));
   const [scans,setScans]=useState(null);
   const [staff,setStaff]=useState([]);
   const [who,setWho]=useState('all');
+  const [view,setView]=useState('day');
   const [err,setErr]=useState('');
+  const [edit,setEdit]=useState(null);
+  const [busy,setBusy]=useState(false);
+  const [msg,setMsg]=useState('');
 
   useEffect(()=>{
     let stop=false;
@@ -3127,8 +3139,29 @@ function AttendPanel({ user }){
   const pins=React.useMemo(()=>{
     const s=new Set();
     Object.keys(scans||{}).forEach(d=>Object.keys(scans[d]||{}).forEach(p=>s.add(String(p))));
+    staff.forEach(x=>{ if(x.fpId) s.add(String(x.fpId)); });
     return [...s].sort((a,b)=>(+a)-(+b));
-  },[scans]);
+  },[scans,staff]);
+
+  const parseRow=(v)=>{
+    const raw=fpRaw(v.t), list=fpClean(v.t);
+    const pairs=[]; let net=0;
+    if(list.length>=2){
+      for(let k=0;k+1<list.length;k+=2){
+        const h=attHours(list[k],list[k+1]);
+        pairs.push({ i:list[k], o:list[k+1], h });
+        if(h) net+=h;
+      }
+      if(list.length%2) pairs.push({ i:list[list.length-1], o:'', h:null });
+    } else if(list.length===1){
+      pairs.push({ i:list[0], o:'', h:null });
+    } else if(v.i){
+      const h=attHours(v.i, (v.o&&v.o!==v.i)? v.o : '');
+      pairs.push({ i:v.i, o:(v.o&&v.o!==v.i)? v.o:'', h });
+      net = h || 0;
+    }
+    return { pairs, fixed:Math.max(0, raw.length-list.length), net:Math.round(net*10)/10, manual: !!v.m };
+  };
 
   const days=React.useMemo(()=>{
     if(!scans) return [];
@@ -3137,34 +3170,37 @@ function AttendPanel({ user }){
       const rows=Object.keys(scans[d]||{})
         .filter(p=> who==='all' || String(p)===who)
         .sort((a,b)=>(+a)-(+b))
-        .map(p=>{
-          const v=scans[d][p]||{};
-          const raw=fpRaw(v.t), list=fpClean(v.t);
-          const pairs=[]; let net=0;
-          if(list.length>=2){
-            for(let k=0;k+1<list.length;k+=2){
-              const h=attHours(list[k],list[k+1]);
-              pairs.push({ i:list[k], o:list[k+1], h });
-              if(h) net+=h;
-            }
-            if(list.length%2) pairs.push({ i:list[list.length-1], o:'', h:null });
-          } else if(v.i){
-            const h=attHours(v.i, (v.o&&v.o!==v.i)? v.o : '');
-            pairs.push({ i:v.i, o:(v.o&&v.o!==v.i)? v.o:'', h });
-            net = h || 0;
-          }
-          return { pin:p, ...v, pairs, fixed:Math.max(0, raw.length-list.length), net:Math.round(net*10)/10 };
-        });
+        .map(p=>({ pin:p, ...(scans[d][p]||{}), ...parseRow(scans[d][p]||{}) }));
       if(rows.length) out.push({ d, rows });
     });
     return out;
   },[scans,who]);
 
+  const sum=React.useMemo(()=>{
+    const per={};
+    Object.keys(scans||{}).forEach(d=>{
+      Object.keys(scans[d]||{}).forEach(p=>{
+        const r=parseRow(scans[d][p]||{});
+        if(!per[p]) per[p]={ pin:p, days:0, hours:0, manual:0, open:0 };
+        per[p].days++;
+        per[p].hours+=r.net;
+        if(r.manual) per[p].manual++;
+        if(r.pairs.some(x=>!x.o)) per[p].open++;
+      });
+    });
+    return Object.values(per)
+      .map(x=>({ ...x, hours:Math.round(x.hours*10)/10, avg: x.days? Math.round(x.hours/x.days*10)/10 : 0 }))
+      .sort((a,b)=>b.hours-a.hours);
+  },[scans]);
+
   const stat=React.useMemo(()=>{
-    let dd=0, hh=0;
-    days.forEach(x=>x.rows.forEach(r=>{ dd++; if(r.net) hh+=r.net; }));
-    return { days:dd, hours:Math.round(hh*10)/10 };
-  },[days]);
+    let dd=0, hh=0, op=0;
+    Object.keys(scans||{}).forEach(d=>Object.keys(scans[d]||{}).forEach(p=>{
+      const r=parseRow(scans[d][p]||{});
+      dd++; hh+=r.net; if(r.pairs.some(x=>!x.o)) op++;
+    }));
+    return { days:dd, hours:Math.round(hh*10)/10, open:op };
+  },[scans]);
 
   const shiftYm=(n)=>{
     const [y,m]=ym.split('-').map(Number);
@@ -3172,20 +3208,80 @@ function AttendPanel({ user }){
     setYm(dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0'));
   };
   const DOW=['อา','จ','อ','พ','พฤ','ศ','ส'];
+  const MON=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  const [Y,M]=ym.split('-').map(Number);
+  const dim=new Date(Y,M,0).getDate();
+  const isNow=(ym===ymOf(today()));
+  const maxDay=isNow? +today().slice(8,10) : dim;
+
+  const openEdit=(d,pin)=>{
+    const v=(scans&&scans[d]&&scans[d][pin])||{};
+    const list=fpClean(v.t);
+    const ps=[];
+    for(let k=0;k+1<list.length;k+=2) ps.push({ i:list[k], o:list[k+1] });
+    if(list.length%2) ps.push({ i:list[list.length-1], o:'' });
+    if(!ps.length && v.i) ps.push({ i:v.i, o:(v.o&&v.o!==v.i)? v.o:'' });
+    if(!ps.length) ps.push({ i:'', o:'' });
+    setEdit({ d:String(d), pin:String(pin), pairs:ps, isNew:false });
+  };
+  const openAdd=()=>{
+    setEdit({ d:String(maxDay), pin:(pins[0]||''), pairs:[{i:'',o:''}], isNew:true });
+  };
+
+  const save=async()=>{
+    if(!edit || !db) return;
+    const d=String(parseInt(edit.d,10)||0), pin=String(edit.pin||'').trim();
+    if(!d || +d<1 || +d>dim){ setMsg('วันที่ไม่ถูกต้อง'); return; }
+    if(!pin){ setMsg('เลือกพนักงานก่อน'); return; }
+    const flat=[];
+    edit.pairs.forEach(p=>{
+      const a=attFmt(p.i), b=attFmt(p.o);
+      if(a) flat.push(a);
+      if(b) flat.push(b);
+    });
+    setBusy(true); setMsg('');
+    try{
+      const t=flat.join(',');
+      const patch={ d:{ [d]:{ [pin]: t? { t, m:1 } : firebase.firestore.FieldValue.delete() } } };
+      await db.collection('fpScans').doc(ym).set(patch,{merge:true});
+      setScans(prev=>{
+        const nx=JSON.parse(JSON.stringify(prev||{}));
+        if(!t){ if(nx[d]) { delete nx[d][pin]; if(!Object.keys(nx[d]).length) delete nx[d]; } }
+        else { nx[d]=nx[d]||{}; nx[d][pin]={ t, m:1 }; }
+        return nx;
+      });
+      setEdit(null);
+      setMsg(t? 'บันทึกแล้ว' : 'ลบแล้ว');
+      setTimeout(()=>setMsg(''),1800);
+    }catch(e){
+      setMsg('บันทึกไม่สำเร็จ · '+(e&&e.message? e.message:''));
+    }
+    setBusy(false);
+  };
+
+  const BTN={border:'1px solid var(--line)',background:'var(--card)',borderRadius:10,padding:'4px 12px'};
+  const INP={fontFamily:'inherit',fontSize:14,border:'1px solid var(--line)',borderRadius:9,padding:'7px 9px',background:'var(--card)',color:'var(--ink)',width:'100%',textAlign:'center'};
 
   return (
     <div className="px-3 pt-3">
       <div className="card p-3 mb-3">
         <div className="flex items-center justify-between mb-2">
-          <button className="press kanit" style={{border:'1px solid var(--line)',background:'var(--card)',borderRadius:10,padding:'4px 12px'}} onClick={()=>shiftYm(-1)}>‹</button>
+          <button className="press kanit" style={BTN} onClick={()=>shiftYm(-1)}>‹</button>
           <div className="kanit text-[15px]" style={{fontWeight:700,color:'var(--primary)'}}>⏱ เวลาเข้า-ออก · {ocPayLabel? ocPayLabel(ym) : ym}</div>
-          <button className="press kanit" style={{border:'1px solid var(--line)',background:'var(--card)',borderRadius:10,padding:'4px 12px'}} onClick={()=>shiftYm(1)}>›</button>
+          <button className="press kanit" style={BTN} onClick={()=>shiftYm(1)}>›</button>
         </div>
         <div className="flex items-center justify-center gap-4 text-[13px]" style={{color:'var(--muted)'}}>
           <span>เข้างาน <b className="num" style={{color:'var(--ink)'}}>{stat.days}</b> ครั้ง</span>
           <span>รวม <b className="num" style={{color:'var(--ink)'}}>{stat.hours}</b> ชม.</span>
+          {stat.open>0 && <span style={{color:'var(--neg)'}}>ไม่ครบ <b className="num">{stat.open}</b></span>}
         </div>
-        {pins.length>0 && (
+
+        <div className="flex gap-1.5 mt-2.5">
+          <button className="press kanit text-[13px] flex-1 py-1.5 rounded-xl" style={{border:'1px solid var(--line)',background: view==='day'?'var(--primary)':'var(--card)', color: view==='day'?'#fff':'var(--ink)'}} onClick={()=>setView('day')}>📅 รายวัน</button>
+          <button className="press kanit text-[13px] flex-1 py-1.5 rounded-xl" style={{border:'1px solid var(--line)',background: view==='sum'?'var(--primary)':'var(--card)', color: view==='sum'?'#fff':'var(--ink)'}} onClick={()=>setView('sum')}>📊 สรุปเดือน</button>
+        </div>
+
+        {view==='day' && pins.length>0 && (
           <div className="flex gap-1.5 mt-2.5 flex-wrap">
             <button className="press kanit text-[12px]" style={{border:'1px solid var(--line)',borderRadius:999,padding:'3px 12px',background: who==='all'?'var(--primary)':'var(--card)', color: who==='all'?'#fff':'var(--ink)'}} onClick={()=>setWho('all')}>ทุกคน</button>
             {pins.map(p=>(
@@ -3193,31 +3289,79 @@ function AttendPanel({ user }){
             ))}
           </div>
         )}
+        {view==='day' && (
+          <button className="press kanit text-[13.5px] w-full mt-2.5 py-2 rounded-xl text-white" style={{background:'var(--primary)',border:'none',fontWeight:600}} onClick={openAdd}>+ ลงเวลาเอง</button>
+        )}
       </div>
 
+      {msg && <div className="card p-2 mb-2 text-center text-[13px]" style={{color: msg.indexOf('ไม่')>=0? 'var(--neg)':'#3E7D3E'}}>{msg}</div>}
+
       {scans===null && <div className="text-center text-[13px] py-8" style={{color:'var(--muted)'}}>กำลังโหลด…</div>}
-      {scans!==null && days.length===0 && (
-        <div className="card p-5 text-center text-[13px]" style={{color:'var(--muted)'}}>
-          {err || 'ยังไม่มีข้อมูลสแกนนิ้วเดือนนี้'}
+
+      {scans!==null && view==='sum' && (
+        <div className="card p-3 mb-3">
+          <div className="kanit text-[14px] mb-2" style={{fontWeight:600}}>📊 สรุปทั้งเดือน</div>
+          {sum.length===0 && <div className="text-center text-[13px] py-4" style={{color:'var(--muted)'}}>ยังไม่มีข้อมูล</div>}
+          {sum.length>0 && (
+            <div>
+              <div className="flex text-[11.5px] pb-1.5" style={{color:'var(--muted)',borderBottom:'1px solid var(--line)'}}>
+                <div className="flex-1">พนักงาน</div>
+                <div style={{width:52,textAlign:'right'}}>วัน</div>
+                <div style={{width:68,textAlign:'right'}}>รวม ชม.</div>
+                <div style={{width:60,textAlign:'right'}}>เฉลี่ย</div>
+              </div>
+              {sum.map(r=>(
+                <div key={r.pin} className="flex items-center py-2 text-[13px]" style={{borderBottom:'1px solid var(--line)'}}>
+                  <div className="kanit flex-1 min-w-0" style={{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
+                    {nameOf(r.pin)}
+                    {r.manual>0 && <span className="text-[10.5px]" style={{color:'var(--muted)',marginLeft:5}}>✏️{r.manual}</span>}
+                    {r.open>0 && <span className="text-[10.5px]" style={{color:'var(--neg)',marginLeft:5}}>!{r.open}</span>}
+                  </div>
+                  <div className="num" style={{width:52,textAlign:'right'}}>{r.days}</div>
+                  <div className="num" style={{width:68,textAlign:'right',fontWeight:700,color:'var(--primary)'}}>{r.hours}</div>
+                  <div className="num" style={{width:60,textAlign:'right',color:'var(--muted)'}}>{r.avg}</div>
+                </div>
+              ))}
+              <div className="flex items-center pt-2 text-[13px]" style={{fontWeight:700}}>
+                <div className="kanit flex-1">รวมทุกคน</div>
+                <div className="num" style={{width:52,textAlign:'right'}}>{stat.days}</div>
+                <div className="num" style={{width:68,textAlign:'right',color:'var(--primary)'}}>{stat.hours}</div>
+                <div style={{width:60}}></div>
+              </div>
+            </div>
+          )}
+          <div className="text-[11.5px] mt-2.5" style={{color:'var(--muted)'}}>✏️ = จำนวนวันที่แก้ไขเอง · ! = วันที่ยังไม่ได้สแกนออก</div>
         </div>
       )}
 
-      {days.map(({d,rows})=>{
-        const [Y,M]=ym.split('-').map(Number);
+      {scans!==null && view==='day' && days.length===0 && (
+        <div className="card p-5 text-center text-[13px]" style={{color:'var(--muted)'}}>
+          {err || 'ยังไม่มีข้อมูลเดือนนี้ · กด "+ ลงเวลาเอง" เพื่อเพิ่ม'}
+        </div>
+      )}
+
+      {view==='day' && days.map(({d,rows})=>{
         const dt=new Date(Y,M-1,d);
         return (
           <div key={d} className="card p-3 mb-2">
             <div className="flex items-center justify-between mb-1.5">
-              <div className="kanit text-[14px]" style={{fontWeight:600}}>{d} {['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'][M-1]} <span className="text-[12px]" style={{fontWeight:400,color:'var(--muted)'}}>({DOW[dt.getDay()]})</span></div>
-              <div className="text-[11px]" style={{color:'var(--muted)'}}>{rows.length} คน</div>
+              <div className="kanit text-[14px]" style={{fontWeight:600}}>{d} {MON[M-1]} <span className="text-[12px]" style={{fontWeight:400,color:'var(--muted)'}}>({DOW[dt.getDay()]})</span></div>
+              <div className="flex items-center gap-2">
+                <div className="text-[11px]" style={{color:'var(--muted)'}}>{rows.length} คน</div>
+                <button className="press kanit text-[11.5px]" style={{border:'1px solid var(--line)',background:'var(--card)',borderRadius:8,padding:'2px 9px'}} onClick={()=>setEdit({ d:String(d), pin:(pins[0]||''), pairs:[{i:'',o:''}], isNew:true })}>+ คน</button>
+              </div>
             </div>
             {rows.map(r=>(
-              <div key={r.pin} className="py-1.5" style={{borderTop:'1px solid var(--line)'}}>
+              <div key={r.pin} className="py-1.5" style={{borderTop:'1px solid var(--line)'}} onClick={()=>openEdit(d,r.pin)}>
                 <div className="flex items-center gap-2">
-                  <div className="kanit text-[13.5px] flex-1 min-w-0" style={{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{nameOf(r.pin)}</div>
+                  <div className="kanit text-[13.5px] flex-1 min-w-0" style={{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
+                    {nameOf(r.pin)}
+                    {r.manual && <span className="text-[10.5px]" style={{color:'var(--muted)',marginLeft:5}}>✏️ แก้เอง</span>}
+                  </div>
                   {r.pairs.length>1 && <span className="text-[10.5px]" style={{color:'var(--muted)'}}>{r.pairs.length} ช่วง</span>}
                   {r.fixed>0 && <span className="text-[10.5px]" style={{color:'var(--muted)',opacity:.75}}>ตัดซ้ำ {r.fixed}</span>}
                   <div className="num text-[13px]" style={{fontWeight:700,color: r.net>=10?'#3E7D3E':'var(--ink)'}}>{r.net? r.net+' ชม.':'–'}</div>
+                  <span className="text-[12px]" style={{color:'var(--muted)'}}>✏️</span>
                 </div>
                 {r.pairs.map((p,k)=>(
                   <div key={k} className="flex items-center gap-2 mt-0.5 text-[12.5px]" style={{color:'var(--muted)',paddingLeft:8}}>
@@ -3232,8 +3376,64 @@ function AttendPanel({ user }){
         );
       })}
 
+      {edit && (
+        <div style={{position:'fixed',inset:0,background:'rgba(20,26,34,.55)',zIndex:60,display:'flex',alignItems:'flex-end'}} onClick={()=>!busy&&setEdit(null)}>
+          <div className="card" style={{width:'100%',borderRadius:'20px 20px 0 0',padding:16,maxHeight:'88vh',overflow:'auto'}} onClick={e=>e.stopPropagation()}>
+            <div className="kanit text-[15px] mb-3" style={{fontWeight:700,color:'var(--primary)'}}>{edit.isNew? '➕ ลงเวลาเอง' : '✏️ แก้ไขเวลา'}</div>
+
+            <div className="flex gap-2 mb-3">
+              <div style={{width:96}}>
+                <div className="text-[11.5px] mb-1" style={{color:'var(--muted)'}}>วันที่</div>
+                <select className="kanit" style={INP} value={edit.d} onChange={e=>setEdit({...edit,d:e.target.value})}>
+                  {Array.from({length:dim},(_,i)=>i+1).map(n=>(<option key={n} value={String(n)}>{n} {MON[M-1]}</option>))}
+                </select>
+              </div>
+              <div className="flex-1">
+                <div className="text-[11.5px] mb-1" style={{color:'var(--muted)'}}>พนักงาน</div>
+                <select className="kanit" style={INP} value={edit.pin} onChange={e=>setEdit({...edit,pin:e.target.value})}>
+                  <option value="">— เลือก —</option>
+                  {pins.map(p=>(<option key={p} value={p}>{nameOf(p)}</option>))}
+                </select>
+              </div>
+            </div>
+
+            <div className="text-[11.5px] mb-1" style={{color:'var(--muted)'}}>ช่วงเวลา (24 ชม. เช่น 09:00) · เว้นว่างทั้งหมด = ลบวันนี้ของคนนี้</div>
+            {edit.pairs.map((p,k)=>(
+              <div key={k} className="flex items-center gap-2 mb-2">
+                <input className="num" style={INP} placeholder="เข้า" value={p.i} inputMode="numeric"
+                  onChange={e=>{ const ps=edit.pairs.slice(); ps[k]={...ps[k],i:e.target.value}; setEdit({...edit,pairs:ps}); }}
+                  onBlur={e=>{ const ps=edit.pairs.slice(); ps[k]={...ps[k],i:attFmt(e.target.value)}; setEdit({...edit,pairs:ps}); }}/>
+                <span style={{color:'var(--muted)'}}>→</span>
+                <input className="num" style={INP} placeholder="ออก" value={p.o} inputMode="numeric"
+                  onChange={e=>{ const ps=edit.pairs.slice(); ps[k]={...ps[k],o:e.target.value}; setEdit({...edit,pairs:ps}); }}
+                  onBlur={e=>{ const ps=edit.pairs.slice(); ps[k]={...ps[k],o:attFmt(e.target.value)}; setEdit({...edit,pairs:ps}); }}/>
+                <div className="num text-[12.5px]" style={{width:64,textAlign:'right',color:'var(--muted)'}}>
+                  {(()=>{ const h=attHours(attFmt(p.i),attFmt(p.o)); return h!=null? h+' ชม.':''; })()}
+                </div>
+                <button className="press" style={{border:'none',background:'none',color:'var(--neg)',fontSize:17,padding:'0 2px'}}
+                  onClick={()=>{ const ps=edit.pairs.filter((_,x)=>x!==k); setEdit({...edit,pairs: ps.length? ps : [{i:'',o:''}]}); }}>✕</button>
+              </div>
+            ))}
+            <button className="press kanit text-[13px] w-full py-2 rounded-xl mb-3" style={{border:'1px dashed var(--line)',background:'var(--card)',color:'var(--muted)'}}
+              onClick={()=>setEdit({...edit,pairs:[...edit.pairs,{i:'',o:''}]})}>+ เพิ่มช่วง (ออกไปธุระแล้วกลับ)</button>
+
+            <div className="flex items-center justify-between text-[13px] mb-3 px-1">
+              <span style={{color:'var(--muted)'}}>รวมวันนี้</span>
+              <b className="num" style={{color:'var(--primary)',fontSize:16}}>
+                {(()=>{ let n=0; edit.pairs.forEach(p=>{ const h=attHours(attFmt(p.i),attFmt(p.o)); if(h) n+=h; }); return Math.round(n*10)/10; })()} ชม.
+              </b>
+            </div>
+
+            <div className="flex gap-2">
+              <button className="press kanit text-[14px] py-2.5 px-5 rounded-xl" style={{background:'var(--card)',border:'1px solid var(--line)'}} onClick={()=>!busy&&setEdit(null)}>ยกเลิก</button>
+              <button className="press kanit text-[14px] flex-1 py-2.5 rounded-xl text-white" style={{background:'var(--primary)',border:'none',fontWeight:600,opacity:busy?.6:1}} disabled={busy} onClick={save}>{busy? 'กำลังบันทึก…':'บันทึก'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="text-[11.5px] text-center pb-4 pt-1" style={{color:'var(--muted)'}}>
-        ข้อมูลจากเครื่องสแกนนิ้ว · สแกนเป็นคู่ เข้า→ออก · ออกไปทำธุระให้สแกนออก แล้วสแกนเข้าใหม่ตอนกลับ<br/>
+        แตะแถวเพื่อแก้ไขเวลา · เครื่องสแกนไม่ติดก็ลงเองได้<br/>
         ระบบตัดสแกนซ้ำที่ห่างกันไม่ถึง {FP_DEDUP_MIN} นาทีให้อัตโนมัติ
       </div>
     </div>
