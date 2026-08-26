@@ -3109,6 +3109,13 @@ function attHours(i,o){
   let d=(b-a)/60; if(d<0) d+=24;
   return Math.round(d*10)/10;
 }
+const LEAVE_TYPES = [
+  { id:'off',      label:'หยุดปกติ',  emoji:'🏠', color:'#9AA1AB' },
+  { id:'sick',     label:'ลาป่วย',    emoji:'🤒', color:'#CE4A5A' },
+  { id:'personal', label:'ลากิจ',     emoji:'📄', color:'#C68B4A' },
+];
+const leaveInfo=(id)=> LEAVE_TYPES.find(x=>x.id===id) || LEAVE_TYPES[0];
+
 const WORK_SHOPS = [
   { id:'owlcha', label:'Owl Cha',  emoji:'🧋', color:'#8A5A3B' },
   { id:'teddy2', label:'Teddy 2',  emoji:'🧺', color:'#2E8FC4' },
@@ -3136,6 +3143,9 @@ function AttendPanel({ user }){
   const [ym,setYm]=useState(ymOf(today()));
   const [scans,setScans]=useState(null);
   const [shopMap,setShopMap]=useState({});
+  const [leaveMap,setLeaveMap]=useState({});
+  const [detail,setDetail]=useState(null);
+  const [leaveEdit,setLeaveEdit]=useState(null);
   const [staff,setStaff]=useState([]);
   const [who,setWho]=useState('all');
   const [shopF,setShopF]=useState('all');
@@ -3154,7 +3164,7 @@ function AttendPanel({ user }){
       .then(s=>{ if(!stop && s.exists) setStaff(((s.data()||{}).staff)||[]); })
       .catch(()=>{});
     db.collection('fpScans').doc(ym).get()
-      .then(s=>{ if(stop) return; const v=s.exists? (s.data()||{}) : {}; setScans(v.d||{}); setShopMap(v.shop||{}); })
+      .then(s=>{ if(stop) return; const v=s.exists? (s.data()||{}) : {}; setScans(v.d||{}); setShopMap(v.shop||{}); setLeaveMap(v.leave||{}); })
       .catch(e=>{ if(!stop){ setScans({}); setErr('โหลดข้อมูลไม่สำเร็จ'); } });
     return ()=>{ stop=true; };
   },[ym]);
@@ -3171,6 +3181,24 @@ function AttendPanel({ user }){
     return (st&&st.shop)? st.shop : 'owlcha';
   };
   const isMaid=(pin)=>{ const st=stOf(pin); return !!(st&&st.kind==='maid'); };
+  const leaveOf=(d,pin)=> ((leaveMap||{})[String(d)]||{})[String(pin)] || null;
+  const saveLeave=async(d,pin,val)=>{
+    if(!db) return;
+    setBusy(true);
+    try{
+      const patch={ leave:{ [String(d)]:{ [String(pin)]: val || firebase.firestore.FieldValue.delete() } } };
+      await db.collection('fpScans').doc(ym).set(patch,{merge:true});
+      setLeaveMap(prev=>{
+        const nx=JSON.parse(JSON.stringify(prev||{}));
+        if(!val){ if(nx[String(d)]){ delete nx[String(d)][String(pin)]; if(!Object.keys(nx[String(d)]).length) delete nx[String(d)]; } }
+        else { nx[String(d)]=nx[String(d)]||{}; nx[String(d)][String(pin)]=val; }
+        return nx;
+      });
+      setLeaveEdit(null);
+      setMsg('บันทึกแล้ว'); setTimeout(()=>setMsg(''),1500);
+    }catch(e){ setMsg('บันทึกไม่สำเร็จ'); }
+    setBusy(false);
+  };
   const setShop=async(d,pin,sid)=>{
     if(!db) return;
     try{
@@ -3373,8 +3401,8 @@ function AttendPanel({ user }){
                 <div style={{width:68,textAlign:'right'}}>รวม ชม.</div>
               </div>
               {sum.map(r=>(
-                <div key={r.pin} className="flex items-center py-2 text-[13px]" style={{borderBottom:'1px solid var(--line)'}}>
-                  <div className="kanit flex-1 min-w-0" style={{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
+                <div key={r.pin} className="flex items-center py-2 text-[13px]" style={{borderBottom:'1px solid var(--line)',cursor:'pointer'}} onClick={()=>setDetail(r.pin)}>
+                  <div className="kanit flex-1 min-w-0" style={{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',color:'var(--primary)'}}>
                     {nameOf(r.pin)}
                     {r.manual>0 && <span className="text-[10.5px]" style={{color:'var(--muted)',marginLeft:5}}>✏️{r.manual}</span>}
                     {r.open>0 && <span className="text-[10.5px]" style={{color:'var(--neg)',marginLeft:5}}>!{r.open}</span>}
@@ -3403,7 +3431,7 @@ function AttendPanel({ user }){
               </div>
             </div>
           )}
-          <div className="text-[11.5px] mt-2.5" style={{color:'var(--muted)'}}>✏️ = จำนวนวันที่แก้ไขเอง · ! = วันที่ยังไม่ได้สแกนออก · ชั่วโมงแยกตามร้านที่ทำงานจริงในแต่ละวัน</div>
+          <div className="text-[11.5px] mt-2.5" style={{color:'var(--muted)'}}>แตะชื่อเพื่อดูรายวันทั้งเดือน · ✏️ = วันที่แก้ไขเอง · ! = ยังไม่ได้สแกนออก</div>
         </div>
       )}
 
@@ -3511,6 +3539,112 @@ function AttendPanel({ user }){
           </div>
         );
       })}
+
+      {detail && (()=>{
+        const rowsAll=[];
+        let wk=0, wh=0; const lv={off:0,sick:0,personal:0};
+        for(let d=1; d<=maxDay; d++){
+          const v=(scans&&scans[d]&&scans[d][detail])? scans[d][detail] : null;
+          const r=v? parseRow(v) : null;
+          const lvv=leaveOf(d,detail);
+          if(r){ wk++; wh+=r.net; }
+          else { const t=(lvv&&lvv.t)||'off'; lv[t]=(lv[t]||0)+1; }
+          rowsAll.push({ d, r, lv:lvv, dt:new Date(Y,M-1,d) });
+        }
+        wh=Math.round(wh*10)/10;
+        return (
+          <div style={{position:'fixed',inset:0,background:'rgba(20,26,34,.55)',zIndex:65,display:'flex',alignItems: wide?'center':'flex-end',justifyContent:'center',padding: wide?20:0}} onClick={()=>!busy&&setDetail(null)}>
+            <div className="card" style={{width: wide?'min(720px,95vw)':'100%',borderRadius: wide?18:'20px 20px 0 0',padding:0,maxHeight:'90vh',display:'flex',flexDirection:'column'}} onClick={e=>e.stopPropagation()}>
+              <div className="p-3" style={{borderBottom:'1px solid var(--line)'}}>
+                <div className="flex items-center justify-between">
+                  <div className="kanit text-[16px]" style={{fontWeight:700,color:'var(--primary)'}}>{nameOf(detail)}</div>
+                  <button className="press kanit text-[13px]" style={{border:'1px solid var(--line)',background:'var(--card)',borderRadius:10,padding:'4px 12px'}} onClick={()=>setDetail(null)}>ปิด</button>
+                </div>
+                <div className="text-[12.5px] mt-0.5" style={{color:'var(--muted)'}}>{ocPayLabel? ocPayLabel(ym) : ym}</div>
+                <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-[12.5px]">
+                  <span style={{color:'var(--muted)'}}>ทำงาน <b className="num" style={{color:'#3E7D3E'}}>{wk}</b> วัน</span>
+                  <span style={{color:'var(--muted)'}}>รวม <b className="num" style={{color:'var(--primary)'}}>{wh}</b> ชม.</span>
+                  <span style={{color:'var(--muted)'}}>🏠 หยุด <b className="num" style={{color:'var(--ink)'}}>{lv.off||0}</b></span>
+                  <span style={{color:'var(--muted)'}}>🤒 ป่วย <b className="num" style={{color:'#CE4A5A'}}>{lv.sick||0}</b></span>
+                  <span style={{color:'var(--muted)'}}>📄 ลากิจ <b className="num" style={{color:'#C68B4A'}}>{lv.personal||0}</b></span>
+                </div>
+              </div>
+
+              <div style={{overflow:'auto',flex:1}}>
+                {rowsAll.map(function(row){
+                  const d=row.d, r=row.r, lvv=row.lv, dt=row.dt;
+                  const isWk=(dt.getDay()===0||dt.getDay()===6);
+                  const li=lvv? leaveInfo(lvv.t) : leaveInfo('off');
+                  return (
+                    <div key={d} className="flex items-center px-3 py-2 text-[13px]" style={{borderBottom:'1px solid var(--line)', background: r? 'transparent':'var(--soft)'}}>
+                      <div style={{width:76,flex:'none'}}>
+                        <span className="kanit" style={{fontWeight:600,color: isWk?'var(--neg)':'var(--ink)'}}>{d} {MON[M-1]}</span>
+                        <span className="text-[11px] block" style={{color:'var(--muted)'}}>{DOW[dt.getDay()]}</span>
+                      </div>
+                      {r ? (
+                        <React.Fragment>
+                          <div style={{width:88,flex:'none',textAlign:'center'}}>
+                            <button className="press kanit text-[11px]" style={{border:'1px solid '+shopInfo(shopOf(d,detail)).color,background:'transparent',color:shopInfo(shopOf(d,detail)).color,borderRadius:999,padding:'2px 8px',fontWeight:600}}
+                              onClick={()=>{ const nx=shopOf(d,detail)==='owlcha'?'teddy2':'owlcha'; setShop(d,detail,nx); }}>
+                              {shopInfo(shopOf(d,detail)).emoji}
+                            </button>
+                          </div>
+                          <div className="num text-[12.5px]" style={{flex:1,color:'var(--muted)'}}>
+                            {r.pairs.map((x,k)=>(
+                              <span key={k} style={{marginRight:9,whiteSpace:'nowrap'}}>{x.i}<span style={{opacity:.6}}>&rarr;</span><span style={{color: x.o?'inherit':'var(--neg)'}}>{x.o||'?'}</span></span>
+                            ))}
+                            {r.manual && <span className="text-[10.5px]" style={{color:'var(--muted)'}}>&#9999;</span>}
+                          </div>
+                          <div className="num" style={{width:74,textAlign:'right',fontWeight:700,color: r.net>=10?'#3E7D3E':'var(--ink)'}}>{r.net? r.net+' ชม.':'–'}</div>
+                          <div style={{width:48,textAlign:'right'}}>
+                            <button className="press kanit text-[12px]" style={{border:'1px solid var(--line)',background:'var(--card)',borderRadius:8,padding:'3px 9px'}} onClick={()=>openEdit(d,detail)}>&#9999;</button>
+                          </div>
+                        </React.Fragment>
+                      ) : (
+                        <React.Fragment>
+                          <div style={{flex:1,paddingLeft:4}}>
+                            <span className="kanit text-[13px]" style={{color:li.color,fontWeight:600}}>{li.emoji} {li.label}</span>
+                            {lvv && lvv.n && <span className="text-[12px]" style={{color:'var(--muted)',marginLeft:6}}>· {lvv.n}</span>}
+                          </div>
+                          <div style={{width:138,display:'flex',gap:5,justifyContent:'flex-end'}}>
+                            <button className="press kanit text-[12px]" style={{border:'1px solid var(--line)',background:'var(--card)',borderRadius:8,padding:'3px 9px'}} onClick={()=>setLeaveEdit({ d:d, pin:detail, t:(lvv&&lvv.t)||'off', n:(lvv&&lvv.n)||'' })}>เปลี่ยน</button>
+                            <button className="press kanit text-[12px]" style={{border:'1px solid var(--line)',background:'var(--card)',borderRadius:8,padding:'3px 9px'}} onClick={()=>setEdit({ d:String(d), pin:String(detail), pairs:[{i:'',o:''}], isNew:true })}>+ เวลา</button>
+                          </div>
+                        </React.Fragment>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {leaveEdit && (
+        <div style={{position:'fixed',inset:0,background:'rgba(20,26,34,.6)',zIndex:70,display:'flex',alignItems:'center',justifyContent:'center',padding:18}} onClick={()=>!busy&&setLeaveEdit(null)}>
+          <div className="card" style={{width:'min(420px,94vw)',borderRadius:18,padding:16}} onClick={e=>e.stopPropagation()}>
+            <div className="kanit text-[15px] mb-1" style={{fontWeight:700,color:'var(--primary)'}}>วันที่ {leaveEdit.d} {MON[M-1]}</div>
+            <div className="text-[12.5px] mb-3" style={{color:'var(--muted)'}}>{nameOf(leaveEdit.pin)}</div>
+            <div className="flex gap-1.5 mb-3">
+              {LEAVE_TYPES.map(t=>(
+                <button key={t.id} className="press kanit text-[13px] flex-1 py-2 rounded-xl"
+                  style={{border:'1px solid '+(leaveEdit.t===t.id? t.color:'var(--line)'),background: leaveEdit.t===t.id? t.color:'var(--card)', color: leaveEdit.t===t.id?'#fff':'var(--ink)'}}
+                  onClick={()=>setLeaveEdit({...leaveEdit,t:t.id})}>{t.emoji} {t.label}</button>
+              ))}
+            </div>
+            <div className="text-[11.5px] mb-1" style={{color:'var(--muted)'}}>เหตุผล / บันทึก</div>
+            <input className="kanit" style={{fontFamily:'inherit',fontSize:14,border:'1px solid var(--line)',borderRadius:9,padding:'8px 10px',background:'var(--card)',color:'var(--ink)',width:'100%',marginBottom:12}}
+              placeholder={leaveEdit.t==='sick'? 'เช่น เป็นไข้ ไปหาหมอ' : leaveEdit.t==='personal'? 'เช่น ไปธุระที่บ้าน' : 'เช่น วันหยุดประจำสัปดาห์'}
+              value={leaveEdit.n} onChange={e=>setLeaveEdit({...leaveEdit,n:e.target.value})}/>
+            <div className="flex gap-2">
+              <button className="press kanit text-[14px] py-2.5 px-4 rounded-xl" style={{background:'var(--card)',border:'1px solid var(--line)'}} onClick={()=>!busy&&setLeaveEdit(null)}>ยกเลิก</button>
+              <button className="press kanit text-[14px] flex-1 py-2.5 rounded-xl text-white" style={{background:'var(--primary)',border:'none',fontWeight:600,opacity:busy?.6:1}} disabled={busy}
+                onClick={()=>saveLeave(leaveEdit.d, leaveEdit.pin, (leaveEdit.t==='off' && !leaveEdit.n) ? null : { t:leaveEdit.t, n:String(leaveEdit.n||'').trim() })}>บันทึก</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {edit && (
         <div style={{position:'fixed',inset:0,background:'rgba(20,26,34,.55)',zIndex:60,display:'flex',alignItems: wide?'center':'flex-end',justifyContent:'center',padding: wide?20:0}} onClick={()=>!busy&&setEdit(null)}>
