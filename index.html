@@ -3355,39 +3355,47 @@ function AttendPanel({ user }){
       {view==='day' && wide && days.length>0 && (
         <div className="card p-0 mb-3" style={{overflow:'hidden',...WIDE_BOX}}>
           <div className="flex items-center px-3 py-2 text-[12px]" style={{color:'var(--muted)',background:'var(--soft)',borderBottom:'1px solid var(--line)',fontWeight:600}}>
-            <div style={{width:112}}>วันที่</div>
-            <div style={{flex:1}}>พนักงาน</div>
-            <div style={{width:230}}>ช่วงเวลา</div>
-            <div style={{width:90,textAlign:'right'}}>รวม</div>
-            <div style={{width:96,textAlign:'center'}}>สถานะ</div>
-            <div style={{width:56,textAlign:'center'}}>แก้</div>
+            <div style={{width:118,padding:'0 10px'}}>วันที่</div>
+            <div style={{flex:1,padding:'0 10px'}}>พนักงาน</div>
+            <div style={{width:236,padding:'0 6px'}}>ช่วงเวลา</div>
+            <div style={{width:92,padding:'0 10px',textAlign:'right'}}>รวม</div>
+            <div style={{width:100,textAlign:'center'}}>สถานะ</div>
+            <div style={{width:58,textAlign:'center'}}>แก้</div>
           </div>
-          {days.map(({d,rows})=>{
+          {days.map(({d,rows},di)=>{
             const dt=new Date(Y,M-1,d);
+            const wk=(dt.getDay()===0||dt.getDay()===6);
+            const zebra = di%2===0 ? 'var(--card)' : 'var(--soft)';
             return rows.map((r,ri)=>(
-              <div key={d+'-'+r.pin} className="flex items-center px-3 py-2 text-[13px]"
-                style={{borderBottom:'1px solid var(--line)', background: ri===0? 'var(--card)':'transparent'}}>
-                <div style={{width:112}}>
+              <div key={d+'-'+r.pin} className="flex items-stretch px-0 text-[13px]"
+                style={{
+                  background: zebra,
+                  borderTop: ri===0 ? '2px solid var(--line)' : '1px solid rgba(0,0,0,.045)'
+                }}>
+                <div style={{width:118,padding:'9px 10px',borderRight:'1px solid rgba(0,0,0,.06)',display:'flex',alignItems:'center'}}>
                   {ri===0 ? (
-                    <span className="kanit" style={{fontWeight:600}}>{d} {MON[M-1]} <span className="text-[11.5px]" style={{fontWeight:400,color:'var(--muted)'}}>({DOW[dt.getDay()]})</span></span>
+                    <span className="kanit" style={{fontWeight:700,color: wk? 'var(--neg)':'var(--ink)'}}>
+                      {d} {MON[M-1]} <span className="text-[11.5px]" style={{fontWeight:400,opacity:.7}}>({DOW[dt.getDay()]})</span>
+                      <span className="text-[10.5px] block" style={{fontWeight:400,color:'var(--muted)'}}>{rows.length} คน</span>
+                    </span>
                   ) : <span/>}
                 </div>
-                <div className="kanit min-w-0" style={{flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{nameOf(r.pin)}</div>
-                <div style={{width:230,color:'var(--muted)'}} className="num text-[12.5px]">
+                <div className="kanit min-w-0" style={{flex:1,padding:'9px 10px',display:'flex',alignItems:'center',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{nameOf(r.pin)}</div>
+                <div style={{width:236,color:'var(--muted)',padding:'9px 6px',display:'flex',alignItems:'center',flexWrap:'wrap',gap:2}} className="num text-[12.5px]">
                   {r.pairs.map((x,k)=>(
                     <span key={k} style={{marginRight:10,whiteSpace:'nowrap'}}>
                       {x.i}<span style={{opacity:.6}}>→</span><span style={{color: x.o? 'inherit':'var(--neg)'}}>{x.o||'?'}</span>
                     </span>
                   ))}
                 </div>
-                <div className="num" style={{width:90,textAlign:'right',fontWeight:700,color: r.net>=10?'#3E7D3E':'var(--ink)'}}>{r.net? r.net+' ชม.':'–'}</div>
-                <div style={{width:96,textAlign:'center'}} className="text-[11px]">
+                <div className="num" style={{width:92,padding:'9px 10px',textAlign:'right',fontWeight:700,display:'flex',alignItems:'center',justifyContent:'flex-end',color: r.net>=10?'#3E7D3E':'var(--ink)'}}>{r.net? r.net+' ชม.':'–'}</div>
+                <div style={{width:100,padding:'9px 4px',textAlign:'center',display:'flex',alignItems:'center',justifyContent:'center'}} className="text-[11px]">
                   {r.manual && <span style={{color:'var(--muted)'}}>✏️ แก้เอง</span>}
                   {!r.manual && r.pairs.some(x=>!x.o) && <span style={{color:'var(--neg)'}}>ยังไม่ออก</span>}
                   {!r.manual && !r.pairs.some(x=>!x.o) && r.fixed>0 && <span style={{color:'var(--muted)',opacity:.75}}>ตัดซ้ำ {r.fixed}</span>}
                 </div>
-                <div style={{width:56,textAlign:'center'}}>
-                  <button className="press kanit text-[12px]" style={{border:'1px solid var(--line)',background:'var(--card)',borderRadius:8,padding:'2px 10px'}} onClick={()=>openEdit(d,r.pin)}>✏️</button>
+                <div style={{width:58,padding:'9px 6px',display:'flex',alignItems:'center',justifyContent:'center'}}>
+                  <button className="press kanit text-[12px]" style={{border:'1px solid var(--line)',background:'var(--card)',borderRadius:8,padding:'3px 10px'}} onClick={()=>openEdit(d,r.pin)}>✏️</button>
                 </div>
               </div>
             ));
@@ -3432,8 +3440,8 @@ function AttendPanel({ user }){
       })}
 
       {edit && (
-        <div style={{position:'fixed',inset:0,background:'rgba(20,26,34,.55)',zIndex:60,display:'flex',alignItems:'flex-end'}} onClick={()=>!busy&&setEdit(null)}>
-          <div className="card" style={{width:'100%',borderRadius:'20px 20px 0 0',padding:16,maxHeight:'88vh',overflow:'auto'}} onClick={e=>e.stopPropagation()}>
+        <div style={{position:'fixed',inset:0,background:'rgba(20,26,34,.55)',zIndex:60,display:'flex',alignItems: wide?'center':'flex-end',justifyContent:'center',padding: wide?20:0}} onClick={()=>!busy&&setEdit(null)}>
+          <div className="card" style={{width: wide?'min(560px,94vw)':'100%',borderRadius: wide?18:'20px 20px 0 0',padding:16,maxHeight:'88vh',overflow:'auto',boxShadow: wide?'0 24px 60px rgba(0,0,0,.28)':'none'}} onClick={e=>e.stopPropagation()}>
             <div className="kanit text-[15px] mb-3" style={{fontWeight:700,color:'var(--primary)'}}>{edit.isNew? '➕ ลงเวลาเอง' : '✏️ แก้ไขเวลา'}</div>
 
             <div className="flex gap-2 mb-3">
