@@ -3553,8 +3553,9 @@ function AttendPanel({ user }){
         }
         wh=Math.round(wh*10)/10;
         return (
-          <div style={{position:'fixed',inset:0,background:'rgba(20,26,34,.55)',zIndex:65,display:'flex',alignItems: wide?'center':'flex-end',justifyContent:'center',padding: wide?20:0}} onClick={()=>!busy&&setDetail(null)}>
-            <div className="card" style={{width: wide?'min(720px,95vw)':'100%',borderRadius: wide?18:'20px 20px 0 0',padding:0,maxHeight:'90vh',display:'flex',flexDirection:'column'}} onClick={e=>e.stopPropagation()}>
+          <Portal>
+          <div style={{position:'fixed',inset:0,background:'rgba(20,26,34,.55)',zIndex:118,display:'flex',alignItems: wide?'center':'flex-end',justifyContent:'center',padding: wide?20:0}} onClick={()=>!busy&&setDetail(null)}>
+            <div className="card" style={{width: wide?'min(720px,95vw)':'100%',borderRadius: wide?18:'20px 20px 0 0',padding:0,maxHeight: wide?'90vh':'86vh',display:'flex',flexDirection:'column',boxShadow:'0 -8px 30px rgba(0,0,0,.18)'}} onClick={e=>e.stopPropagation()}>
               <div className="p-3" style={{borderBottom:'1px solid var(--line)'}}>
                 <div className="flex items-center justify-between">
                   <div className="kanit text-[16px]" style={{fontWeight:700,color:'var(--primary)'}}>{nameOf(detail)}</div>
@@ -3570,7 +3571,7 @@ function AttendPanel({ user }){
                 </div>
               </div>
 
-              <div style={{overflow:'auto',flex:1}}>
+              <div style={{overflow:'auto',flex:1,paddingBottom: wide?0:'calc(96px + env(safe-area-inset-bottom))'}}>
                 {rowsAll.map(function(row){
                   const d=row.d, r=row.r, lvv=row.lv, dt=row.dt;
                   const isWk=(dt.getDay()===0||dt.getDay()===6);
@@ -3618,11 +3619,13 @@ function AttendPanel({ user }){
               </div>
             </div>
           </div>
+          </Portal>
         );
       })()}
 
       {leaveEdit && (
-        <div style={{position:'fixed',inset:0,background:'rgba(20,26,34,.6)',zIndex:70,display:'flex',alignItems:'center',justifyContent:'center',padding:18}} onClick={()=>!busy&&setLeaveEdit(null)}>
+        <Portal>
+        <div style={{position:'fixed',inset:0,background:'rgba(20,26,34,.6)',zIndex:125,display:'flex',alignItems:'center',justifyContent:'center',padding:18}} onClick={()=>!busy&&setLeaveEdit(null)}>
           <div className="card" style={{width:'min(420px,94vw)',borderRadius:18,padding:16}} onClick={e=>e.stopPropagation()}>
             <div className="kanit text-[15px] mb-1" style={{fontWeight:700,color:'var(--primary)'}}>วันที่ {leaveEdit.d} {MON[M-1]}</div>
             <div className="text-[12.5px] mb-3" style={{color:'var(--muted)'}}>{nameOf(leaveEdit.pin)}</div>
@@ -3644,11 +3647,13 @@ function AttendPanel({ user }){
             </div>
           </div>
         </div>
+        </Portal>
       )}
 
       {edit && (
-        <div style={{position:'fixed',inset:0,background:'rgba(20,26,34,.55)',zIndex:60,display:'flex',alignItems: wide?'center':'flex-end',justifyContent:'center',padding: wide?20:0}} onClick={()=>!busy&&setEdit(null)}>
-          <div className="card" style={{width: wide?'min(560px,94vw)':'100%',borderRadius: wide?18:'20px 20px 0 0',padding:16,maxHeight:'88vh',overflow:'auto',boxShadow: wide?'0 24px 60px rgba(0,0,0,.28)':'none'}} onClick={e=>e.stopPropagation()}>
+        <Portal>
+        <div style={{position:'fixed',inset:0,background:'rgba(20,26,34,.55)',zIndex:120,display:'flex',alignItems: wide?'center':'flex-end',justifyContent:'center',padding: wide?20:0}} onClick={()=>!busy&&setEdit(null)}>
+          <div className="card" style={{width: wide?'min(560px,94vw)':'100%',borderRadius: wide?18:'20px 20px 0 0',padding:16,paddingBottom: wide?16:'calc(96px + env(safe-area-inset-bottom))',maxHeight:'88vh',overflow:'auto',boxShadow: wide?'0 24px 60px rgba(0,0,0,.28)':'0 -8px 30px rgba(0,0,0,.18)'}} onClick={e=>e.stopPropagation()}>
             <div className="kanit text-[15px] mb-3" style={{fontWeight:700,color:'var(--primary)'}}>{edit.isNew? '➕ ลงเวลาเอง' : '✏️ แก้ไขเวลา'}</div>
 
             <div className="flex gap-2 mb-3">
@@ -3700,6 +3705,7 @@ function AttendPanel({ user }){
             </div>
           </div>
         </div>
+        </Portal>
       )}
 
       <div className="text-[11.5px] text-center pb-4 pt-1" style={{color:'var(--muted)'}}>
@@ -3895,8 +3901,9 @@ function StaffPanel({ user, toast }){
       ))}
 
       {edit && (
-        <div style={{position:'fixed',inset:0,background:'rgba(20,26,34,.55)',zIndex:60,display:'flex',alignItems: wide?'center':'flex-end',justifyContent:'center',padding: wide?20:0}} onClick={()=>!busy&&setEdit(null)}>
-          <div className="card" style={{width: wide?'min(560px,94vw)':'100%',borderRadius: wide?18:'20px 20px 0 0',padding:16,maxHeight:'88vh',overflow:'auto'}} onClick={e=>e.stopPropagation()}>
+        <Portal>
+        <div style={{position:'fixed',inset:0,background:'rgba(20,26,34,.55)',zIndex:120,display:'flex',alignItems: wide?'center':'flex-end',justifyContent:'center',padding: wide?20:0}} onClick={()=>!busy&&setEdit(null)}>
+          <div className="card" style={{width: wide?'min(560px,94vw)':'100%',borderRadius: wide?18:'20px 20px 0 0',padding:16,paddingBottom: wide?16:'calc(96px + env(safe-area-inset-bottom))',maxHeight:'88vh',overflow:'auto',boxShadow: wide?'0 24px 60px rgba(0,0,0,.28)':'0 -8px 30px rgba(0,0,0,.18)'}} onClick={e=>e.stopPropagation()}>
             <div className="kanit text-[15px] mb-3" style={{fontWeight:700,color:'var(--primary)'}}>{edit._new? '➕ เพิ่มพนักงาน' : '✏️ แก้ไขข้อมูล'}</div>
 
             <div className="text-[11.5px] mb-1" style={{color:'var(--muted)'}}>ชื่อ</div>
@@ -3989,6 +3996,7 @@ function StaffPanel({ user, toast }){
             </div>
           </div>
         </div>
+        </Portal>
       )}
 
       <div className="text-[11.5px] text-center pb-4 pt-1" style={{color:'var(--muted)'}}>
