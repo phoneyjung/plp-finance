@@ -3535,7 +3535,18 @@ function StaffPanel({ user, toast }){
   },[]);
 
   const staff=(pay&&pay.staff)||[];
+  const cfg=(pay&&pay.cfg)||{};
   const isOn=(st)=> st.active!==false;
+  const rateOf=(st)=>{
+    const base=ocPayBaseOf(st,cfg)||0;
+    const div=cfg.divisor||26, sh=cfg.shiftHrs||10, mult=cfg.otMult||2;
+    return {
+      base,
+      perDay: Math.round(base/div),
+      otHr: Math.round(base/div/sh*mult),
+      dilig: cfg.dilig||0
+    };
+  };
   const list=staff.filter(st=> tab==='on'? isOn(st) : !isOn(st));
 
   const saveStaff=async(next)=>{
@@ -3607,6 +3618,32 @@ function StaffPanel({ user, toast }){
         )}
       </div>
 
+      {pay!==null && (
+        <div className="card p-3 mb-3" style={WIDE_BOX}>
+          <div className="kanit text-[13.5px] mb-2" style={{fontWeight:600}}>💵 โครงสร้างเงินเดือน (ใช้กับทุกคน)</div>
+          <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-[12.5px]" style={{color:'var(--muted)'}}>
+            <span>ฐานเฟส 1 <b className="num" style={{color:'var(--ink)'}}>{ocFmt(cfg.base1||0,0)}</b></span>
+            <span>เฟส 2 <b className="num" style={{color:'var(--ink)'}}>{ocFmt(cfg.base2||0,0)}</b></span>
+            <span>เฟส 3 <b className="num" style={{color:'var(--ink)'}}>{ocFmt(cfg.base3||0,0)}</b></span>
+            <span>เบี้ยขยัน <b className="num" style={{color:'var(--ink)'}}>{ocFmt(cfg.dilig||0,0)}</b></span>
+            <span>ตัวหารวัน <b className="num" style={{color:'var(--ink)'}}>{cfg.divisor||26}</b></span>
+            <span>ชม./กะ <b className="num" style={{color:'var(--ink)'}}>{cfg.shiftHrs||10}</b></span>
+            <span>OT × <b className="num" style={{color:'var(--ink)'}}>{cfg.otMult||2}</b></span>
+          </div>
+          {(cfg.tiers||[]).length>0 && (
+            <div className="mt-2 pt-2" style={{borderTop:'1px dashed var(--line)'}}>
+              <div className="text-[12px] mb-1" style={{color:'var(--muted)'}}>🎯 คอมกองกลางรายวัน (หารคนเข้ากะ · ไม่รวมแม่บ้าน)</div>
+              <div className="flex flex-wrap gap-x-3 gap-y-1 text-[12.5px]">
+                {(cfg.tiers||[]).map((t,i)=>(
+                  <span key={i} style={{color:'var(--muted)'}}>≥<b className="num" style={{color:'var(--ink)'}}>{ocFmt(t.min,0)}</b> แก้ว → <b className="num" style={{color:'var(--primary)'}}>{ocFmt(t.pool,0)}</b>฿</span>
+                ))}
+              </div>
+            </div>
+          )}
+          <div className="text-[11.5px] mt-2" style={{color:'var(--muted)'}}>แก้ตัวเลขพวกนี้ได้ที่แท็บ 💰 ต้นทุน → เงินเดือน → ⚙️ โครงสร้างเงินเดือน</div>
+        </div>
+      )}
+
       {msg && <div className="card p-2 mb-2 text-center text-[13px]" style={{...WIDE_BOX, color: msg.indexOf('ไม่')>=0? 'var(--neg)':'#3E7D3E'}}>{msg}</div>}
       {pay===null && <div className="text-center text-[13px] py-8" style={{color:'var(--muted)'}}>กำลังโหลด…</div>}
       {pay!==null && list.length===0 && (
@@ -3634,6 +3671,16 @@ function StaffPanel({ user, toast }){
                 {st.phone && ('  ·  '+st.phone)}
               </div>
               {st.note && <div className="text-[12px] mt-1" style={{color:'var(--muted)',opacity:.85}}>📝 {st.note}</div>}
+              {(()=>{ const r=rateOf(st); return (
+                <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2 pt-2 text-[12px]" style={{borderTop:'1px dashed var(--line)'}}>
+                  <span style={{color:'var(--muted)'}}>ฐาน <b className="num" style={{color:'var(--ink)'}}>{ocFmt(r.base,0)}</b> ฿/ด.</span>
+                  <span style={{color:'var(--muted)'}}>≈ <b className="num" style={{color:'var(--ink)'}}>{ocFmt(r.perDay,0)}</b> ฿/วัน</span>
+                  {st.kind!=='maid' && <span style={{color:'var(--muted)'}}>OT <b className="num" style={{color:'var(--ink)'}}>{ocFmt(r.otHr,0)}</b> ฿/ชม.</span>}
+                  <span style={{color:'var(--muted)'}}>เบี้ยขยัน <b className="num" style={{color:'var(--ink)'}}>{ocFmt(r.dilig,0)}</b> ฿</span>
+                  {st.kind==='maid' && st.offQuota>0 && <span style={{color:'var(--muted)'}}>หยุดฟรี <b className="num" style={{color:'var(--ink)'}}>{st.offQuota}</b> วัน</span>}
+                  {st.kind==='maid' && st.extraRate>0 && <span style={{color:'var(--muted)'}}>ทำแทนหยุด <b className="num" style={{color:'var(--ink)'}}>{ocFmt(st.extraRate,0)}</b> ฿/วัน</span>}
+                </div>
+              ); })()}
             </div>
             {!ro && (
               <div className="flex flex-col gap-1.5" style={{flex:'none'}}>
@@ -3711,6 +3758,18 @@ function StaffPanel({ user, toast }){
 
             <div className="text-[11.5px] mb-1" style={{color:'var(--muted)'}}>บันทึกเพิ่มเติม</div>
             <textarea className="kanit" style={{...INP,marginBottom:12,minHeight:64,resize:'vertical'}} placeholder="เช่น ที่อยู่ · ผู้ติดต่อฉุกเฉิน · เหตุผลที่ออก" value={edit.note||''} onChange={e=>setEdit({...edit,note:e.target.value})}/>
+
+            {(()=>{ const r=rateOf({ ...edit, custom:parseFloat(edit.custom)||0, phase:parseInt(edit.phase,10)||1 }); return (
+              <div className="rounded-xl p-2.5 mb-3" style={{background:'var(--soft)'}}>
+                <div className="text-[11.5px] mb-1" style={{color:'var(--muted)'}}>💵 เรทที่จะได้</div>
+                <div className="flex flex-wrap gap-x-3 gap-y-1 text-[12.5px]">
+                  <span style={{color:'var(--muted)'}}>ฐาน <b className="num" style={{color:'var(--ink)'}}>{ocFmt(r.base,0)}</b> ฿/ด.</span>
+                  <span style={{color:'var(--muted)'}}>≈ <b className="num" style={{color:'var(--ink)'}}>{ocFmt(r.perDay,0)}</b> ฿/วัน</span>
+                  {edit.kind!=='maid' && <span style={{color:'var(--muted)'}}>OT <b className="num" style={{color:'var(--ink)'}}>{ocFmt(r.otHr,0)}</b> ฿/ชม.</span>}
+                  <span style={{color:'var(--muted)'}}>เบี้ยขยัน <b className="num" style={{color:'var(--ink)'}}>{ocFmt(r.dilig,0)}</b> ฿</span>
+                </div>
+              </div>
+            ); })()}
 
             <label className="flex items-center gap-2 text-[13.5px] mb-3">
               <input type="checkbox" checked={edit.active!==false} onChange={e=>setEdit({...edit,active:e.target.checked})}/>
