@@ -983,6 +983,7 @@ const NAV_PERMS = [
   ['print','พิมพ์ป้าย/สูตร (Owl Cha)'],
   ['cost','ต้นทุนต่อแก้ว (Owl Cha · ข้อมูลกำไร)'],
   ['attend','เวลาเข้า-ออก (สแกนนิ้ว)'],
+  ['staff','ข้อมูลพนักงาน (Owl Cha)'],
 ];
 
 /* ================================================================
@@ -2670,7 +2671,14 @@ function ocPayCalc(pay,ym){
     const pool=c>0? ocPayPool(c,cfg.tiers) : 0;
     perDay[d]={ pool, head:comIds.length, each: comIds.length? pool/comIds.length : 0, ids, comIds };
   }
-  const rows=pay.staff.map(st=>{
+  /* คนลาออกยังโชว์ได้ถ้ามีวันเข้างาน/เวลาในเดือนนี้ (เดือนเก่าคำนวณครบ) */
+  const usedIds={};
+  for(let d=1;d<=nDays;d++){
+    (att[d]||[]).forEach(id=>{ usedIds[id]=1; });
+    Object.keys(times[d]||{}).forEach(id=>{ usedIds[id]=1; });
+  }
+  const activeStaff=pay.staff.filter(st=> st.active!==false || usedIds[st.id]);
+  const rows=activeStaff.map(st=>{
     const isMaid = st.kind==='maid';
     const baseUsed0=ocPayBaseOf(st,cfg);
     const hourRate=baseUsed0/(cfg.divisor||26)/(cfg.shiftHrs||10);
@@ -2774,8 +2782,9 @@ function ocPayBuildWorkbook(pay,ym){
   const r2=[];
   r2.push([cell('รายชื่อพนักงาน',sTitle)]);
   r2.push([]);
+  const expStaff = (calc.rows||[]).map(r=>r.st);
   r2.push(['ชื่อ','ประเภท','เฟส','ฐานกำหนดเอง (0=อัตโนมัติ)','ฐานที่ใช้ (฿)','เบี้ยขยัน (฿)'].map(h=>cell(h,sHead)));
-  pay.staff.forEach(st=>{
+  expStaff.forEach(st=>{
     const row=calc.rows.find(r=>r.st.id===st.id)||{};
     r2.push([cell(st.name,sTxt),cell(st.kind==='maid'?'แม่บ้าน':'พนักงาน',{...sTxt,alignment:{horizontal:'center'}}),cell(st.phase,{...sNum,alignment:{horizontal:'center'}}),cell(st.custom||0,sYel,'#,##0'),cell(ocPayBaseOf(st,cfg),sNumB,'#,##0'),cell(row.dl!=null?row.dl:cfg.dilig,sNum,'#,##0')]);
   });
@@ -2785,21 +2794,21 @@ function ocPayBuildWorkbook(pay,ym){
   r3.push([cell('เข้างาน · เดือน '+ocPayLabel(ym),sTitle)]);
   r3.push([cell('1 = เข้ากะวันนั้น · คอม ฿/คน = กองกลาง ÷ จำนวนคนเข้า',sNote)]);
   r3.push([]);
-  r3.push(['วันที่','ยอดขาย (แก้ว)','กองกลาง (฿)','คอม ฿/คน'].concat(pay.staff.map(s=>s.name)).map(h=>cell(h,sHead)));
+  r3.push(['วันที่','ยอดขาย (แก้ว)','กองกลาง (฿)','คอม ฿/คน'].concat(expStaff.map(s=>s.name)).map(h=>cell(h,sHead)));
   const mAtt=(pay.months[ym]||{}).att||{}, mCups=(pay.months[ym]||{}).cups||{};
   for(let d=1;d<=calc.nDays;d++){
     const pd=calc.perDay[d];
     const row=[cell(d,{...sNum,alignment:{horizontal:'center'}}), cell(Number(mCups[d])||0,sYel,'#,##0'), cell(pd.pool,sNum,'#,##0'), cell(Math.round(pd.each*100)/100,sNum,'#,##0.00')];
-    pay.staff.forEach(s=>row.push(pd.ids.indexOf(s.id)>=0? cell(1,{...sNum,alignment:{horizontal:'center'}}) : cell('',sTxt)));
+    expStaff.forEach(s=>row.push(pd.ids.indexOf(s.id)>=0? cell(1,{...sNum,alignment:{horizontal:'center'}}) : cell('',sTxt)));
     r3.push(row);
   }
   const totRow=[cell('รวมวันเข้า',sSec),cell(calc.cupsT,{...sSec,alignment:{horizontal:'right'}},'#,##0'),cell('',sSec),cell('',sSec)];
-  pay.staff.forEach(s=>{ const rr=calc.rows.find(r=>r.st.id===s.id); totRow.push(cell(rr?rr.days:0,{...sSec,alignment:{horizontal:'center'}},'#,##0')); });
+  expStaff.forEach(s=>{ const rr=calc.rows.find(r=>r.st.id===s.id); totRow.push(cell(rr?rr.days:0,{...sSec,alignment:{horizontal:'center'}},'#,##0')); });
   r3.push(totRow);
   const comRow=[cell('รวมคอม (฿)',sSec),cell('',sSec),cell('',sSec),cell('',sSec)];
-  pay.staff.forEach(s=>{ const rr=calc.rows.find(r=>r.st.id===s.id); comRow.push(cell(rr?rr.com:0,{...sSec,alignment:{horizontal:'right'}},'#,##0')); });
+  expStaff.forEach(s=>{ const rr=calc.rows.find(r=>r.st.id===s.id); comRow.push(cell(rr?rr.com:0,{...sSec,alignment:{horizontal:'right'}},'#,##0')); });
   r3.push(comRow);
-  const ws3=toSheet(r3,[{s:{r:0,c:0},e:{r:0,c:3+pay.staff.length}},{s:{r:1,c:0},e:{r:1,c:3+pay.staff.length}}],[{wch:7},{wch:11},{wch:10},{wch:10}].concat(pay.staff.map(()=>({wch:9}))));
+  const ws3=toSheet(r3,[{s:{r:0,c:0},e:{r:0,c:3+expStaff.length}},{s:{r:1,c:0},e:{r:1,c:3+expStaff.length}}],[{wch:7},{wch:11},{wch:10},{wch:10}].concat(expStaff.map(()=>({wch:9}))));
   /* ---- Sheet 4: Payroll ---- */
   const r4=[];
   r4.push([cell('สรุปเงินเดือน · '+ocPayLabel(ym),sTitle)]);
@@ -3503,6 +3512,227 @@ function AttendPanel({ user }){
   );
 }
 
+/* ================================================================
+   👥 ทะเบียนพนักงาน (Owl Cha) — owlCost/payroll · staff[]
+   เก็บทั้งคนทำงานอยู่และคนลาออก · หน้าเงินเดือนดึงเฉพาะคนที่ยังอยู่
+   ================================================================ */
+function StaffPanel({ user, toast }){
+  const [pay,setPay]=useState(null);
+  const [tab,setTab]=useState('on');
+  const [edit,setEdit]=useState(null);
+  const [busy,setBusy]=useState(false);
+  const [msg,setMsg]=useState('');
+  const wide=useWide(900);
+  const ro = user.role!=='admin';
+
+  useEffect(()=>{
+    let stop=false;
+    if(!db){ setPay({staff:[]}); return; }
+    db.collection('owlCost').doc('payroll').get()
+      .then(s=>{ if(!stop) setPay(s.exists? (s.data()||{}) : {staff:[]}); })
+      .catch(()=>{ if(!stop) setPay({staff:[]}); });
+    return ()=>{ stop=true; };
+  },[]);
+
+  const staff=(pay&&pay.staff)||[];
+  const isOn=(st)=> st.active!==false;
+  const list=staff.filter(st=> tab==='on'? isOn(st) : !isOn(st));
+
+  const saveStaff=async(next)=>{
+    if(!db) return;
+    setBusy(true); setMsg('');
+    try{
+      await db.collection('owlCost').doc('payroll').set({ staff: next },{merge:true});
+      setPay(p=>({ ...(p||{}), staff: next }));
+      setEdit(null);
+      setMsg('บันทึกแล้ว'); setTimeout(()=>setMsg(''),1600);
+    }catch(e){ setMsg('บันทึกไม่สำเร็จ · '+(e&&e.message?e.message:'')); }
+    setBusy(false);
+  };
+
+  const openNew=()=>setEdit({
+    id:'p'+ocUid(), name:'', phase:1, custom:0, kind:'staff', fpId:'',
+    active:true, start:today(), end:'', phone:'', note:'', _new:true
+  });
+  const openEdit=(st)=>setEdit({ ...st, _new:false });
+
+  const commit=()=>{
+    if(!edit) return;
+    const nm=String(edit.name||'').trim();
+    if(!nm){ setMsg('ใส่ชื่อก่อน'); return; }
+    const clean={
+      id:edit.id, name:nm,
+      phase:parseInt(edit.phase,10)||1,
+      custom:parseFloat(edit.custom)||0,
+      kind:edit.kind==='maid'?'maid':'staff',
+      fpId:String(edit.fpId||'').trim(),
+      active: edit.active!==false,
+      start:edit.start||'', end:edit.end||'',
+      phone:String(edit.phone||'').trim(),
+      note:String(edit.note||'').trim()
+    };
+    if(clean.kind==='maid'){
+      if(edit.offQuota!=null&&edit.offQuota!=='') clean.offQuota=parseFloat(edit.offQuota)||0;
+      if(edit.extraRate!=null&&edit.extraRate!=='') clean.extraRate=parseFloat(edit.extraRate)||0;
+    }
+    const next = edit._new ? [...staff, clean] : staff.map(x=>x.id===clean.id? clean : x);
+    saveStaff(next);
+  };
+
+  const setOff=(st)=>{
+    if(!confirm('บันทึกว่า '+st.name+' ลาออก?\nจะไม่ขึ้นในหน้าเงินเดือนเดือนใหม่ แต่ข้อมูลเดือนเก่ายังอยู่ครบ')) return;
+    saveStaff(staff.map(x=>x.id===st.id? {...x, active:false, end: x.end||today()} : x));
+  };
+  const setOn=(st)=>saveStaff(staff.map(x=>x.id===st.id? {...x, active:true, end:''} : x));
+  const del=(st)=>{
+    if(!confirm('ลบ '+st.name+' ออกถาวร?\nแนะนำให้กด "ลาออก" แทน เพื่อเก็บประวัติไว้')) return;
+    saveStaff(staff.filter(x=>x.id!==st.id));
+  };
+
+  const nOn=staff.filter(isOn).length, nOff=staff.length-nOn;
+  const PHASE=['','เฟส 1','เฟส 2','เฟส 3'];
+  const INP={fontFamily:'inherit',fontSize:14,border:'1px solid var(--line)',borderRadius:9,padding:'8px 10px',background:'var(--card)',color:'var(--ink)',width:'100%'};
+  const WIDE_BOX = wide ? { width:'min(1000px,94vw)', marginLeft:'calc(50% - min(500px,47vw))' } : {};
+
+  return (
+    <div className="px-3 pt-3">
+      <div className="card p-3 mb-3" style={WIDE_BOX}>
+        <div className="kanit text-[15px] mb-2" style={{fontWeight:700,color:'var(--primary)'}}>👥 ข้อมูลพนักงาน · Owl Cha</div>
+        <div className="flex gap-1.5">
+          <button className="press kanit text-[13px] flex-1 py-1.5 rounded-xl" style={{border:'1px solid var(--line)',background: tab==='on'?'var(--primary)':'var(--card)', color: tab==='on'?'#fff':'var(--ink)'}} onClick={()=>setTab('on')}>ทำงานอยู่ ({nOn})</button>
+          <button className="press kanit text-[13px] flex-1 py-1.5 rounded-xl" style={{border:'1px solid var(--line)',background: tab==='off'?'var(--primary)':'var(--card)', color: tab==='off'?'#fff':'var(--ink)'}} onClick={()=>setTab('off')}>ลาออกแล้ว ({nOff})</button>
+        </div>
+        {!ro && tab==='on' && (
+          <button className="press kanit text-[13.5px] w-full mt-2.5 py-2 rounded-xl text-white" style={{background:'var(--primary)',border:'none',fontWeight:600}} onClick={openNew}>+ เพิ่มพนักงาน</button>
+        )}
+      </div>
+
+      {msg && <div className="card p-2 mb-2 text-center text-[13px]" style={{...WIDE_BOX, color: msg.indexOf('ไม่')>=0? 'var(--neg)':'#3E7D3E'}}>{msg}</div>}
+      {pay===null && <div className="text-center text-[13px] py-8" style={{color:'var(--muted)'}}>กำลังโหลด…</div>}
+      {pay!==null && list.length===0 && (
+        <div className="card p-5 text-center text-[13px]" style={{...WIDE_BOX,color:'var(--muted)'}}>
+          {tab==='on'? 'ยังไม่มีพนักงาน · กด "+ เพิ่มพนักงาน"' : 'ยังไม่มีคนลาออก'}
+        </div>
+      )}
+
+      {list.map(st=>(
+        <div key={st.id} className="card p-3 mb-2" style={WIDE_BOX}>
+          <div className="flex items-start gap-2">
+            <div className="flex-1 min-w-0">
+              <div className="kanit text-[15px]" style={{fontWeight:600}}>
+                {st.kind==='maid'? '🧹 ':''}{st.name}
+                {!isOn(st) && <span className="text-[11px]" style={{color:'var(--neg)',marginLeft:6}}>ลาออก</span>}
+              </div>
+              <div className="text-[12px] mt-0.5" style={{color:'var(--muted)'}}>
+                {st.kind==='maid'? 'แม่บ้าน' : PHASE[st.phase||1]}
+                {st.custom>0 && ' · ฐานเอง '+ocFmt(st.custom,0)+'฿'}
+                {st.fpId? ' · สแกน#'+st.fpId : ' · ยังไม่ผูกรหัสสแกน'}
+              </div>
+              <div className="text-[12px] mt-0.5" style={{color:'var(--muted)'}}>
+                {st.start && ('เริ่ม '+st.start)}
+                {st.end && ('  ·  ออก '+st.end)}
+                {st.phone && ('  ·  '+st.phone)}
+              </div>
+              {st.note && <div className="text-[12px] mt-1" style={{color:'var(--muted)',opacity:.85}}>📝 {st.note}</div>}
+            </div>
+            {!ro && (
+              <div className="flex flex-col gap-1.5" style={{flex:'none'}}>
+                <button className="press kanit text-[12px]" style={{border:'1px solid var(--line)',background:'var(--card)',borderRadius:9,padding:'4px 12px'}} onClick={()=>openEdit(st)}>✏️ แก้ไข</button>
+                {isOn(st)
+                  ? <button className="press kanit text-[12px]" style={{border:'1px solid var(--line)',background:'var(--card)',borderRadius:9,padding:'4px 12px',color:'var(--neg)'}} onClick={()=>setOff(st)}>ลาออก</button>
+                  : <button className="press kanit text-[12px]" style={{border:'1px solid var(--line)',background:'var(--card)',borderRadius:9,padding:'4px 12px',color:'#3E7D3E'}} onClick={()=>setOn(st)}>กลับมา</button>}
+              </div>
+            )}
+          </div>
+        </div>
+      ))}
+
+      {edit && (
+        <div style={{position:'fixed',inset:0,background:'rgba(20,26,34,.55)',zIndex:60,display:'flex',alignItems: wide?'center':'flex-end',justifyContent:'center',padding: wide?20:0}} onClick={()=>!busy&&setEdit(null)}>
+          <div className="card" style={{width: wide?'min(560px,94vw)':'100%',borderRadius: wide?18:'20px 20px 0 0',padding:16,maxHeight:'88vh',overflow:'auto'}} onClick={e=>e.stopPropagation()}>
+            <div className="kanit text-[15px] mb-3" style={{fontWeight:700,color:'var(--primary)'}}>{edit._new? '➕ เพิ่มพนักงาน' : '✏️ แก้ไขข้อมูล'}</div>
+
+            <div className="text-[11.5px] mb-1" style={{color:'var(--muted)'}}>ชื่อ</div>
+            <input className="kanit" style={{...INP,marginBottom:10}} value={edit.name} placeholder="ชื่อเล่น" onChange={e=>setEdit({...edit,name:e.target.value})}/>
+
+            <div className="flex gap-2 mb-2.5">
+              <div style={{flex:1}}>
+                <div className="text-[11.5px] mb-1" style={{color:'var(--muted)'}}>ประเภท</div>
+                <select className="kanit" style={INP} value={edit.kind==='maid'?'maid':'staff'} onChange={e=>setEdit({...edit,kind:e.target.value})}>
+                  <option value="staff">พนักงานหน้าร้าน</option>
+                  <option value="maid">🧹 แม่บ้าน</option>
+                </select>
+              </div>
+              <div style={{width:118}}>
+                <div className="text-[11.5px] mb-1" style={{color:'var(--muted)'}}>เฟสเงินเดือน</div>
+                <select className="kanit" style={INP} value={edit.phase||1} onChange={e=>setEdit({...edit,phase:e.target.value})} disabled={edit.kind==='maid'}>
+                  <option value={1}>เฟส 1</option><option value={2}>เฟส 2</option><option value={3}>เฟส 3</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex gap-2 mb-2.5">
+              <div style={{flex:1}}>
+                <div className="text-[11.5px] mb-1" style={{color:'var(--muted)'}}>รหัสสแกนนิ้ว</div>
+                <input className="num" style={INP} inputMode="numeric" placeholder="เช่น 11" value={edit.fpId||''} onChange={e=>setEdit({...edit,fpId:e.target.value})}/>
+              </div>
+              <div style={{flex:1}}>
+                <div className="text-[11.5px] mb-1" style={{color:'var(--muted)'}}>ฐานเอง (0 = ตามเฟส)</div>
+                <input className="num" style={INP} inputMode="numeric" placeholder="0" value={edit.custom||''} onChange={e=>setEdit({...edit,custom:e.target.value})}/>
+              </div>
+            </div>
+
+            {edit.kind==='maid' && (
+              <div className="flex gap-2 mb-2.5">
+                <div style={{flex:1}}>
+                  <div className="text-[11.5px] mb-1" style={{color:'var(--muted)'}}>วันหยุดฟรี/เดือน</div>
+                  <input className="num" style={INP} inputMode="numeric" value={edit.offQuota||''} onChange={e=>setEdit({...edit,offQuota:e.target.value})}/>
+                </div>
+                <div style={{flex:1}}>
+                  <div className="text-[11.5px] mb-1" style={{color:'var(--muted)'}}>ทำแทนวันหยุด ฿/วัน</div>
+                  <input className="num" style={INP} inputMode="numeric" value={edit.extraRate||''} onChange={e=>setEdit({...edit,extraRate:e.target.value})}/>
+                </div>
+              </div>
+            )}
+
+            <div className="flex gap-2 mb-2.5">
+              <div style={{flex:1}}>
+                <div className="text-[11.5px] mb-1" style={{color:'var(--muted)'}}>วันเริ่มงาน</div>
+                <input type="date" className="kanit" style={INP} value={edit.start||''} onChange={e=>setEdit({...edit,start:e.target.value})}/>
+              </div>
+              <div style={{flex:1}}>
+                <div className="text-[11.5px] mb-1" style={{color:'var(--muted)'}}>วันลาออก</div>
+                <input type="date" className="kanit" style={INP} value={edit.end||''} onChange={e=>setEdit({...edit,end:e.target.value})}/>
+              </div>
+            </div>
+
+            <div className="text-[11.5px] mb-1" style={{color:'var(--muted)'}}>เบอร์โทร</div>
+            <input className="num" style={{...INP,marginBottom:10}} inputMode="tel" placeholder="08x-xxx-xxxx" value={edit.phone||''} onChange={e=>setEdit({...edit,phone:e.target.value})}/>
+
+            <div className="text-[11.5px] mb-1" style={{color:'var(--muted)'}}>บันทึกเพิ่มเติม</div>
+            <textarea className="kanit" style={{...INP,marginBottom:12,minHeight:64,resize:'vertical'}} placeholder="เช่น ที่อยู่ · ผู้ติดต่อฉุกเฉิน · เหตุผลที่ออก" value={edit.note||''} onChange={e=>setEdit({...edit,note:e.target.value})}/>
+
+            <label className="flex items-center gap-2 text-[13.5px] mb-3">
+              <input type="checkbox" checked={edit.active!==false} onChange={e=>setEdit({...edit,active:e.target.checked})}/>
+              <span className="kanit">ยังทำงานอยู่ (ติ๊กออก = ลาออกแล้ว)</span>
+            </label>
+
+            <div className="flex gap-2">
+              {!edit._new && <button className="press kanit text-[14px] py-2.5 px-4 rounded-xl" style={{background:'var(--card)',border:'1px solid var(--line)',color:'var(--neg)'}} onClick={()=>del(edit)}>ลบ</button>}
+              <button className="press kanit text-[14px] py-2.5 px-5 rounded-xl" style={{background:'var(--card)',border:'1px solid var(--line)'}} onClick={()=>!busy&&setEdit(null)}>ยกเลิก</button>
+              <button className="press kanit text-[14px] flex-1 py-2.5 rounded-xl text-white" style={{background:'var(--primary)',border:'none',fontWeight:600,opacity:busy?.6:1}} disabled={busy} onClick={commit}>{busy?'กำลังบันทึก…':'บันทึก'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="text-[11.5px] text-center pb-4 pt-1" style={{color:'var(--muted)'}}>
+        คนที่ลาออกจะไม่ขึ้นในหน้าเงินเดือนเดือนใหม่ · ข้อมูลเดือนเก่ายังคำนวณได้ครบ
+      </div>
+    </div>
+  );
+}
+
 class TabErrorBoundary extends React.Component{
   constructor(p){ super(p); this.state={err:null}; }
   static getDerivedStateFromError(err){ return { err }; }
@@ -3750,7 +3980,7 @@ function OCTabPay({ toast }){
                 <span className="num text-[11px]" style={{width:38,textAlign:'right',color: pd.each>0?'var(--pos)':'var(--muted)'}}>{pd.each>0? ocFmt(pd.each,0) : '–'}</span>
                 <button className="press" onClick={()=>setExpDay(expDay===d?null:d)} style={{border:'none',background:'none',fontSize:13,padding:'0 2px',opacity:(hasT||expDay===d)?1:0.35}}>⏱</button>
                 <div className="flex gap-1 flex-1 flex-wrap pl-0.5">
-                  {pay.staff.map(st=>(
+                  {pay.staff.filter(st=> st.active!==false || pd.ids.indexOf(st.id)>=0).map(st=>(
                     <button key={st.id} className="press kanit" style={chipS(pd.ids.indexOf(st.id)>=0)} onClick={()=>togAtt(d,st.id)}>{st.name.slice(0,4)}</button>
                   ))}
                 </div>
@@ -3837,28 +4067,9 @@ function OCTabPay({ toast }){
         <button className="press kanit text-[13px] w-full text-left" style={{border:'none',background:'none',color:'var(--primary)',padding:0}} onClick={()=>setShowCfg(!showCfg)}>⚙️ พนักงาน & โครงสร้างเงินเดือน {showCfg?'▴':'▾'}</button>
         {showCfg && (
           <div className="mt-2">
-            <div className="flex items-center justify-between mb-1">
-              <div className="kanit text-[13px]">👥 พนักงาน (เฟส 1-3 · ฐานเอง 0=อัตโนมัติ · 🧹=แม่บ้าน รับฐาน+โบนัสเท่านั้น ไม่หารคอม)</div>
-              {pay.staff.length<10 && <button className="press kanit text-[12px] px-2 py-1 rounded-lg" style={{background:'var(--soft)',color:'var(--primary)',border:'none'}}
-                onClick={()=>upd(p=>{ p.staff.push({id:'p'+ocUid(),name:'พนักงานใหม่',phase:1,custom:0}); })}>+ เพิ่ม</button>}
-            </div>
-            <div className="space-y-1.5 mb-3">
-              {pay.staff.map((st,i)=>(
-                <div key={st.id} className="flex items-center gap-1.5 flex-wrap">
-                  <div className="flex-1 min-w-0" style={{minWidth:110}}><OCTextIn value={st.name} onChange={v=>upd(p=>{ p.staff[i].name=v; })}/></div>
-                  <button className="press kanit" style={chipS(st.kind==='maid')} onClick={()=>upd(p=>{ p.staff[i].kind = p.staff[i].kind==='maid' ? 'staff' : 'maid'; })}>🧹</button>
-                  <span className="flex items-center gap-1 text-[11px]" style={{color:'var(--muted)'}}>สแกน#<OCPayIn value={st.fpId} onChange={v=>upd(p=>{ p.staff[i].fpId=v; })} w="38px" ph="–"/></span>
-                  {st.kind==='maid' && <span className="flex items-center gap-1 text-[11px]" style={{color:'var(--muted)'}}>หยุดฟรี<OCPayIn value={st.offQuota} onChange={v=>upd(p=>{ p.staff[i].offQuota=v; })} w="40px" ph="–"/>วัน/ด.</span>}
-                  {st.kind==='maid' && <span className="flex items-center gap-1 text-[11px]" style={{color:'var(--muted)'}}>ทำแทนหยุด<OCPayIn value={st.extraRate} onChange={v=>upd(p=>{ p.staff[i].extraRate=v; })} w="52px" ph="เรทวัน"/>฿/วัน</span>}
-                  <select value={st.phase} onChange={e=>upd(p=>{ p.staff[i].phase=parseInt(e.target.value,10); })}
-                    className="border rounded-lg px-1 py-1 text-[12px]" style={{borderColor:'var(--line)'}}>
-                    <option value={1}>เฟส 1</option><option value={2}>เฟส 2</option><option value={3}>เฟส 3</option>
-                  </select>
-                  <OCPayIn value={st.custom||0} onChange={v=>upd(p=>{ p.staff[i].custom= v===''?0:(parseFloat(v)||0); })} w="62px"/>
-                  <button className="press text-[13px] px-1" style={{color:'var(--neg)',border:'none',background:'none'}}
-                    onClick={()=>{ if(confirm('ลบ '+st.name+'?')) upd(p=>{ p.staff.splice(i,1); }); }}>✕</button>
-                </div>
-              ))}
+            <div className="rounded-xl p-2.5 mb-3" style={{background:'var(--soft)'}}>
+              <div className="kanit text-[13px]" style={{fontWeight:600}}>👥 พนักงาน {pay.staff.filter(x=>x.active!==false).length} คน</div>
+              <div className="text-[11.5px] mt-0.5" style={{color:'var(--muted)'}}>เพิ่ม/แก้ไข/บันทึกลาออก ทำได้ที่แท็บ <b>👥 พนักงาน</b> ด้านล่าง · ที่นี่ตั้งเฉพาะโครงสร้างเงินเดือน</div>
             </div>
             <div className="kanit text-[13px] mb-1">💵 ฐานเงินเดือนตามเฟส</div>
             <div className="flex items-center gap-1.5 flex-wrap text-[12px] mb-3" style={{color:'var(--muted)'}}>
@@ -3907,7 +4118,7 @@ function Main({shop,user,canSwitch,onSwitch,logout}){
     {k:'referral',label:'แนะนำ',icon:I.users},
     {k:'capital',label:'ทุน',icon:I.wallet},
     {k:'txns',label:'รายการ',icon:I.table},
-    ...(shop.id==='owlcha' ? [{k:'orders',label:'ออเดอร์',icon:I.cup},{k:'stamp',label:'แต้ม',icon:I.stamp},{k:'print',label:'พิมพ์',icon:I.printer},{k:'cost',label:'ต้นทุน',icon:I.calc},{k:'attend',label:'เวลางาน',icon:I.clock}] : []),
+    ...(shop.id==='owlcha' ? [{k:'orders',label:'ออเดอร์',icon:I.cup},{k:'stamp',label:'แต้ม',icon:I.stamp},{k:'print',label:'พิมพ์',icon:I.printer},{k:'cost',label:'ต้นทุน',icon:I.calc},{k:'attend',label:'เวลางาน',icon:I.clock},{k:'staff',label:'พนักงาน',icon:I.users}] : []),
     {k:'settings',label:'ตั้งค่า',icon:I.gear},
   ];
   const customPerms = (user.perms && Object.keys(user.perms).some(k=>user.perms[k])) ? user.perms : null;
@@ -3947,6 +4158,7 @@ function Main({shop,user,canSwitch,onSwitch,logout}){
         <TabErrorBoundary key={tab}>
         {tab==='cost' && <CostPanel toast={toast}/>}
         {tab==='attend' && <AttendPanel user={user}/>}
+        {tab==='staff' && <StaffPanel user={user} toast={toast}/>}
         </TabErrorBoundary>
         {tab==='settings' && <Settings shop={shop} user={user} logout={logout} toast={toast}/>}
       </div>
