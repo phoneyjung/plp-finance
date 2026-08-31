@@ -3109,6 +3109,11 @@ function attHours(i,o){
   let d=(b-a)/60; if(d<0) d+=24;
   return Math.round(d*10)/10;
 }
+/* สายเกินเท่านี้ (นาที/เดือน) จะเตือน — เพราะการหักลบกับ OT อาจทำให้ต่ำกว่ากฎหมาย */
+const LATE_WARN_MIN = 250;
+/* ช่วงผ่อนผัน (นาที) — ใช้เท่ากันทั้งเข้าสายและออกช้า · ตั้ง 0 = นับทุกนาที */
+const GRACE_MIN = 15;
+
 const LEAVE_TYPES = [
   { id:'off',      label:'หยุดปกติ',  emoji:'🏠', color:'#9AA1AB' },
   { id:'sick',     label:'ลาป่วย',    emoji:'🤒', color:'#CE4A5A' },
@@ -3205,15 +3210,19 @@ function AttendPanel({ user }){
       const first=pr.pairs[0], last=pr.pairs[pr.pairs.length-1];
       const aIn=attHM(first.i), aOut=attHM(last.o);
       if(sIn!=null && sOut!=null && aIn!=null && aOut!=null){
-        const late = Math.max(0, aIn - sIn);   /* มาก่อน = 0 ไม่บวกให้ */
+        let late = Math.max(0, aIn - sIn);     /* มาก่อน = 0 ไม่บวกให้ */
         let over = aOut - sOut;                /* ออกช้า = บวก · ออกก่อน = ลบ */
         if(over > 720) over -= 1440;           /* กันเคสข้ามเที่ยงคืน */
         if(over < -720) over += 1440;
+        /* ช่วงผ่อนผัน — ไม่ถึงเกณฑ์ = ไม่นับ ทั้งสองทาง */
+        if(late < GRACE_MIN) late = 0;
+        if(Math.abs(over) < GRACE_MIN) over = 0;
         return Math.round(over - late);
       }
     }
     /* ไม่ได้ตั้งกะประจำ → เทียบจากชั่วโมงรวม */
-    return Math.round(((pr&&pr.netMin)||0) - shiftHrsOf(pin)*60);
+    const df=Math.round(((pr&&pr.netMin)||0) - shiftHrsOf(pin)*60);
+    return Math.abs(df) < GRACE_MIN ? 0 : df;
   };
   const otMinOf=(pin, netMin)=> Math.round((netMin||0) - shiftHrsOf(pin)*60);
   const minTxt=(m)=> !m ? '–' : ((m>0?'+':'') + m + ' น.');
@@ -3364,7 +3373,9 @@ function AttendPanel({ user }){
       else { const t=(lvv&&lvv.t)||'off'; lv[t]=(lv[t]||0)+1; }
       rowsAll.push({ d, r, lv:lvv, dt:new Date(yy,mm-1,d), otMin, hol });
     }
-    return { wk, wh:Math.round(wh*10)/10, wot, whol, wholH:Math.round(wholH*10)/10, lv, rowsAll };
+    let lateM=0, overM=0;
+    rowsAll.forEach(rr=>{ if(rr.otMin>0) overM+=rr.otMin; else if(rr.otMin<0) lateM+=(-rr.otMin); });
+    return { wk, wh:Math.round(wh*10)/10, wot, whol, wholH:Math.round(wholH*10)/10, lv, rowsAll, lateM, overM };
   },[scans,who,ym,leaveMap,holMap,staff,cfg]);
 
   const stat=React.useMemo(()=>{
@@ -3607,10 +3618,12 @@ function AttendPanel({ user }){
       x.font='400 13px Kanit,sans-serif'; x.fillStyle='rgba(255,255,255,.6)';
       x.fillText('Owl Cha / Teddy · ออกให้วันที่ '+today(), PAD, 100);
       /* กล่องสรุป */
-      const otH=minHr(wot||0);  /* ตัดเศษแล้ว */
+      const otH=minHr(wot||0);
+      let ovM=0, ltM=0;
+      rows.forEach(rr=>{ if(rr.otMin>0) ovM+=rr.otMin; else if(rr.otMin<0) ltM+=(-rr.otMin); });
       const box=[['ทำงาน',wk+' วัน','#2E7D4F'],['รวมชั่วโมง',wh+' ชม.','#8A5A3B'],
-                 ['OT สุทธิ',(otH>0?'+':'')+otH+' ชม.', otH>=0?'#C68B4A':'#CE4A5A'],['วันหยุด×2',(whol||0)+' วัน','#CE4A5A'],
-                 ['หยุด',(lv.off||0)+' วัน','#7A828C'],['ป่วย/ลากิจ',((lv.sick||0)+(lv.personal||0))+' วัน','#A05A8A']];
+                 ['ทำเกิน (OT)','+'+ovM+' น.','#C68B4A'],['สาย/ออกก่อน','-'+ltM+' น.', ltM>LATE_WARN_MIN?'#CE4A5A':'#7A828C'],
+                 ['OT สุทธิ',(otH>0?'+':'')+otH+' ชม.', otH>=0?'#C68B4A':'#CE4A5A'],['วันหยุด×2',(whol||0)+' วัน','#CE4A5A']];
       const bw=(W-PAD*2-5*8)/6;
       box.forEach((b,i)=>{
         const bx=PAD+i*(bw+8), by=HEAD-64;
@@ -3652,8 +3665,8 @@ function AttendPanel({ user }){
       x.fillStyle='#B4AA96'; x.font='400 11.5px Kanit,sans-serif';
       const st0=stOf(pin);
       const shiftTxt=(st0&&st0.shiftIn&&st0.shiftOut)? (st0.shiftIn+'–'+st0.shiftOut) : (shiftHrsOf(pin)+' ชม./วัน');
-      x.fillText('* +/- นาที = เทียบกะ '+shiftTxt+' (ออกช้า=บวก · เข้าสาย/ออกก่อน=ลบ · มาก่อนเวลาไม่บวกให้)', PAD, H-38);
-      x.fillText('  รวมทั้งเดือน '+(wot>0?'+':'')+(wot||0)+' นาที = '+(otH>0?'+':'')+otH+' ชม.  ·  หากพบข้อมูลไม่ตรง แจ้งหัวหน้าได้ทันที', PAD, H-20);
+      x.fillText('* +/- นาที = เทียบกะ '+shiftTxt+' · ออกช้า=บวก · เข้าสาย/ออกก่อน=ลบ · มาก่อนเวลาไม่บวกให้ · ผ่อนผัน '+GRACE_MIN+' นาที', PAD, H-38);
+      x.fillText('  ทำเกิน +'+ovM+' น. · สาย -'+ltM+' น. → สุทธิ '+(wot>0?'+':'')+(wot||0)+' นาที = '+(otH>0?'+':'')+otH+' ชม.  ·  หากพบข้อมูลไม่ตรง แจ้งหัวหน้าได้ทันที', PAD, H-20);
       c.toBlob(bl=>{
         const u=URL.createObjectURL(bl);
         const a=document.createElement('a');
@@ -3730,10 +3743,18 @@ function AttendPanel({ user }){
               <button className="press kanit text-[12.5px]" style={{border:'none',background:'var(--primary)',color:'#fff',borderRadius:10,padding:'5px 12px',fontWeight:600}}
                 onClick={()=>saveSlip(who, pStat.rowsAll, pStat.wk, pStat.wh, pStat.lv, pStat.wot, pStat.whol)}>🖼 สร้างรูปสรุป</button>
             </div>
+            {pStat.lateM>LATE_WARN_MIN && (
+              <div className="rounded-xl p-2.5 mb-2" style={{background:'#FDECEE',border:'1px solid #F3C4CA'}}>
+                <div className="kanit text-[12.5px]" style={{color:'#8E2B39',fontWeight:600}}>⚠️ มาสาย/ออกก่อน รวม {pStat.lateM} นาที เดือนนี้</div>
+                <div className="text-[11.5px] mt-0.5" style={{color:'#A65563'}}>เกิน {LATE_WARN_MIN} นาที — ถ้าหักลบกับ OT อาจทำให้จ่ายต่ำกว่ากฎหมายขั้นต่ำ (OT ×1.5 แยกจากการหักสาย) แนะนำคุยเรื่องวินัยการมางาน</div>
+              </div>
+            )}
             <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-[12.5px]">
               <span style={{color:'var(--muted)'}}>ทำงาน <b className="num" style={{color:'#3E7D3E'}}>{pStat.wk}</b> วัน</span>
               <span style={{color:'var(--muted)'}}>รวม <b className="num" style={{color:'var(--primary)'}}>{pStat.wh}</b> ชม.</span>
-              <span style={{color:'var(--muted)'}}>เกิน/ขาด <b className="num" style={{color: pStat.wot>=0?'#C68B4A':'#CE4A5A'}}>{pStat.wot>0?'+':''}{pStat.wot}</b> นาที = <b className="num" style={{color: pStat.wot>=0?'#C68B4A':'#CE4A5A'}}>{minHr(pStat.wot)}</b> ชม.</span>
+              <span style={{color:'var(--muted)'}}>OT <b className="num" style={{color:'#C68B4A'}}>+{pStat.overM}</b> น.</span>
+              <span style={{color:'var(--muted)'}}>สาย <b className="num" style={{color: pStat.lateM>LATE_WARN_MIN?'#CE4A5A':'var(--ink)'}}>-{pStat.lateM}</b> น.</span>
+              <span style={{color:'var(--muted)'}}>สุทธิ <b className="num" style={{color: pStat.wot>=0?'#C68B4A':'#CE4A5A'}}>{pStat.wot>0?'+':''}{pStat.wot}</b> น. = <b className="num" style={{color: pStat.wot>=0?'#C68B4A':'#CE4A5A'}}>{minHr(pStat.wot)}</b> ชม.</span>
               {pStat.whol>0 && <span style={{color:'var(--muted)'}}>🆘 <b className="num" style={{color:'#CE4A5A'}}>{pStat.whol}</b> วัน ({pStat.wholH} ชม.×2)</span>}
               <span style={{color:'var(--muted)'}}>🏠 <b className="num">{pStat.lv.off||0}</b></span>
               <span style={{color:'var(--muted)'}}>🤒 <b className="num" style={{color:'#CE4A5A'}}>{pStat.lv.sick||0}</b></span>
@@ -4111,11 +4132,13 @@ function AttendPanel({ user }){
             const sI=attHM(st0.shiftIn), sO=attHM(st0.shiftOut);
             const aI=attHM(attFmt(p0[0].i)), aO=attHM(attFmt(p0[p0.length-1].o));
             if(sI!=null&&sO!=null&&aI!=null&&aO!=null){
-              const lt=Math.max(0,aI-sI); let ov=aO-sO;
+              let lt=Math.max(0,aI-sI); let ov=aO-sO;
               if(ov>720) ov-=1440; if(ov<-720) ov+=1440;
+              if(lt<GRACE_MIN) lt=0;
+              if(Math.abs(ov)<GRACE_MIN) ov=0;
               om=Math.round(ov-lt);
             }
-          } else om=Math.round(netM - shiftHrsOf(statEdit.pin)*60);
+          } else { const df=Math.round(netM - shiftHrsOf(statEdit.pin)*60); om = Math.abs(df)<GRACE_MIN? 0 : df; }
         }
         const INP2={fontFamily:'inherit',fontSize:15,border:'1px solid var(--line)',borderRadius:9,padding:'9px 10px',background:'var(--card)',color:'var(--ink)',width:'100%',textAlign:'center'};
         return (
@@ -4169,6 +4192,9 @@ function AttendPanel({ user }){
                     <b className="num" style={{color: om>0?'#C68B4A': (om<0?'#CE4A5A':'var(--muted)'),fontSize:16}}>
                       {om>0? '+'+om+' นาที (OT)' : om<0? om+' นาที (ขาด)' : 'พอดี'}
                     </b>
+                  </div>
+                  <div className="text-[11.5px] mt-1" style={{color:'var(--muted)'}}>
+                    ผ่อนผัน {GRACE_MIN} นาที — เข้าสายหรือออกช้าไม่ถึง {GRACE_MIN} นาที ไม่นับทั้งสองทาง
                   </div>
                 </div>
               </div>
@@ -4267,9 +4293,21 @@ function AttendPanel({ user }){
             <span style={{color:'var(--muted)'}}>รวมชั่วโมง</span><b className="num" style={{color:'var(--primary)'}}>{pStat.wh} ชม.</b>
           </div>
           <div className="flex items-center justify-between py-1.5 text-[13.5px]" style={{borderBottom:'1px solid var(--line)'}}>
-            <span style={{color:'var(--muted)'}}>เกิน/ขาด (OT)</span>
+            <span style={{color:'var(--muted)'}}>ทำเกินเวลา (OT)</span><b className="num" style={{color:'#C68B4A'}}>+{pStat.overM} นาที</b>
+          </div>
+          <div className="flex items-center justify-between py-1.5 text-[13.5px]" style={{borderBottom:'1px solid var(--line)'}}>
+            <span style={{color:'var(--muted)'}}>มาสาย / ออกก่อน</span><b className="num" style={{color: pStat.lateM>LATE_WARN_MIN?'#CE4A5A':'var(--ink)'}}>-{pStat.lateM} นาที</b>
+          </div>
+          <div className="flex items-center justify-between py-1.5 text-[13.5px]" style={{borderBottom:'1px solid var(--line)'}}>
+            <span style={{color:'var(--muted)'}}>สุทธิ</span>
             <b className="num" style={{color: pStat.wot>=0?'#C68B4A':'#CE4A5A'}}>{pStat.wot>0?'+':''}{pStat.wot} น. = {minHr(pStat.wot)} ชม.</b>
           </div>
+          {pStat.lateM>LATE_WARN_MIN && (
+            <div className="rounded-xl p-2.5 mt-2" style={{background:'#FDECEE'}}>
+              <div className="kanit text-[12.5px]" style={{color:'#8E2B39',fontWeight:600}}>⚠️ สายเกิน {LATE_WARN_MIN} นาที/เดือน</div>
+              <div className="text-[11.5px] mt-0.5" style={{color:'#A65563'}}>การหักลบกับ OT อาจทำให้จ่ายต่ำกว่ากฎหมาย · ควรคุยเรื่องวินัยการมางาน</div>
+            </div>
+          )}
           {pStat.whol>0 && (
             <div className="flex items-center justify-between py-1.5 text-[13.5px]" style={{borderBottom:'1px solid var(--line)'}}>
               <span style={{color:'var(--muted)'}}>🆘 ทำงานวันหยุด</span><b className="num" style={{color:'#CE4A5A'}}>{pStat.whol} วัน · {pStat.wholH} ชม.×2</b>
@@ -4286,6 +4324,7 @@ function AttendPanel({ user }){
 
       <div className="text-[11.5px] text-center pb-4 pt-1" style={{color:'var(--muted)'}}>
         แตะแถวเพื่อแก้ไขเวลา · แตะป้ายร้านเพื่อสลับร้านเฉพาะวันนั้น<br/>
+        OT ผ่อนผัน {GRACE_MIN} นาที — เข้าสาย/ออกช้าไม่ถึง {GRACE_MIN} นาที ไม่นับทั้งสองทาง<br/>
         ระบบตัดสแกนซ้ำที่ห่างกันไม่ถึง {FP_DEDUP_MIN} นาทีให้อัตโนมัติ
       </div>
     </div>
