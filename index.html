@@ -3146,6 +3146,8 @@ function AttendPanel({ user }){
   const [leaveMap,setLeaveMap]=useState({});
   const [holMap,setHolMap]=useState({});
   const [cfg,setCfg]=useState({});
+  const [payAll,setPayAll]=useState(null);
+  const [showSync,setShowSync]=useState(false);
   const [detail,setDetail]=useState(null);
   const [leaveEdit,setLeaveEdit]=useState(null);
   const [statEdit,setStatEdit]=useState(null);
@@ -3164,7 +3166,7 @@ function AttendPanel({ user }){
     setScans(null); setErr('');
     if(!db){ setErr('ออฟไลน์'); return; }
     db.collection('owlCost').doc('payroll').get()
-      .then(s=>{ if(!stop && s.exists){ const v=s.data()||{}; setStaff(v.staff||[]); setCfg(v.cfg||{}); } })
+      .then(s=>{ if(!stop && s.exists){ const v=s.data()||{}; setStaff(v.staff||[]); setCfg(v.cfg||{}); setPayAll(v); } })
       .catch(()=>{});
     db.collection('fpScans').doc(ym).get()
       .then(s=>{ if(stop) return; const v=s.exists? (s.data()||{}) : {}; setScans(v.d||{}); setShopMap(v.shop||{}); setLeaveMap(v.leave||{}); setHolMap(v.hol||{}); })
@@ -3468,6 +3470,88 @@ function AttendPanel({ user }){
     setBusy(false);
   };
 
+  /* ── ดึงเวลาที่เคยลงในหน้าเงินเดือน มาใส่แท็บเวลางาน ── */
+  const pullFromPayroll=async()=>{
+    if(!db || !payAll){ setMsg('ยังโหลดข้อมูลไม่เสร็จ'); return; }
+    const mo=(payAll.months||{})[ym]||{};
+    const tms=mo.times||{}, hols=mo.hol||{};
+    const idToPin={};
+    (payAll.staff||[]).forEach(st=>{ if(st.fpId!=null&&st.fpId!=='') idToPin[st.id]=String(st.fpId); });
+    const dPatch={}, hPatch={};
+    let cnt=0, skip=0;
+    Object.keys(tms).forEach(d=>{
+      Object.keys(tms[d]||{}).forEach(sid=>{
+        const t=tms[d][sid]||{};
+        if(!t.i) return;
+        const pin=idToPin[sid];
+        if(!pin){ skip++; return; }
+        if((scans[d]||{})[pin]) return;             /* มีอยู่แล้ว ไม่ทับ */
+        const flat=[t.i]; if(t.o && t.o!==t.i) flat.push(t.o);
+        dPatch[d]=dPatch[d]||{}; dPatch[d][pin]={ t:flat.join(','), m:1 };
+        if(((hols[d]||[]).indexOf(sid))>=0){ hPatch[d]=hPatch[d]||{}; hPatch[d][pin]=1; }
+        cnt++;
+      });
+    });
+    if(!cnt){ setMsg(skip? ('ไม่มีข้อมูลใหม่ · ข้าม '+skip+' รายการ (ยังไม่ได้ผูกรหัสสแกน)') : 'ไม่มีข้อมูลในหน้าเงินเดือนเดือนนี้'); setTimeout(()=>setMsg(''),3200); return; }
+    if(!confirm('ดึงเวลาจากหน้าเงินเดือน '+(ocPayLabel? ocPayLabel(ym):ym)+'\n'+cnt+' รายการ มาใส่แท็บเวลางาน?\n(ของเดิมที่มีอยู่แล้วจะไม่ถูกทับ)')) return;
+    setBusy(true);
+    try{
+      await db.collection('fpScans').doc(ym).set({ d:dPatch, hol:hPatch },{merge:true});
+      setScans(prev=>{ const nx=JSON.parse(JSON.stringify(prev||{}));
+        Object.keys(dPatch).forEach(d=>{ nx[d]=nx[d]||{}; Object.keys(dPatch[d]).forEach(k=>{ nx[d][k]=dPatch[d][k]; }); });
+        return nx; });
+      setHolMap(prev=>{ const nx=JSON.parse(JSON.stringify(prev||{}));
+        Object.keys(hPatch).forEach(d=>{ nx[d]=nx[d]||{}; Object.keys(hPatch[d]).forEach(k=>{ nx[d][k]=1; }); });
+        return nx; });
+      setMsg('ดึงมาแล้ว '+cnt+' รายการ'+(skip?(' · ข้าม '+skip+' (ไม่มีรหัสสแกน)'):''));
+      setTimeout(()=>setMsg(''),3600);
+    }catch(e){ setMsg('ดึงข้อมูลไม่สำเร็จ'); }
+    setBusy(false);
+  };
+
+  /* ── ส่งเวลาจากแท็บนี้ ไปลงหน้าเงินเดือน ── */
+  const pushToPayroll=async()=>{
+    if(!db || !payAll){ setMsg('ยังโหลดข้อมูลไม่เสร็จ'); return; }
+    const pinToId={}, homeShop={};
+    (payAll.staff||[]).forEach(st=>{ if(st.fpId!=null&&st.fpId!==''){ pinToId[String(st.fpId)]=st.id; homeShop[String(st.fpId)]=st.shop||'owlcha'; } });
+    const months=JSON.parse(JSON.stringify(payAll.months||{}));
+    const mo=months[ym]||(months[ym]={});
+    const times=mo.times||(mo.times={});
+    const att=mo.att||(mo.att={});
+    const hol=mo.hol||(mo.hol={});
+    let cnt=0, skip=0;
+    Object.keys(scans||{}).forEach(d=>{
+      Object.keys(scans[d]||{}).forEach(pin=>{
+        const sid=pinToId[String(pin)];
+        if(!sid){ skip++; return; }
+        if(shopOf(d,pin)!=='owlcha') return;
+        const pr=parseRow(scans[d][pin]||{});
+        if(!pr.pairs.length || !pr.pairs[0].i) return;
+        let brk=0;
+        for(let k=0;k+1<pr.pairs.length;k++){
+          const a=attHM(pr.pairs[k].o), b=attHM(pr.pairs[k+1].i);
+          if(a!=null&&b!=null&&b>a) brk+=(b-a);
+        }
+        const fi=pr.pairs[0].i, fo=pr.pairs[pr.pairs.length-1].o||'';
+        (times[d]||(times[d]={}))[sid]={ i:fi, o:fo, b:brk };
+        const arr=att[d]||(att[d]=[]);
+        if(arr.indexOf(sid)<0) arr.push(sid);
+        if(isHol(d,pin)){ const ha=hol[d]||(hol[d]=[]); if(ha.indexOf(sid)<0) ha.push(sid); }
+        cnt++;
+      });
+    });
+    if(!cnt){ setMsg('ไม่มีข้อมูลให้ส่ง'); setTimeout(()=>setMsg(''),2500); return; }
+    if(!confirm('ส่งเวลา '+cnt+' รายการ ไปลงหน้าเงินเดือน '+(ocPayLabel? ocPayLabel(ym):ym)+'?\n(จะเขียนทับเวลาเดิมของวันเดียวกัน)')) return;
+    setBusy(true);
+    try{
+      await db.collection('owlCost').doc('payroll').set({ months },{merge:true});
+      setPayAll(prev=>({ ...(prev||{}), months }));
+      setMsg('ส่งไปเงินเดือนแล้ว '+cnt+' รายการ'+(skip?(' · ข้าม '+skip+' (ไม่มีรหัสสแกน)'):''));
+      setTimeout(()=>setMsg(''),3600);
+    }catch(e){ setMsg('ส่งข้อมูลไม่สำเร็จ'); }
+    setBusy(false);
+  };
+
   const openAdd=()=>{
     const pin = (who!=='all'? who : (pins[0]||''));
     setEdit({ d:String(maxDay), pin:pin, pairs:shiftPair(pin), isNew:true });
@@ -3620,6 +3704,23 @@ function AttendPanel({ user }){
         )}
         {view==='day' && (
           <button className="press kanit text-[13.5px] w-full mt-2.5 py-2 rounded-xl text-white" style={{background:'var(--primary)',border:'none',fontWeight:600}} onClick={openAdd}>+ ลงเวลาเอง</button>
+        )}
+
+        {user.role==='admin' && (
+          <div className="mt-2">
+            <button className="press kanit text-[12px] w-full py-1.5" style={{border:'none',background:'none',color:'var(--muted)'}}
+              onClick={()=>setShowSync(!showSync)}>🔄 ย้ายข้อมูลกับหน้าเงินเดือน {showSync?'▴':'▾'}</button>
+            {showSync && (
+              <div className="rounded-xl p-2.5 mt-1" style={{background:'var(--soft)'}}>
+                <div className="text-[11.5px] mb-2" style={{color:'var(--muted)'}}>ใช้ครั้งเดียวตอนย้ายข้อมูลเก่า · เดือนใหม่ระบบซิงก์ให้เองอยู่แล้ว</div>
+                <button className="press kanit text-[13px] w-full py-2 rounded-xl mb-1.5" style={{border:'1px solid var(--line)',background:'var(--card)',fontWeight:600,opacity:busy?.5:1}} disabled={busy}
+                  onClick={pullFromPayroll}>📥 ดึงเวลาจากหน้าเงินเดือน → มาที่นี่</button>
+                <button className="press kanit text-[13px] w-full py-2 rounded-xl" style={{border:'1px solid var(--line)',background:'var(--card)',fontWeight:600,opacity:busy?.5:1}} disabled={busy}
+                  onClick={pushToPayroll}>📤 ส่งเวลาจากที่นี่ → ไปหน้าเงินเดือน</button>
+                <div className="text-[11px] mt-2" style={{color:'var(--muted)'}}>ทำทีละเดือน · เลือกเดือนที่ต้องการด้านบนก่อนกด</div>
+              </div>
+            )}
+          </div>
         )}
 
         {view==='day' && pStat && (
@@ -4547,6 +4648,7 @@ function OCTabPay({ toast }){
         };
         const m=p.months[ym]||(p.months[ym]={});
         const times=m.times||(m.times={});
+        const att=m.att||(m.att={});
         let ch=false;
         Object.keys(sc).forEach(d=>{
           Object.keys(sc[d]||{}).forEach(pin=>{
@@ -4567,6 +4669,11 @@ function OCTabPay({ toast }){
             const fi=list.length? list[0] : (v.i||'');
             const fo=list.length>=2? list[list.length-1] : ((v.o&&v.o!==v.i)? v.o : '');
             (times[d]||(times[d]={}))[sid]={ i:fi, o:fo, b:brk };
+            /* มีเวลาเข้า-ออก = เข้ากะวันนั้นอัตโนมัติ ไม่ต้องกดเลือกซ้ำ */
+            if(fi){
+              const arr=att[d]||(att[d]=[]);
+              if(arr.indexOf(sid)<0) arr.push(sid);
+            }
             ch=true;
           });
         });
@@ -4730,7 +4837,10 @@ function OCTabPay({ toast }){
 
       <div className="card p-3 mb-3">
         <div className="kanit text-[14px] mb-0.5">📅 เข้างานรายวัน</div>
-        <div className="text-[11px] mb-2" style={{color:'var(--muted)'}}>กรอกยอดแก้ว + แตะชื่อคนที่เข้ากะ · คอม/คน = กองกลาง ÷ คนเข้า</div>
+        <div className="rounded-lg p-2 mb-2" style={{background:'var(--soft)'}}>
+          <div className="text-[11.5px]" style={{color:'var(--ink)',fontWeight:600}}>⏱ คนเข้ากะดึงจากแท็บ "เวลางาน" อัตโนมัติ</div>
+          <div className="text-[10.5px] mt-0.5" style={{color:'var(--muted)'}}>ใครสแกนนิ้ว/ลงเวลาไว้ ระบบติ๊กให้เอง (มีจุด ●) · กรอกแค่ยอดแก้ว · แตะชื่อเพิ่ม/เอาออกได้ถ้าต้องการ</div>
+        </div>
         <div className="flex items-center gap-1 text-[10.5px] pb-1" style={{color:'var(--muted)',borderBottom:'1px solid var(--line)'}}>
           <span style={{width:18,textAlign:'right'}}>วัน</span>
           <span style={{width:52,textAlign:'center'}}>แก้ว</span>
@@ -4749,15 +4859,21 @@ function OCTabPay({ toast }){
                 <span className="num text-[11px]" style={{width:38,textAlign:'right',color: pd.each>0?'var(--pos)':'var(--muted)'}}>{pd.each>0? ocFmt(pd.each,0) : '–'}</span>
                 <button className="press" onClick={()=>setExpDay(expDay===d?null:d)} style={{border:'none',background:'none',fontSize:13,padding:'0 2px',opacity:(hasT||expDay===d)?1:0.35}}>⏱</button>
                 <div className="flex gap-1 flex-1 flex-wrap pl-0.5">
-                  {pay.staff.filter(st=> st.active!==false || pd.ids.indexOf(st.id)>=0).map(st=>(
-                    <button key={st.id} className="press kanit" style={chipS(pd.ids.indexOf(st.id)>=0)} onClick={()=>togAtt(d,st.id)}>{st.name.slice(0,4)}</button>
-                  ))}
+                  {pay.staff.filter(st=> st.active!==false || pd.ids.indexOf(st.id)>=0).map(st=>{
+                    const auto=!!(tms[st.id] && tms[st.id].i);
+                    return (
+                      <button key={st.id} className="press kanit" style={chipS(pd.ids.indexOf(st.id)>=0)} onClick={()=>togAtt(d,st.id)}
+                        title={auto? 'มีเวลาเข้า-ออกจากแท็บเวลางาน':''}>
+                        {auto? '●':''}{st.name.slice(0,4)}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
               {expDay===d && (
                 <div className="rounded-lg p-2 mb-1.5" style={{background:'var(--soft)'}}>
                   <div className="text-[11px] mb-1" style={{color:'var(--muted)'}}>⏱ เวลาเข้า-ออก · ไม่กรอก = ไม่คิด OT · เกิน {cfg.shiftHrs} ชม. คิด OT อัตโนมัติ (นับเฉพาะชั่วโมงเต็ม) · 🆘×2 = มาช่วยวันหยุด ค่าแรง×2 ตั้งแต่ ชม.แรก (วันนั้นไม่นับฐาน/OT ปกติ)</div>
-                  {pd.ids.length===0 && <div className="text-[11.5px]" style={{color:'var(--muted)'}}>แตะชื่อคนเข้ากะก่อนครับ</div>}
+                  {pd.ids.length===0 && <div className="text-[11.5px]" style={{color:'var(--muted)'}}>ยังไม่มีใครเข้ากะวันนี้ · ลงเวลาได้ที่แท็บ ⏱ เวลางาน หรือแตะชื่อด้านบน</div>}
                   {pd.ids.map(id=>{
                     const st=pay.staff.find(s=>s.id===id); if(!st) return null;
                     const tt=tms[id]||{};
