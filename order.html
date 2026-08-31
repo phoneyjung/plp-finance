@@ -38,10 +38,8 @@
 </head>
 <body>
 <div id="root"></div>
-
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useMemo, useRef } = React;
-
 /* ====== ตั้งค่า ====== */
 const LIFF_ID = '2010531664-XhbuTZLn';   // ← LIFF "Owl Order" (Owl Cha Login channel)
 const NOTIFY_URL = 'PASTE_NOTIFY_URL';    // ← Apps Script "Owl Notify"
@@ -105,7 +103,6 @@ const BANNERS = [
   { img:'owl-img/banner-4.jpg', menu:'', cat:'พรีเมียมฟรุต' },
   { img:'owl-img/banner-5.jpg', menu:'', cat:'พรีเมียมฟรุต' },
 ];
-
 const firebaseConfig = {
   apiKey: "AIzaSyAVaizHIgRcgrufwwI1ohbOinOy0DtTiM0",
   authDomain: "plp-finance.firebaseapp.com",
@@ -118,7 +115,6 @@ firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 try{ db.settings({ experimentalAutoDetectLongPolling: true, merge: true }); }catch(e){}
 firebase.auth().signInAnonymously().catch(e => console.error('auth', e));
-
 function cleanUndefined(obj){
   if (Array.isArray(obj)) return obj.map(cleanUndefined);
   if (obj && typeof obj === 'object'){
@@ -179,7 +175,6 @@ function slotList(){
   }
   return out;
 }
-
 /* ====== LIFF ====== */
 function useLiff(){
   const [profile, setProfile] = useState(null);
@@ -197,7 +192,6 @@ function useLiff(){
   }, []);
   return { profile, inLine };
 }
-
 /* ====== การ์ดเมนู ====== */
 function MenuCard({ m, onTap }){
   return (
@@ -218,7 +212,6 @@ function MenuCard({ m, onTap }){
     </div>
   );
 }
-
 /* ====== ชีทเลือกตัวเลือกแก้ว ====== */
 function ItemSheet({ m, toppings, onAdd, onClose, init }){
   const isTop = m.category === 'ท็อปปิ้ง';
@@ -252,7 +245,6 @@ function ItemSheet({ m, toppings, onAdd, onClose, init }){
           </div>
           <div onClick={onClose} style={{fontSize:22, color:'var(--muted)', cursor:'pointer'}}>✕</div>
         </div>
-
         {!isTop && toppings.length > 0 && <>
           <div style={{margin:'16px 0 8px', fontWeight:600, fontSize:15}}>ท็อปปิ้ง <span style={{color:'var(--muted)', fontWeight:400, fontSize:13}}>(เลือกได้หลายอย่าง)</span></div>
           {toppings.map(t => {
@@ -288,7 +280,6 @@ function ItemSheet({ m, toppings, onAdd, onClose, init }){
             );
           })}
         </>}
-
         {!isTop && <>
         <div style={{margin:'16px 0 8px', fontWeight:600, fontSize:15}}>น้ำแข็ง</div>
         <div style={{display:'flex', gap:8, flexWrap:'wrap'}}>
@@ -297,7 +288,6 @@ function ItemSheet({ m, toppings, onAdd, onClose, init }){
               onClick={() => setIce(s.k)}>{s.t}</div>
           ))}
         </div>
-
         <div style={{margin:'16px 0 8px', fontWeight:600, fontSize:15}}>ระดับความหวาน</div>
         <div style={{display:'flex', gap:8, flexWrap:'wrap'}}>
           {SWEETS.map(s => (
@@ -306,7 +296,6 @@ function ItemSheet({ m, toppings, onAdd, onClose, init }){
           ))}
         </div>
         </>}
-
         <div style={{display:'flex', alignItems:'center', gap:14, margin:'16px 0'}}>
           <div style={{fontWeight:600, fontSize:15}}>จำนวน</div>
           <div style={{display:'flex', alignItems:'center', gap:0, border:'1.5px solid var(--line)',
@@ -318,7 +307,6 @@ function ItemSheet({ m, toppings, onAdd, onClose, init }){
               style={{border:'none', background:'none', width:42, height:38, fontSize:20}}>+</button>
           </div>
         </div>
-
         <button className="btn press" style={{width:'100%', background:'var(--accent)', color:'#fff', fontSize:17}}
           onClick={() => { onAdd(isTop ? { m, sweet:'', ice:'', tops:[], qty, unit } : { m, sweet, ice, tops, qty, unit }); onClose(); }}>
           {init ? '💾 บันทึกการแก้ไข' : 'ใส่ตะกร้า'} · {unit * qty} ฿
@@ -327,7 +315,6 @@ function ItemSheet({ m, toppings, onAdd, onClose, init }){
     </>
   );
 }
-
 /* ====== ตะกร้า + ยืนยัน ====== */
 function CartSheet({ cart, setCart, profile, inLine, onDone, onClose, onEdit }){
   const [name, setName] = useState(profile ? profile.displayName : '');
@@ -336,10 +323,8 @@ function CartSheet({ cart, setCart, profile, inLine, onDone, onClose, onEdit }){
   const [busy, setBusy] = useState(false);
   const slots = useMemo(slotList, []);
   const total = cart.reduce((s, c) => s + c.unit * c.qty, 0);
-
   const chQty = (i, d) => setCart(p => p.map((c, x) => x === i ? { ...c, qty: Math.max(1, c.qty + d) } : c));
   const rm = i => setCart(p => p.filter((_, x) => x !== i));
-
   const [review, setReview] = useState(false);
   const askConfirm = () => {
     if (!cart.length) return;
@@ -385,7 +370,6 @@ function CartSheet({ cart, setCart, profile, inLine, onDone, onClose, onEdit }){
         items
       });
       const ref = await db.collection('owlOrders').add(doc);
-
       // ส่งสรุปเข้าแชทร้าน (ในนามลูกค้า) — ลูกค้าเก็บไว้โชว์หน้าร้าน + แอดมินเห็นทันที
       const sw = { none:'ไม่หวาน', less:'หวานน้อย', normal:'หวานปกติ', extra:'หวานมาก' };
       const ic = { less:'น้ำแข็งน้อย', no:'ไม่ใส่น้ำแข็ง', sep:'แยกน้ำแข็ง' };
@@ -427,7 +411,6 @@ function CartSheet({ cart, setCart, profile, inLine, onDone, onClose, onEdit }){
     }catch(e){ alert('สั่งไม่สำเร็จ: ' + e.message); }
     setBusy(false);
   };
-
   return (
     <>
       <div className="sheet-bg" onClick={onClose} />
@@ -463,7 +446,6 @@ function CartSheet({ cart, setCart, profile, inLine, onDone, onClose, onEdit }){
           </div>
         ))}
         {cart.length === 0 && <div style={{textAlign:'center', color:'var(--muted)', padding:'20px 0'}}>ตะกร้าว่าง</div>}
-
         {cart.length > 0 && <>
           <div style={{borderTop:'1.5px dashed var(--line)', margin:'12px 0', paddingTop:12,
                        display:'flex', justifyContent:'space-between', fontWeight:700, fontSize:17}}>
@@ -491,7 +473,6 @@ function CartSheet({ cart, setCart, profile, inLine, onDone, onClose, onEdit }){
             ยืนยันแล้วจะได้ QR โอนชำระก่อน ร้านเริ่มทำหลังได้รับยอด · 📍 หน้าหอเพชรรัตน์ 4 ตรงข้ามโรงอาหารเพชรรัตน์
           </div>
         </>}
-
         {review &&
           <div style={{position:'fixed', inset:0, background:'rgba(20,18,14,.55)', zIndex:70,
                        display:'flex', alignItems:'center', justifyContent:'center', padding:20}}>
@@ -541,7 +522,6 @@ function CartSheet({ cart, setCart, profile, inLine, onDone, onClose, onEdit }){
     </>
   );
 }
-
 /* ====== หน้าสำเร็จ ====== */
 function Done({ info }){
   const qrRef = useRef(null);
@@ -576,7 +556,6 @@ function Done({ info }){
     <div style={{minHeight:'100vh', display:'flex', alignItems:'flex-start', justifyContent:'center', padding:'20px 14px 30px'}}>
       <div style={{background:'#fff', borderRadius:22, padding:'26px 20px 22px', maxWidth:410, width:'100%',
                    border:'1px solid var(--line)', boxShadow:'0 12px 34px rgba(29,27,22,.10)'}}>
-
         <div style={{textAlign:'center'}}>
           <img src="owl-img/owl-logo.jpg" alt="OWL"
             style={{width:84, objectFit:'contain'}}
@@ -585,7 +564,6 @@ function Done({ info }){
           <div className="num" style={{fontWeight:800, fontSize:32, color:'var(--accent)', lineHeight:1.25, marginTop:8}}>{info.orderNo}</div>
           <div style={{color:'var(--muted)', fontSize:13.5}}>คุณ{info.name} · 🕐 มารับ {info.slot} น.</div>
         </div>
-
         <div style={{borderTop:'1.5px dashed var(--line)', margin:'16px 0 12px'}} />
         {(info.items || []).map((it, i) => (
           <div key={i} style={{display:'flex', justifyContent:'space-between', gap:10, marginBottom:9}}>
@@ -600,7 +578,6 @@ function Done({ info }){
                      paddingTop:11, marginTop:4, fontWeight:700, fontSize:16.5}}>
           <div>ยอดชำระ</div><div>{info.total} ฿</div>
         </div>
-
         <div style={{background:'var(--soft)', border:'1.5px solid var(--line)', borderRadius:16,
                      padding:'14px 10px 12px', margin:'14px 0 0', textAlign:'center'}}>
           <div ref={qrRef} style={{display:'flex', justifyContent:'center'}} />
@@ -613,7 +590,6 @@ function Done({ info }){
             🖼 เปิด QR เต็มจอ · แคปไปสแกน
           </button>
         </div>
-
         <div style={{background:'#FDF1E3', border:'1.5px solid #F2C48D', borderRadius:16,
                      padding:'13px 14px', margin:'12px 0 0'}}>
           <div style={{fontWeight:700, fontSize:15, color:'#9A5B1F'}}>📎 โอนเสร็จแล้ว อย่าลืม!</div>
@@ -625,7 +601,6 @@ function Done({ info }){
             ✉️ ไปส่งสลิปในแชทเลย
           </button>
         </div>
-
         <div style={{fontSize:12.5, color:'var(--muted)', textAlign:'center', marginTop:14}}>
           📍 หน้าหอเพชรรัตน์ 4 ตรงข้ามโรงอาหารเพชรรัตน์
         </div>
@@ -635,7 +610,6 @@ function Done({ info }){
               ⚠️ ยังไม่ได้ส่งสรุปเข้าแชท ({info.sendStatus === 'notline' ? 'ไม่ได้เปิดผ่าน LINE' : String(info.sendStatus).slice(0, 120)})
               — ใช้หน้านี้โชว์พนักงานแทนได้เลย
             </div>}
-
         {askClose &&
           <div style={{position:'fixed', inset:0, background:'rgba(20,18,14,.55)', zIndex:98,
                        display:'flex', alignItems:'center', justifyContent:'center', padding:26}}>
@@ -672,7 +646,6 @@ function Done({ info }){
     </div>
   );
 }
-
 /* ====== แกลเลอรีโปสเตอร์ ====== */
 function PosterViewer({ start, onClose, onPick }){
   const ref = useRef(null);
@@ -705,7 +678,6 @@ function PosterViewer({ start, onClose, onPick }){
     </div>
   );
 }
-
 /* ====== App ====== */
 function App(){
   const { profile, inLine } = useLiff();
@@ -724,7 +696,6 @@ function App(){
   const [posterAt, setPosterAt] = useState(-1);   // index ใน POSTERS (-1 = ปิด)
   const [editIdx, setEditIdx] = useState(-1);     // index ในตะกร้าที่กำลังแก้
   const keyRef = useRef(0);
-
   const [menuErr, setMenuErr] = useState(false);
   const loadMenus = React.useCallback(() => {
     setMenuErr(false); setMenus(null);
@@ -755,9 +726,34 @@ function App(){
     attempt(0);
   }, []);
   useEffect(() => { loadMenus(); }, []);
-
+  /* ====== เปิดจากหน้าเมนู (menu.html) ให้ตรงแก้วเลย ======
+     รูปแบบลิงก์: order.html?cat=<หมวด>&menu=<ชื่อไทย>&en=<ชื่ออังกฤษ>&item=<docId>
+     ไม่มีพารามิเตอร์ = ทำงานเหมือนเดิมทุกอย่าง */
+  const deepRef = useRef(false);
+  useEffect(() => {
+    if (deepRef.current || !menus || !menus.length) return;
+    deepRef.current = true;
+    let q;
+    try{ q = new URLSearchParams(window.location.search); }catch(e){ return; }
+    const id = (q.get('item') || '').trim();
+    const th = (q.get('menu') || '').trim();
+    const en = (q.get('en') || '').trim();
+    const c  = (q.get('cat') || '').trim();
+    if (!id && !th && !en && !c) return;
+    const norm = s => (s || '').replace(/\s+/g, '').toLowerCase();
+    let m = null;
+    if (id) m = menus.find(x => x.id === id);
+    if (!m && th) m = menus.find(x => norm(x.nameTh) === norm(th));
+    if (!m && en) m = menus.find(x => norm(x.name) === norm(en));
+    if (!m && th) m = menus.find(x => norm(x.nameTh).indexOf(norm(th)) === 0);
+    if (m){
+      if (CATEGORIES.includes(m.category)) setCat(m.category);
+      setSel(m);
+    } else if (c && CATEGORIES.includes(c)){
+      setCat(c);
+    }
+  }, [menus]);
   if (done) return <Done info={done} />;
-
   const drinks = (menus || []).filter(m => m.category !== 'ท็อปปิ้ง');
   const toppings = (menus || []).filter(m => m.category === 'ท็อปปิ้ง')
                                 .sort((a, b) => ((a.sortOrder != null ? a.sortOrder : 1e9) - (b.sortOrder != null ? b.sortOrder : 1e9)) || (a.price - b.price));
@@ -766,7 +762,6 @@ function App(){
                       .sort((a, b) => ((a.sortOrder != null ? a.sortOrder : 1e9) - (b.sortOrder != null ? b.sortOrder : 1e9)) || (a.price - b.price) || a.name.localeCompare(b.name));
   const cupCount = cart.reduce((s, c) => s + c.qty, 0);
   const total = cart.reduce((s, c) => s + c.unit * c.qty, 0);
-
   return (
     <div style={{maxWidth:560, margin:'0 auto', padding:'0 14px 110px'}}>
       <div style={{padding:'20px 2px 6px'}}>
@@ -780,7 +775,6 @@ function App(){
             style={{fontSize:12.5, padding:'4px 11px'}}>📖 โปสเตอร์เมนู</span>
         </div>
       </div>
-
       <div style={{display:'flex', gap:10, overflowX:'auto', margin:'6px -14px 4px', padding:'0 14px',
                    scrollSnapType:'x mandatory', WebkitOverflowScrolling:'touch'}}>
         {BANNERS.map((b, i) => (
@@ -809,7 +803,6 @@ function App(){
           <div key={c} className={'pill press' + (cat === c ? ' on' : '')} onClick={() => setCat(c)}>{c}</div>
         ))}
       </div>
-
       {menus === null &&
         <div style={{textAlign:'center', color:'var(--muted)', padding:'50px 0'}}>กำลังโหลดเมนู…</div>}
       {menus !== null && menuErr && shown.length === 0 &&
@@ -821,7 +814,6 @@ function App(){
         </div>}
       {menus !== null && !menuErr && shown.length === 0 &&
         <div style={{textAlign:'center', color:'var(--muted)', padding:'50px 0'}}>ยังไม่มีเมนูในหมวดนี้</div>}
-
       {CAT_POSTER[cat] &&
         <div className="press" onClick={() => {
             const i = POSTERS.findIndex(p => p.f === CAT_POSTER[cat]);
@@ -843,7 +835,6 @@ function App(){
       <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginTop:10}}>
         {shown.map(m => <MenuCard key={m.id} m={m} onTap={setSel} />)}
       </div>
-
       {cupCount > 0 && !showCart &&
         <div style={{position:'fixed', left:0, right:0, bottom:0, padding:'12px 14px 20px', zIndex:30,
                      maxWidth:560, margin:'0 auto'}}>
@@ -854,7 +845,6 @@ function App(){
             <span>🧺 ตะกร้า · {cupCount} แก้ว</span><span>{total} ฿ →</span>
           </button>
         </div>}
-
       {posterAt >= 0 && <PosterViewer start={posterAt} onClose={() => setPosterAt(-1)}
         onPick={p => {
           if (p.menu){
