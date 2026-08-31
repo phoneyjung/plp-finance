@@ -3144,8 +3144,11 @@ function AttendPanel({ user }){
   const [scans,setScans]=useState(null);
   const [shopMap,setShopMap]=useState({});
   const [leaveMap,setLeaveMap]=useState({});
+  const [holMap,setHolMap]=useState({});
+  const [cfg,setCfg]=useState({});
   const [detail,setDetail]=useState(null);
   const [leaveEdit,setLeaveEdit]=useState(null);
+  const [statEdit,setStatEdit]=useState(null);
   const [staff,setStaff]=useState([]);
   const [who,setWho]=useState('all');
   const [shopF,setShopF]=useState('all');
@@ -3161,10 +3164,10 @@ function AttendPanel({ user }){
     setScans(null); setErr('');
     if(!db){ setErr('ออฟไลน์'); return; }
     db.collection('owlCost').doc('payroll').get()
-      .then(s=>{ if(!stop && s.exists) setStaff(((s.data()||{}).staff)||[]); })
+      .then(s=>{ if(!stop && s.exists){ const v=s.data()||{}; setStaff(v.staff||[]); setCfg(v.cfg||{}); } })
       .catch(()=>{});
     db.collection('fpScans').doc(ym).get()
-      .then(s=>{ if(stop) return; const v=s.exists? (s.data()||{}) : {}; setScans(v.d||{}); setShopMap(v.shop||{}); setLeaveMap(v.leave||{}); })
+      .then(s=>{ if(stop) return; const v=s.exists? (s.data()||{}) : {}; setScans(v.d||{}); setShopMap(v.shop||{}); setLeaveMap(v.leave||{}); setHolMap(v.hol||{}); })
       .catch(e=>{ if(!stop){ setScans({}); setErr('โหลดข้อมูลไม่สำเร็จ'); } });
     return ()=>{ stop=true; };
   },[ym]);
@@ -3182,6 +3185,35 @@ function AttendPanel({ user }){
   };
   const isMaid=(pin)=>{ const st=stOf(pin); return !!(st&&st.kind==='maid'); };
   const leaveOf=(d,pin)=> ((leaveMap||{})[String(d)]||{})[String(pin)] || null;
+  const isHol=(d,pin)=> !!(((holMap||{})[String(d)]||{})[String(pin)]);
+  /* ชั่วโมงกะปกติของคนนั้น (จากโปรไฟล์ ไม่มีก็ใช้ค่ากลาง) */
+  const shiftHrsOf=(pin)=>{
+    const st=stOf(pin);
+    if(st && st.shiftIn && st.shiftOut){
+      const h=attHours(st.shiftIn, st.shiftOut);
+      if(h) return h;
+    }
+    return cfg.shiftHrs || 10;
+  };
+  /* ส่วนต่างจากกะปกติ เป็น "นาที" — บวก = ทำเกิน (OT) · ลบ = เข้าสาย/ออกก่อน */
+  const otMinOf=(pin, netMin)=> Math.round((netMin||0) - shiftHrsOf(pin)*60);
+  /* แปลงนาทีเป็นข้อความ เช่น +1:25 / -0:15 */
+  const minTxt=(m)=> !m ? '–' : ((m>0?'+':'') + m + ' น.');
+  const minHr=(m)=> Math.round((m/60)*100)/100;
+  const setHol=async(d,pin,on)=>{
+    if(!db) return;
+    try{
+      const patch={ hol:{ [String(d)]:{ [String(pin)]: on? 1 : firebase.firestore.FieldValue.delete() } } };
+      await db.collection('fpScans').doc(ym).set(patch,{merge:true});
+      setHolMap(prev=>{
+        const nx=JSON.parse(JSON.stringify(prev||{}));
+        if(on){ nx[String(d)]=nx[String(d)]||{}; nx[String(d)][String(pin)]=1; }
+        else if(nx[String(d)]){ delete nx[String(d)][String(pin)]; if(!Object.keys(nx[String(d)]).length) delete nx[String(d)]; }
+        return nx;
+      });
+      setMsg(on? 'ตั้งเป็นทำงานวันหยุด (ค่าแรง×2)' : 'ยกเลิกวันหยุดแล้ว'); setTimeout(()=>setMsg(''),1600);
+    }catch(e){ setMsg('บันทึกไม่สำเร็จ'); }
+  };
   const saveLeave=async(d,pin,val)=>{
     if(!db) return;
     setBusy(true);
@@ -3220,46 +3252,68 @@ function AttendPanel({ user }){
 
   const parseRow=(v)=>{
     const raw=fpRaw(v.t), list=fpClean(v.t);
-    const pairs=[]; let net=0;
+    const pairs=[]; let net=0, netMin=0;
+    const mins=(a,b)=>{ const x=attHM(a), y=attHM(b); if(x==null||y==null) return null; let d=y-x; if(d<0) d+=1440; return d; };
     if(list.length>=2){
       for(let k=0;k+1<list.length;k+=2){
         const h=attHours(list[k],list[k+1]);
+        const mm=mins(list[k],list[k+1]);
         pairs.push({ i:list[k], o:list[k+1], h });
         if(h) net+=h;
+        if(mm) netMin+=mm;
       }
       if(list.length%2) pairs.push({ i:list[list.length-1], o:'', h:null });
     } else if(list.length===1){
       pairs.push({ i:list[0], o:'', h:null });
     } else if(v.i){
       const h=attHours(v.i, (v.o&&v.o!==v.i)? v.o : '');
+      const mm=mins(v.i,(v.o&&v.o!==v.i)? v.o : '');
       pairs.push({ i:v.i, o:(v.o&&v.o!==v.i)? v.o:'', h });
-      net = h || 0;
+      net = h || 0; netMin = mm || 0;
     }
-    return { pairs, fixed:Math.max(0, raw.length-list.length), net:Math.round(net*10)/10, manual: !!v.m };
+    return { pairs, fixed:Math.max(0, raw.length-list.length), net:Math.round(net*10)/10, netMin, manual: !!v.m };
   };
 
   const days=React.useMemo(()=>{
     if(!scans) return [];
     const out=[];
+    /* เลือกพนักงานคนเดียว → แสดงครบทุกวันของเดือน เรียง 1→31 */
+    if(who!=='all'){
+      const yy=+ym.slice(0,4), mm=+ym.slice(5,7);
+      const nDay=new Date(yy,mm,0).getDate();
+      for(let d=1; d<=nDay; d++){
+        const v=(scans[d]||{})[who];
+        const rows=[];
+        if(v && (shopF==='all' || shopOf(d,who)===shopF)){
+          const pr=parseRow(v);
+          const hl=isHol(d,who);
+          rows.push({ pin:who, ...v, ...pr, shop:shopOf(d,who), otMin: hl?0:otMinOf(who,pr.netMin), hol:hl });
+        }
+        out.push({ d, rows, full:true });
+      }
+      return out;
+    }
     Object.keys(scans).map(Number).sort((a,b)=>b-a).forEach(d=>{
       const rows=Object.keys(scans[d]||{})
         .filter(p=> who==='all' || String(p)===who)
         .filter(p=> shopF==='all' || shopOf(d,p)===shopF)
         .sort((a,b)=>(+a)-(+b))
-        .map(p=>({ pin:p, ...(scans[d][p]||{}), ...parseRow(scans[d][p]||{}), shop:shopOf(d,p) }));
+        .map(p=>{ const pr=parseRow(scans[d][p]||{}); const hl=isHol(d,p); return { pin:p, ...(scans[d][p]||{}), ...pr, shop:shopOf(d,p), otMin: hl?0:otMinOf(p,pr.netMin), hol:hl }; });
       if(rows.length) out.push({ d, rows });
     });
     return out;
-  },[scans,who,shopF,shopMap,staff]);
+  },[scans,who,shopF,shopMap,staff,ym,holMap,cfg]);
 
   const sum=React.useMemo(()=>{
     const per={};
     Object.keys(scans||{}).forEach(d=>{
       Object.keys(scans[d]||{}).forEach(p=>{
         const r=parseRow(scans[d][p]||{});
-        if(!per[p]) per[p]={ pin:p, days:0, hours:0, manual:0, open:0, byShop:{} };
+        if(!per[p]) per[p]={ pin:p, days:0, hours:0, manual:0, open:0, byShop:{}, otMin:0, hol:0, holHours:0 };
         per[p].days++;
         per[p].hours+=r.net;
+        const hl2=isHol(d,p);
+        if(hl2){ per[p].hol++; per[p].holHours+=r.net; } else per[p].otMin+=otMinOf(p,r.netMin);
         const sid=shopOf(d,p);
         if(!per[p].byShop[sid]) per[p].byShop[sid]={ days:0, hours:0 };
         per[p].byShop[sid].days++;
@@ -3271,7 +3325,28 @@ function AttendPanel({ user }){
     return Object.values(per)
       .map(x=>({ ...x, hours:Math.round(x.hours*10)/10, avg: x.days? Math.round(x.hours/x.days*10)/10 : 0 }))
       .sort((a,b)=>b.hours-a.hours);
-  },[scans,shopMap,staff]);
+  },[scans,shopMap,staff,holMap,cfg]);
+
+  /* สรุปของคนที่เลือกอยู่ (โหมดรายวัน) */
+  const pStat=React.useMemo(()=>{
+    if(who==='all' || !scans) return null;
+    const yy=+ym.slice(0,4), mm=+ym.slice(5,7);
+    const nDay=new Date(yy,mm,0).getDate();
+    const last = (ym===ymOf(today()))? +today().slice(8,10) : nDay;
+    let wk=0, wh=0, wot=0, whol=0, wholH=0;
+    const lv={off:0,sick:0,personal:0}; const rowsAll=[];
+    for(let d=1; d<=last; d++){
+      const v=(scans[d]||{})[who];
+      const r=v? parseRow(v) : null;
+      const lvv=leaveOf(d,who);
+      const hol=isHol(d,who);
+      const otMin=(r && !hol)? otMinOf(who,r.netMin) : 0;
+      if(r){ wk++; wh+=r.net; wot+=otMin; if(hol){ whol++; wholH+=r.net; } }
+      else { const t=(lvv&&lvv.t)||'off'; lv[t]=(lv[t]||0)+1; }
+      rowsAll.push({ d, r, lv:lvv, dt:new Date(yy,mm-1,d), otMin, hol });
+    }
+    return { wk, wh:Math.round(wh*10)/10, wot, whol, wholH:Math.round(wholH*10)/10, lv, rowsAll };
+  },[scans,who,ym,leaveMap,holMap,staff,cfg]);
 
   const stat=React.useMemo(()=>{
     let dd=0, hh=0, op=0;
@@ -3297,15 +3372,88 @@ function AttendPanel({ user }){
   const openEdit=(d,pin)=>{
     const v=(scans&&scans[d]&&scans[d][pin])||{};
     const list=fpClean(v.t);
-    const ps=[];
+    let ps=[];
     for(let k=0;k+1<list.length;k+=2) ps.push({ i:list[k], o:list[k+1] });
     if(list.length%2) ps.push({ i:list[list.length-1], o:'' });
     if(!ps.length && v.i) ps.push({ i:v.i, o:(v.o&&v.o!==v.i)? v.o:'' });
-    if(!ps.length) ps.push({ i:'', o:'' });
-    setEdit({ d:String(d), pin:String(pin), pairs:ps, isNew:false });
+    const isNew = !ps.length;
+    if(isNew) ps = shiftPair(pin);
+    setEdit({ d:String(d), pin:String(pin), pairs:ps, isNew:isNew });
   };
+  const shiftPair=(pin)=>{
+    const st=stOf(pin);
+    return (st && st.shiftIn && st.shiftOut)? [{ i:st.shiftIn, o:st.shiftOut }] : [{ i:'', o:'' }];
+  };
+  /* แผงสถานะรวม: ทำงานปกติ / ทำงานวันหยุด / หยุด / ป่วย / ลากิจ */
+  const openStatus=(d,pin)=>{
+    const v=(scans&&scans[d]&&scans[d][pin])||null;
+    const lvv=leaveOf(d,pin);
+    const hol=isHol(d,pin);
+    let ps=[];
+    if(v){
+      const list=fpClean(v.t);
+      for(let k=0;k+1<list.length;k+=2) ps.push({ i:list[k], o:list[k+1] });
+      if(list.length%2) ps.push({ i:list[list.length-1], o:'' });
+      if(!ps.length && v.i) ps.push({ i:v.i, o:(v.o&&v.o!==v.i)? v.o:'' });
+    }
+    if(!ps.length) ps=shiftPair(pin);
+    const mode = v ? (hol? 'holiday':'work') : ((lvv&&lvv.t)||'off');
+    setStatEdit({ d:String(d), pin:String(pin), mode, pairs:ps, note:(lvv&&lvv.n)||'' });
+  };
+
+  const saveStatus=async()=>{
+    if(!statEdit || !db) return;
+    const d=String(parseInt(statEdit.d,10)||0), pin=String(statEdit.pin||'').trim();
+    if(!d || !pin){ setMsg('ข้อมูลไม่ครบ'); return; }
+    const isWork = (statEdit.mode==='work' || statEdit.mode==='holiday');
+    setBusy(true); setMsg('');
+    try{
+      const DEL=firebase.firestore.FieldValue.delete();
+      const patch={ d:{}, leave:{}, hol:{} };
+      if(isWork){
+        const flat=[];
+        statEdit.pairs.forEach(pp=>{ const a=attFmt(pp.i), b=attFmt(pp.o); if(a) flat.push(a); if(b) flat.push(b); });
+        if(!flat.length){ setBusy(false); setMsg('ใส่เวลาเข้า-ออกก่อน'); return; }
+        patch.d[d]={ [pin]:{ t:flat.join(','), m:1 } };
+        patch.leave[d]={ [pin]: DEL };
+        patch.hol[d]={ [pin]: (statEdit.mode==='holiday')? 1 : DEL };
+      }else{
+        patch.d[d]={ [pin]: DEL };
+        patch.hol[d]={ [pin]: DEL };
+        patch.leave[d]={ [pin]: (statEdit.mode==='off' && !statEdit.note) ? DEL : { t:statEdit.mode, n:String(statEdit.note||'').trim() } };
+      }
+      await db.collection('fpScans').doc(ym).set(patch,{merge:true});
+      /* อัปเดตหน้าจอทันที */
+      setScans(prev=>{
+        const nx=JSON.parse(JSON.stringify(prev||{}));
+        if(isWork){
+          const flat=[];
+          statEdit.pairs.forEach(pp=>{ const a=attFmt(pp.i), b=attFmt(pp.o); if(a) flat.push(a); if(b) flat.push(b); });
+          nx[d]=nx[d]||{}; nx[d][pin]={ t:flat.join(','), m:1 };
+        }else if(nx[d]){ delete nx[d][pin]; if(!Object.keys(nx[d]).length) delete nx[d]; }
+        return nx;
+      });
+      setHolMap(prev=>{
+        const nx=JSON.parse(JSON.stringify(prev||{}));
+        if(isWork && statEdit.mode==='holiday'){ nx[d]=nx[d]||{}; nx[d][pin]=1; }
+        else if(nx[d]){ delete nx[d][pin]; if(!Object.keys(nx[d]).length) delete nx[d]; }
+        return nx;
+      });
+      setLeaveMap(prev=>{
+        const nx=JSON.parse(JSON.stringify(prev||{}));
+        if(!isWork && !(statEdit.mode==='off' && !statEdit.note)){ nx[d]=nx[d]||{}; nx[d][pin]={ t:statEdit.mode, n:String(statEdit.note||'').trim() }; }
+        else if(nx[d]){ delete nx[d][pin]; if(!Object.keys(nx[d]).length) delete nx[d]; }
+        return nx;
+      });
+      setStatEdit(null);
+      setMsg('บันทึกแล้ว'); setTimeout(()=>setMsg(''),1600);
+    }catch(e){ setMsg('บันทึกไม่สำเร็จ · '+(e&&e.message?e.message:'')); }
+    setBusy(false);
+  };
+
   const openAdd=()=>{
-    setEdit({ d:String(maxDay), pin:(pins[0]||''), pairs:[{i:'',o:''}], isNew:true });
+    const pin = (who!=='all'? who : (pins[0]||''));
+    setEdit({ d:String(maxDay), pin:pin, pairs:shiftPair(pin), isNew:true });
   };
 
   const save=async()=>{
@@ -3341,6 +3489,79 @@ function AttendPanel({ user }){
 
   /* ขยายออกนอกกรอบ 480px เมื่อเปิดบนคอม */
   const WIDE_BOX = wide ? { width:'min(1180px,94vw)', marginLeft:'calc(50% - min(590px,47vw))' } : {};
+  /* สร้างรูปสรุปเวลางานรายคน ให้พนักงานเช็คเอง */
+  const saveSlip=(pin, rows, wk, wh, lv, wot, whol)=>{
+    try{
+      const W=790, HEAD=176, ROW=34, PAD=22;
+      const H=HEAD + rows.length*ROW + 82;
+      const c=document.createElement('canvas');
+      const R=2; c.width=W*R; c.height=H*R;
+      const x=c.getContext('2d'); x.scale(R,R);
+      x.fillStyle='#FAF6EE'; x.fillRect(0,0,W,H);
+      x.fillStyle='#6B4A2F'; x.fillRect(0,0,W,HEAD-40);
+      x.fillStyle='#fff'; x.font='700 27px Kanit,sans-serif';
+      x.fillText(nameOf(pin), PAD, 46);
+      x.font='400 16px Kanit,sans-serif'; x.fillStyle='rgba(255,255,255,.85)';
+      x.fillText('สรุปเวลาทำงาน · '+(ocPayLabel? ocPayLabel(ym):ym), PAD, 74);
+      x.font='400 13px Kanit,sans-serif'; x.fillStyle='rgba(255,255,255,.6)';
+      x.fillText('Owl Cha / Teddy · ออกให้วันที่ '+today(), PAD, 100);
+      /* กล่องสรุป */
+      const otH=minHr(wot||0);
+      const box=[['ทำงาน',wk+' วัน','#2E7D4F'],['รวมชั่วโมง',wh+' ชม.','#8A5A3B'],
+                 ['OT สุทธิ',(otH>0?'+':'')+otH+' ชม.', otH>=0?'#C68B4A':'#CE4A5A'],['วันหยุด×2',(whol||0)+' วัน','#CE4A5A'],
+                 ['หยุด',(lv.off||0)+' วัน','#7A828C'],['ป่วย/ลากิจ',((lv.sick||0)+(lv.personal||0))+' วัน','#A05A8A']];
+      const bw=(W-PAD*2-5*8)/6;
+      box.forEach((b,i)=>{
+        const bx=PAD+i*(bw+8), by=HEAD-64;
+        x.fillStyle='#fff'; x.beginPath(); x.roundRect(bx,by,bw,54,10); x.fill();
+        x.fillStyle='#8A95A0'; x.font='400 12px Kanit,sans-serif'; x.fillText(b[0],bx+10,by+20);
+        x.fillStyle=b[2]; x.font='700 19px Kanit,sans-serif'; x.fillText(b[1],bx+10,by+43);
+      });
+      /* หัวตาราง */
+      let y=HEAD+2;
+      x.fillStyle='#8A95A0'; x.font='500 13px Kanit,sans-serif';
+      x.fillText('วันที่',PAD,y); x.fillText('เวลาเข้า-ออก',PAD+118,y);
+      x.fillText('รวม',W-PAD-212,y); x.fillText('+/- นาที',W-PAD-142,y); x.fillText('หมายเหตุ',W-PAD-86,y);
+      y+=10;
+      x.strokeStyle='#E6DFCF'; x.beginPath(); x.moveTo(PAD,y); x.lineTo(W-PAD,y); x.stroke();
+      /* แถว */
+      rows.forEach((row,i)=>{
+        const ry=y+18+i*ROW;
+        if(i%2===0){ x.fillStyle='rgba(255,255,255,.72)'; x.fillRect(PAD-6,ry-15,W-PAD*2+12,ROW-2); }
+        const wke=(row.dt.getDay()===0||row.dt.getDay()===6);
+        x.fillStyle= wke? '#CE4A5A':'#243240'; x.font='600 14px Kanit,sans-serif';
+        x.fillText(row.d+' '+MON[M-1]+' ('+DOW[row.dt.getDay()]+')', PAD, ry+3);
+        if(row.r){
+          x.fillStyle='#4A5560'; x.font='400 14px Kanit,sans-serif';
+          x.fillText(row.r.pairs.map(pp=>pp.i+'→'+(pp.o||'?')).join('  '), PAD+118, ry+3);
+          x.fillStyle= row.r.net>=10? '#2E7D4F':'#243240'; x.font='700 14px Kanit,sans-serif';
+          x.fillText((row.r.net||0)+' ชม.', W-PAD-212, ry+3);
+          if(row.otMin){ x.fillStyle= row.otMin>0? '#C68B4A':'#CE4A5A'; x.font='700 13px Kanit,sans-serif'; x.fillText((row.otMin>0?'+':'')+row.otMin+'น.', W-PAD-142, ry+3); }
+          else { x.fillStyle='#C7CDD4'; x.font='400 13px Kanit,sans-serif'; x.fillText('–', W-PAD-142, ry+3); }
+          x.font='400 12px Kanit,sans-serif';
+          if(row.hol){ x.fillStyle='#CE4A5A'; x.fillText('วันหยุด ×2', W-PAD-86, ry+3); }
+          else { x.fillStyle='#8A95A0'; x.fillText(shopInfo(shopOf(row.d,pin)).label, W-PAD-86, ry+3); }
+        }else{
+          const li2=leaveInfo(row.lv? row.lv.t : 'off');
+          x.fillStyle='#9AA1AB'; x.font='400 13px Kanit,sans-serif';
+          x.fillText(li2.label + (row.lv&&row.lv.n? ' · '+row.lv.n : ''), PAD+118, ry+3);
+          x.fillText('–', W-PAD-212, ry+3); x.fillText('–', W-PAD-142, ry+3);
+        }
+      });
+      x.fillStyle='#B4AA96'; x.font='400 11.5px Kanit,sans-serif';
+      x.fillText('* +/- นาที = เทียบกับกะปกติ '+shiftHrsOf(pin)+' ชม./วัน (บวก=ทำเกิน · ลบ=เข้าสาย/ออกก่อน)', PAD, H-38);
+      x.fillText('  รวมทั้งเดือน '+(wot>0?'+':'')+(wot||0)+' นาที = '+(otH>0?'+':'')+otH+' ชม.  ·  หากพบข้อมูลไม่ตรง แจ้งหัวหน้าได้ทันที', PAD, H-20);
+      c.toBlob(bl=>{
+        const u=URL.createObjectURL(bl);
+        const a=document.createElement('a');
+        a.href=u; a.download='เวลางาน-'+String(nameOf(pin)).replace(/[^\u0E00-\u0E7Fa-zA-Z0-9]/g,'')+'-'+ym+'.png';
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(()=>URL.revokeObjectURL(u),4000);
+      });
+      setMsg('บันทึกรูปแล้ว'); setTimeout(()=>setMsg(''),1800);
+    }catch(e){ setMsg('สร้างรูปไม่สำเร็จ'); }
+  };
+
   const BTN={border:'1px solid var(--line)',background:'var(--card)',borderRadius:10,padding:'4px 12px'};
   const INP={fontFamily:'inherit',fontSize:14,border:'1px solid var(--line)',borderRadius:9,padding:'7px 9px',background:'var(--card)',color:'var(--ink)',width:'100%',textAlign:'center'};
 
@@ -3381,6 +3602,25 @@ function AttendPanel({ user }){
         {view==='day' && (
           <button className="press kanit text-[13.5px] w-full mt-2.5 py-2 rounded-xl text-white" style={{background:'var(--primary)',border:'none',fontWeight:600}} onClick={openAdd}>+ ลงเวลาเอง</button>
         )}
+
+        {view==='day' && pStat && (
+          <div className="rounded-2xl p-3 mt-2.5" style={{background:'var(--soft)'}}>
+            <div className="flex items-center justify-between mb-2">
+              <div className="kanit text-[14px]" style={{fontWeight:700}}>📋 สรุปของ {nameOf(who)}</div>
+              <button className="press kanit text-[12.5px]" style={{border:'none',background:'var(--primary)',color:'#fff',borderRadius:10,padding:'5px 12px',fontWeight:600}}
+                onClick={()=>saveSlip(who, pStat.rowsAll, pStat.wk, pStat.wh, pStat.lv, pStat.wot, pStat.whol)}>🖼 สร้างรูปสรุป</button>
+            </div>
+            <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-[12.5px]">
+              <span style={{color:'var(--muted)'}}>ทำงาน <b className="num" style={{color:'#3E7D3E'}}>{pStat.wk}</b> วัน</span>
+              <span style={{color:'var(--muted)'}}>รวม <b className="num" style={{color:'var(--primary)'}}>{pStat.wh}</b> ชม.</span>
+              <span style={{color:'var(--muted)'}}>เกิน/ขาด <b className="num" style={{color: pStat.wot>=0?'#C68B4A':'#CE4A5A'}}>{pStat.wot>0?'+':''}{pStat.wot}</b> นาที = <b className="num" style={{color: pStat.wot>=0?'#C68B4A':'#CE4A5A'}}>{minHr(pStat.wot)}</b> ชม.</span>
+              {pStat.whol>0 && <span style={{color:'var(--muted)'}}>🆘 <b className="num" style={{color:'#CE4A5A'}}>{pStat.whol}</b> วัน ({pStat.wholH} ชม.×2)</span>}
+              <span style={{color:'var(--muted)'}}>🏠 <b className="num">{pStat.lv.off||0}</b></span>
+              <span style={{color:'var(--muted)'}}>🤒 <b className="num" style={{color:'#CE4A5A'}}>{pStat.lv.sick||0}</b></span>
+              <span style={{color:'var(--muted)'}}>📄 <b className="num" style={{color:'#C68B4A'}}>{pStat.lv.personal||0}</b></span>
+            </div>
+          </div>
+        )}
       </div>
 
       {msg && <div className="card p-2 mb-2 text-center text-[13px]" style={{color: msg.indexOf('ไม่')>=0? 'var(--neg)':'#3E7D3E'}}>{msg}</div>}
@@ -3397,8 +3637,10 @@ function AttendPanel({ user }){
                 <div className="flex-1">พนักงาน</div>
                 <div style={{width:96,textAlign:'right'}}>🧋 Owl</div>
                 <div style={{width:96,textAlign:'right'}}>🧺 Teddy2</div>
-                <div style={{width:52,textAlign:'right'}}>วัน</div>
-                <div style={{width:68,textAlign:'right'}}>รวม ชม.</div>
+                <div style={{width:48,textAlign:'right'}}>วัน</div>
+                <div style={{width:64,textAlign:'right'}}>รวม ชม.</div>
+                <div style={{width:52,textAlign:'right'}}>OT</div>
+                <div style={{width:48,textAlign:'right'}}>🆘</div>
               </div>
               {sum.map(r=>(
                 <div key={r.pin} className="flex items-center py-2 text-[13px]" style={{borderBottom:'1px solid var(--line)',cursor:'pointer'}} onClick={()=>setDetail(r.pin)}>
@@ -3416,8 +3658,10 @@ function AttendPanel({ user }){
                       </div>
                     );
                   })}
-                  <div className="num" style={{width:52,textAlign:'right'}}>{r.days}</div>
-                  <div className="num" style={{width:68,textAlign:'right',fontWeight:700,color:'var(--primary)'}}>{r.hours}</div>
+                  <div className="num" style={{width:48,textAlign:'right'}}>{r.days}</div>
+                  <div className="num" style={{width:64,textAlign:'right',fontWeight:700,color:'var(--primary)'}}>{r.hours}</div>
+                  <div className="num text-[12px]" style={{width:52,textAlign:'right',fontWeight:700,color: r.otMin>0?'#C68B4A':(r.otMin<0?'#CE4A5A':'var(--muted)')}}>{r.otMin? (r.otMin>0?'+':'')+minHr(r.otMin)+'ช':'–'}</div>
+                  <div className="num" style={{width:48,textAlign:'right',color: r.hol>0?'#CE4A5A':'var(--muted)',fontWeight: r.hol>0?700:400}}>{r.hol>0? r.hol:'–'}</div>
                 </div>
               ))}
               <div className="flex items-center pt-2 text-[13px]" style={{fontWeight:700}}>
@@ -3426,8 +3670,10 @@ function AttendPanel({ user }){
                   let h=0; sum.forEach(r=>{ const b=(r.byShop||{})[sh.id]; if(b) h+=b.hours; });
                   return <div key={sh.id} className="num" style={{width:96,textAlign:'right',color:sh.color}}>{Math.round(h*10)/10}</div>;
                 })}
-                <div className="num" style={{width:52,textAlign:'right'}}>{stat.days}</div>
-                <div className="num" style={{width:68,textAlign:'right',color:'var(--primary)'}}>{stat.hours}</div>
+                <div className="num" style={{width:48,textAlign:'right'}}>{stat.days}</div>
+                <div className="num" style={{width:64,textAlign:'right',color:'var(--primary)'}}>{stat.hours}</div>
+                <div className="num text-[12px]" style={{width:52,textAlign:'right',color:'#C68B4A'}}>{(()=>{const t=sum.reduce((a,b)=>a+(b.otMin||0),0);return t?(t>0?'+':'')+minHr(t)+'ช':'–';})()}</div>
+                <div className="num" style={{width:48,textAlign:'right',color:'#CE4A5A'}}>{sum.reduce((a,b)=>a+(b.hol||0),0)||'–'}</div>
               </div>
             </div>
           )}
@@ -3448,14 +3694,43 @@ function AttendPanel({ user }){
             <div style={{flex:1,padding:'0 10px'}}>พนักงาน</div>
             <div style={{width:110,textAlign:'center'}}>ร้าน</div>
             <div style={{width:236,padding:'0 6px'}}>ช่วงเวลา</div>
-            <div style={{width:92,padding:'0 10px',textAlign:'right'}}>รวม</div>
-            <div style={{width:100,textAlign:'center'}}>สถานะ</div>
+            <div style={{width:80,padding:'0 8px',textAlign:'right'}}>รวม</div>
+            <div style={{width:62,textAlign:'right'}}>OT</div>
+            <div style={{width:96,textAlign:'center'}}>สถานะ</div>
             <div style={{width:58,textAlign:'center'}}>แก้</div>
           </div>
-          {days.map(({d,rows},di)=>{
+          {days.map(({d,rows,full},di)=>{
             const dt=new Date(Y,M-1,d);
             const wk=(dt.getDay()===0||dt.getDay()===6);
             const zebra = di%2===0 ? 'var(--card)' : 'var(--soft)';
+            if(full && !rows.length){
+              const st1=stOf(who);
+              const lvv=leaveOf(d,who);
+              const li=leaveInfo(lvv? lvv.t : 'off');
+              return (
+                <div key={d+'-off'} className="flex items-stretch px-0 text-[13px]" style={{background:zebra,borderTop:'2px solid var(--line)',opacity:.92}}>
+                  <div style={{width:118,padding:'9px 10px',borderRight:'1px solid rgba(0,0,0,.06)',display:'flex',alignItems:'center'}}>
+                    <span className="kanit" style={{fontWeight:700,color: wk?'var(--neg)':'var(--ink)'}}>
+                      {d} {MON[M-1]} <span className="text-[11.5px]" style={{fontWeight:400,opacity:.7}}>({DOW[dt.getDay()]})</span>
+                    </span>
+                  </div>
+                  <div className="kanit" style={{flex:1,padding:'9px 10px',display:'flex',alignItems:'center',color:li.color,fontWeight:600}}>
+                    {li.emoji} {li.label}
+                    {lvv && lvv.n && <span className="text-[12px]" style={{color:'var(--muted)',fontWeight:400,marginLeft:8}}>· {lvv.n}</span>}
+                  </div>
+                  <div className="num text-[12.5px]" style={{width:236,padding:'9px 6px',display:'flex',alignItems:'center',color:'var(--muted)',opacity:.6}}>
+                    {st1 && st1.shiftIn && st1.shiftOut ? ('ปกติ '+st1.shiftIn+'→'+st1.shiftOut) : ''}
+                  </div>
+                  <div style={{width:80,padding:'9px 8px',display:'flex',alignItems:'center',justifyContent:'flex-end',color:'var(--muted)'}}>–</div>
+                  <div style={{width:62,padding:'9px 4px',display:'flex',alignItems:'center',justifyContent:'flex-end',color:'var(--muted)'}}>–</div>
+                  <div style={{width:96,padding:'9px 4px',display:'flex',alignItems:'center',justifyContent:'center'}}>
+                    <button className="press kanit text-[11.5px]" style={{border:'1px solid var(--line)',background:'var(--card)',borderRadius:999,padding:'3px 11px',fontWeight:600}}
+                      onClick={()=>openStatus(d,who)}>⚙️ สถานะ</button>
+                  </div>
+                  <div style={{width:58,padding:'9px 6px'}}></div>
+                </div>
+              );
+            }
             return rows.map((r,ri)=>(
               <div key={d+'-'+r.pin} className="flex items-stretch px-0 text-[13px]"
                 style={{
@@ -3485,11 +3760,12 @@ function AttendPanel({ user }){
                     </span>
                   ))}
                 </div>
-                <div className="num" style={{width:92,padding:'9px 10px',textAlign:'right',fontWeight:700,display:'flex',alignItems:'center',justifyContent:'flex-end',color: r.net>=10?'#3E7D3E':'var(--ink)'}}>{r.net? r.net+' ชม.':'–'}</div>
-                <div style={{width:100,padding:'9px 4px',textAlign:'center',display:'flex',alignItems:'center',justifyContent:'center'}} className="text-[11px]">
-                  {r.manual && <span style={{color:'var(--muted)'}}>✏️ แก้เอง</span>}
-                  {!r.manual && r.pairs.some(x=>!x.o) && <span style={{color:'var(--neg)'}}>ยังไม่ออก</span>}
-                  {!r.manual && !r.pairs.some(x=>!x.o) && r.fixed>0 && <span style={{color:'var(--muted)',opacity:.75}}>ตัดซ้ำ {r.fixed}</span>}
+                <div className="num" style={{width:80,padding:'9px 8px',textAlign:'right',fontWeight:700,display:'flex',alignItems:'center',justifyContent:'flex-end',color: r.net>=10?'#3E7D3E':'var(--ink)'}}>{r.net? r.net+'ช':'–'}</div>
+                <div className="num" style={{width:62,padding:'9px 4px',textAlign:'right',display:'flex',alignItems:'center',justifyContent:'flex-end',fontWeight:700,fontSize:12,color: r.hol?'#CE4A5A':(r.otMin>0?'#C68B4A':(r.otMin<0?'#CE4A5A':'var(--muted)'))}}>{r.hol? '×2' : minTxt(r.otMin)}</div>
+                <div style={{width:96,padding:'9px 4px',textAlign:'center',display:'flex',alignItems:'center',justifyContent:'center',gap:4}} className="text-[11px]">
+                  <button className="press kanit text-[10.5px]" title="แตะเพื่อเปลี่ยนสถานะ"
+                    style={{border:'1px solid '+(r.hol?'#CE4A5A':'var(--line)'),background: r.hol?'#CE4A5A':'var(--card)',color: r.hol?'#fff':'var(--ink)',borderRadius:999,padding:'2px 9px',fontWeight:600}}
+                    onClick={()=>openStatus(d,r.pin)}>{r.hol? '🆘 วันหยุด':'🕐 ทำงาน'}</button>
                 </div>
                 <div style={{width:58,padding:'9px 6px',display:'flex',alignItems:'center',justifyContent:'center'}}>
                   <button className="press kanit text-[12px]" style={{border:'1px solid var(--line)',background:'var(--card)',borderRadius:8,padding:'3px 10px'}} onClick={()=>openEdit(d,r.pin)}>✏️</button>
@@ -3497,11 +3773,57 @@ function AttendPanel({ user }){
               </div>
             ));
           })}
+          {pStat && (
+            <div style={{borderTop:'3px solid var(--primary)',background:'var(--soft)'}}>
+              <div className="flex items-stretch px-0 text-[13.5px]" style={{fontWeight:700}}>
+                <div style={{width:118,padding:'12px 10px',borderRight:'1px solid rgba(0,0,0,.06)'}} className="kanit">รวมเดือน</div>
+                <div style={{flex:1,padding:'12px 10px'}} className="kanit">{nameOf(who)} · ทำงาน {pStat.wk} วัน
+                  <span className="text-[12px]" style={{fontWeight:400,color:'var(--muted)',marginLeft:8}}>
+                    🏠{pStat.lv.off||0} · 🤒{pStat.lv.sick||0} · 📄{pStat.lv.personal||0}
+                    {pStat.whol>0 && <span style={{color:'#CE4A5A'}}> · 🆘{pStat.whol} วัน ({pStat.wholH}ช×2)</span>}
+                  </span>
+                </div>
+                <div style={{width:236,padding:'12px 6px'}}></div>
+                <div className="num" style={{width:80,padding:'12px 8px',textAlign:'right',color:'var(--primary)'}}>{pStat.wh}ช</div>
+                <div className="num" style={{width:62,padding:'12px 4px',textAlign:'right',fontSize:12,color: pStat.wot>=0?'#C68B4A':'#CE4A5A'}}>{pStat.wot>0?'+':''}{pStat.wot} น.</div>
+                <div style={{width:96,padding:'12px 4px',textAlign:'center'}} className="num text-[12px]">= {minHr(pStat.wot)}ช</div>
+                <div style={{width:58,padding:'12px 6px'}}></div>
+              </div>
+              <div className="px-3 pb-3">
+                <button className="press kanit text-[13.5px] w-full py-2.5 rounded-xl text-white" style={{background:'var(--primary)',border:'none',fontWeight:600}}
+                  onClick={()=>saveSlip(who, pStat.rowsAll, pStat.wk, pStat.wh, pStat.lv, pStat.wot, pStat.whol)}>🖼 สร้างรูปสรุปส่งให้พนักงาน</button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
-      {view==='day' && !wide && days.map(({d,rows})=>{
+      {view==='day' && !wide && days.map(({d,rows,full})=>{
         const dt=new Date(Y,M-1,d);
+        const st1=who!=='all'? stOf(who) : null;
+        const lvv=(full && !rows.length)? leaveOf(d,who) : null;
+        const li=leaveInfo(lvv? lvv.t : 'off');
+        if(full && !rows.length){
+          return (
+            <div key={d} className="card p-3 mb-2" style={{background:'var(--soft)'}}>
+              <div className="flex items-center gap-2">
+                <div style={{width:86,flex:'none'}}>
+                  <span className="kanit text-[14px]" style={{fontWeight:600,color:(dt.getDay()===0||dt.getDay()===6)?'var(--neg)':'var(--ink)'}}>{d} {MON[M-1]}</span>
+                  <span className="text-[11px] block" style={{color:'var(--muted)'}}>{DOW[dt.getDay()]}</span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="kanit text-[13.5px]" style={{color:li.color,fontWeight:600}}>{li.emoji} {li.label}</div>
+                  {lvv && lvv.n && <div className="text-[12px]" style={{color:'var(--muted)'}}>{lvv.n}</div>}
+                  {!lvv && st1 && st1.shiftIn && st1.shiftOut && (
+                    <div className="num text-[11.5px]" style={{color:'var(--muted)',opacity:.7}}>ปกติ {st1.shiftIn}→{st1.shiftOut}</div>
+                  )}
+                </div>
+                <button className="press kanit text-[12px]" style={{border:'1px solid var(--line)',background:'var(--card)',borderRadius:9,padding:'5px 13px',flex:'none',fontWeight:600}}
+                  onClick={()=>openStatus(d,who)}>⚙️ เปลี่ยนสถานะ</button>
+              </div>
+            </div>
+          );
+        }
         return (
           <div key={d} className="card p-3 mb-2">
             <div className="flex items-center justify-between mb-1.5">
@@ -3525,6 +3847,8 @@ function AttendPanel({ user }){
                   {r.pairs.length>1 && <span className="text-[10.5px]" style={{color:'var(--muted)'}}>{r.pairs.length} ช่วง</span>}
                   {r.fixed>0 && <span className="text-[10.5px]" style={{color:'var(--muted)',opacity:.75}}>ตัดซ้ำ {r.fixed}</span>}
                   <div className="num text-[13px]" style={{fontWeight:700,color: r.net>=10?'#3E7D3E':'var(--ink)'}}>{r.net? r.net+' ชม.':'–'}</div>
+                  {!r.hol && r.otMin!==0 && <span className="num text-[11px]" style={{color: r.otMin>0?'#C68B4A':'#CE4A5A',fontWeight:700}}>{minTxt(r.otMin)}</span>}
+                  {r.hol && <span className="text-[10.5px]" style={{color:'#CE4A5A',fontWeight:700}}>🆘×2</span>}
                   <span className="text-[12px]" style={{color:'var(--muted)'}}>✏️</span>
                 </div>
                 {r.pairs.map((p,k)=>(
@@ -3534,6 +3858,11 @@ function AttendPanel({ user }){
                     <span className="num" style={{marginLeft:'auto'}}>{p.h!=null? p.h+' ชม.':''}</span>
                   </div>
                 ))}
+                <div className="flex justify-end mt-1">
+                  <button className="press kanit text-[10.5px]"
+                    style={{border:'1px solid '+(r.hol?'#CE4A5A':'var(--line)'),background: r.hol?'#CE4A5A':'var(--card)',color: r.hol?'#fff':'var(--ink)',borderRadius:999,padding:'2px 11px',fontWeight:600}}
+                    onClick={(e)=>{ e.stopPropagation(); openStatus(d,r.pin); }}>{r.hol? '🆘 ทำงานวันหยุด ×2':'🕐 ทำงานปกติ · แตะเปลี่ยน'}</button>
+                </div>
               </div>
             ))}
           </div>
@@ -3542,16 +3871,18 @@ function AttendPanel({ user }){
 
       {detail && (()=>{
         const rowsAll=[];
-        let wk=0, wh=0; const lv={off:0,sick:0,personal:0};
+        let wk=0, wh=0, wot=0, whol=0, wholH=0; const lv={off:0,sick:0,personal:0};
         for(let d=1; d<=maxDay; d++){
           const v=(scans&&scans[d]&&scans[d][detail])? scans[d][detail] : null;
           const r=v? parseRow(v) : null;
           const lvv=leaveOf(d,detail);
-          if(r){ wk++; wh+=r.net; }
+          const hol=isHol(d,detail);
+          const otMin=(r && !hol)? otMinOf(detail,r.netMin) : 0;
+          if(r){ wk++; wh+=r.net; wot+=otMin; if(hol){ whol++; wholH+=r.net; } }
           else { const t=(lvv&&lvv.t)||'off'; lv[t]=(lv[t]||0)+1; }
-          rowsAll.push({ d, r, lv:lvv, dt:new Date(Y,M-1,d) });
+          rowsAll.push({ d, r, lv:lvv, dt:new Date(Y,M-1,d), otMin, hol });
         }
-        wh=Math.round(wh*10)/10;
+        wh=Math.round(wh*10)/10; wholH=Math.round(wholH*10)/10;
         return (
           <Portal>
           <div style={{position:'fixed',inset:0,background:'rgba(20,26,34,.55)',zIndex:118,display:'flex',alignItems: wide?'center':'flex-end',justifyContent:'center',padding: wide?20:0}} onClick={()=>!busy&&setDetail(null)}>
@@ -3559,12 +3890,18 @@ function AttendPanel({ user }){
               <div className="p-3" style={{borderBottom:'1px solid var(--line)'}}>
                 <div className="flex items-center justify-between">
                   <div className="kanit text-[16px]" style={{fontWeight:700,color:'var(--primary)'}}>{nameOf(detail)}</div>
-                  <button className="press kanit text-[13px]" style={{border:'1px solid var(--line)',background:'var(--card)',borderRadius:10,padding:'4px 12px'}} onClick={()=>setDetail(null)}>ปิด</button>
+                  <div className="flex gap-1.5">
+                    <button className="press kanit text-[13px]" style={{border:'1px solid var(--line)',background:'var(--card)',borderRadius:10,padding:'4px 12px'}}
+                      onClick={()=>saveSlip(detail, rowsAll, wk, wh, lv, wot, whol)}>🖼 บันทึกรูป</button>
+                    <button className="press kanit text-[13px]" style={{border:'1px solid var(--line)',background:'var(--card)',borderRadius:10,padding:'4px 12px'}} onClick={()=>setDetail(null)}>ปิด</button>
+                  </div>
                 </div>
                 <div className="text-[12.5px] mt-0.5" style={{color:'var(--muted)'}}>{ocPayLabel? ocPayLabel(ym) : ym}</div>
                 <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-[12.5px]">
                   <span style={{color:'var(--muted)'}}>ทำงาน <b className="num" style={{color:'#3E7D3E'}}>{wk}</b> วัน</span>
                   <span style={{color:'var(--muted)'}}>รวม <b className="num" style={{color:'var(--primary)'}}>{wh}</b> ชม.</span>
+                  <span style={{color:'var(--muted)'}}>เกิน/ขาด <b className="num" style={{color: wot>=0?'#C68B4A':'#CE4A5A'}}>{wot>0?'+':''}{wot}</b> นาที = <b className="num" style={{color: wot>=0?'#C68B4A':'#CE4A5A'}}>{minHr(wot)}</b> ชม.</span>
+                  {whol>0 && <span style={{color:'var(--muted)'}}>🆘 วันหยุด <b className="num" style={{color:'#CE4A5A'}}>{whol}</b> วัน ({wholH} ชม.×2)</span>}
                   <span style={{color:'var(--muted)'}}>🏠 หยุด <b className="num" style={{color:'var(--ink)'}}>{lv.off||0}</b></span>
                   <span style={{color:'var(--muted)'}}>🤒 ป่วย <b className="num" style={{color:'#CE4A5A'}}>{lv.sick||0}</b></span>
                   <span style={{color:'var(--muted)'}}>📄 ลากิจ <b className="num" style={{color:'#C68B4A'}}>{lv.personal||0}</b></span>
@@ -3574,6 +3911,7 @@ function AttendPanel({ user }){
               <div style={{overflow:'auto',flex:1,paddingBottom: wide?0:'calc(96px + env(safe-area-inset-bottom))'}}>
                 {rowsAll.map(function(row){
                   const d=row.d, r=row.r, lvv=row.lv, dt=row.dt;
+                  const otMin=row.otMin, hol=row.hol;
                   const isWk=(dt.getDay()===0||dt.getDay()===6);
                   const li=lvv? leaveInfo(lvv.t) : leaveInfo('off');
                   return (
@@ -3596,8 +3934,14 @@ function AttendPanel({ user }){
                             ))}
                             {r.manual && <span className="text-[10.5px]" style={{color:'var(--muted)'}}>&#9999;</span>}
                           </div>
-                          <div className="num" style={{width:74,textAlign:'right',fontWeight:700,color: r.net>=10?'#3E7D3E':'var(--ink)'}}>{r.net? r.net+' ชม.':'–'}</div>
-                          <div style={{width:48,textAlign:'right'}}>
+                          <div className="num" style={{width:66,textAlign:'right',fontWeight:700,color: r.net>=10?'#3E7D3E':'var(--ink)'}}>{r.net? r.net+'ช':'–'}</div>
+                          <div className="num text-[11.5px]" style={{width:58,textAlign:'right',fontWeight:700,color: hol?'#CE4A5A':(otMin>0?'#C68B4A':(otMin<0?'#CE4A5A':'var(--muted)'))}}>{hol? '×2' : minTxt(otMin)}</div>
+                          <div style={{width:52,textAlign:'center'}}>
+                            <button className="press kanit text-[10.5px]"
+                              style={{border:'1px solid '+(hol?'#CE4A5A':'var(--line)'),background: hol?'#CE4A5A':'var(--card)',color: hol?'#fff':'var(--ink)',borderRadius:999,padding:'2px 8px',fontWeight:600}}
+                              onClick={()=>openStatus(d,detail)}>⚙️</button>
+                          </div>
+                          <div style={{width:44,textAlign:'right'}}>
                             <button className="press kanit text-[12px]" style={{border:'1px solid var(--line)',background:'var(--card)',borderRadius:8,padding:'3px 9px'}} onClick={()=>openEdit(d,detail)}>&#9999;</button>
                           </div>
                         </React.Fragment>
@@ -3606,9 +3950,11 @@ function AttendPanel({ user }){
                           <div style={{flex:1,paddingLeft:4}}>
                             <span className="kanit text-[13px]" style={{color:li.color,fontWeight:600}}>{li.emoji} {li.label}</span>
                             {lvv && lvv.n && <span className="text-[12px]" style={{color:'var(--muted)',marginLeft:6}}>· {lvv.n}</span>}
+                            {!lvv && (()=>{ const s1=stOf(detail); return (s1&&s1.shiftIn&&s1.shiftOut)
+                              ? <span className="num text-[11.5px]" style={{color:'var(--muted)',opacity:.65,marginLeft:8}}>ปกติ {s1.shiftIn}→{s1.shiftOut}</span> : null; })()}
                           </div>
                           <div style={{width:138,display:'flex',gap:5,justifyContent:'flex-end'}}>
-                            <button className="press kanit text-[12px]" style={{border:'1px solid var(--line)',background:'var(--card)',borderRadius:8,padding:'3px 9px'}} onClick={()=>setLeaveEdit({ d:d, pin:detail, t:(lvv&&lvv.t)||'off', n:(lvv&&lvv.n)||'' })}>เปลี่ยน</button>
+                            <button className="press kanit text-[12px]" style={{border:'1px solid var(--line)',background:'var(--card)',borderRadius:999,padding:'3px 12px',fontWeight:600}} onClick={()=>openStatus(d,detail)}>⚙️ สถานะ</button>
                             <button className="press kanit text-[12px]" style={{border:'1px solid var(--line)',background:'var(--card)',borderRadius:8,padding:'3px 9px'}} onClick={()=>setEdit({ d:String(d), pin:String(detail), pairs:[{i:'',o:''}], isNew:true })}>+ เวลา</button>
                           </div>
                         </React.Fragment>
@@ -3623,32 +3969,95 @@ function AttendPanel({ user }){
         );
       })()}
 
-      {leaveEdit && (
+      {statEdit && (()=>{
+        const MODES=[
+          {id:'work',     label:'ทำงานปกติ',    emoji:'🕐', color:'#2E8FC4'},
+          {id:'holiday',  label:'ทำงานวันหยุด', emoji:'🆘', color:'#CE4A5A'},
+          {id:'off',      label:'หยุด',         emoji:'🏠', color:'#7A828C'},
+          {id:'sick',     label:'ลาป่วย',       emoji:'🤒', color:'#C0566A'},
+          {id:'personal', label:'ลากิจ',        emoji:'📄', color:'#C68B4A'},
+        ];
+        const isWork=(statEdit.mode==='work'||statEdit.mode==='holiday');
+        let netM=0; statEdit.pairs.forEach(pp=>{
+          const a=attHM(attFmt(pp.i)), b=attHM(attFmt(pp.o));
+          if(a!=null && b!=null){ let dd=b-a; if(dd<0) dd+=1440; netM+=dd; }
+        });
+        const net=Math.round(netM/60*10)/10;
+        const om=isWork? Math.round(netM - shiftHrsOf(statEdit.pin)*60) : 0;
+        const INP2={fontFamily:'inherit',fontSize:15,border:'1px solid var(--line)',borderRadius:9,padding:'9px 10px',background:'var(--card)',color:'var(--ink)',width:'100%',textAlign:'center'};
+        return (
         <Portal>
-        <div style={{position:'fixed',inset:0,background:'rgba(20,26,34,.6)',zIndex:125,display:'flex',alignItems:'center',justifyContent:'center',padding:18}} onClick={()=>!busy&&setLeaveEdit(null)}>
-          <div className="card" style={{width:'min(420px,94vw)',borderRadius:18,padding:16}} onClick={e=>e.stopPropagation()}>
-            <div className="kanit text-[15px] mb-1" style={{fontWeight:700,color:'var(--primary)'}}>วันที่ {leaveEdit.d} {MON[M-1]}</div>
-            <div className="text-[12.5px] mb-3" style={{color:'var(--muted)'}}>{nameOf(leaveEdit.pin)}</div>
-            <div className="flex gap-1.5 mb-3">
-              {LEAVE_TYPES.map(t=>(
-                <button key={t.id} className="press kanit text-[13px] flex-1 py-2 rounded-xl"
-                  style={{border:'1px solid '+(leaveEdit.t===t.id? t.color:'var(--line)'),background: leaveEdit.t===t.id? t.color:'var(--card)', color: leaveEdit.t===t.id?'#fff':'var(--ink)'}}
-                  onClick={()=>setLeaveEdit({...leaveEdit,t:t.id})}>{t.emoji} {t.label}</button>
+        <div style={{position:'fixed',inset:0,background:'rgba(20,26,34,.6)',zIndex:126,display:'flex',alignItems: wide?'center':'flex-end',justifyContent:'center',padding: wide?20:0}} onClick={()=>!busy&&setStatEdit(null)}>
+          <div className="card" style={{width: wide?'min(540px,94vw)':'100%',borderRadius: wide?18:'20px 20px 0 0',padding:16,paddingBottom: wide?16:'calc(96px + env(safe-area-inset-bottom))',maxHeight:'90vh',overflow:'auto'}} onClick={e=>e.stopPropagation()}>
+            <div className="kanit text-[15.5px]" style={{fontWeight:700,color:'var(--primary)'}}>⚙️ สถานะวันที่ {statEdit.d} {MON[M-1]}</div>
+            <div className="text-[12.5px] mb-3" style={{color:'var(--muted)'}}>{nameOf(statEdit.pin)}</div>
+
+            <div className="flex flex-wrap gap-1.5 mb-3">
+              {MODES.map(mo=>(
+                <button key={mo.id} className="press kanit text-[13px]" style={{flex:'1 1 30%',minWidth:'30%',padding:'9px 4px',borderRadius:12,
+                  border:'1px solid '+(statEdit.mode===mo.id? mo.color:'var(--line)'),
+                  background: statEdit.mode===mo.id? mo.color:'var(--card)',
+                  color: statEdit.mode===mo.id?'#fff':'var(--ink)', fontWeight: statEdit.mode===mo.id?700:400}}
+                  onClick={()=>setStatEdit({...statEdit, mode:mo.id, pairs: (mo.id==='work'||mo.id==='holiday') && !statEdit.pairs.some(x=>x.i)? shiftPair(statEdit.pin) : statEdit.pairs })}>
+                  {mo.emoji} {mo.label}
+                </button>
               ))}
             </div>
-            <div className="text-[11.5px] mb-1" style={{color:'var(--muted)'}}>เหตุผล / บันทึก</div>
-            <input className="kanit" style={{fontFamily:'inherit',fontSize:14,border:'1px solid var(--line)',borderRadius:9,padding:'8px 10px',background:'var(--card)',color:'var(--ink)',width:'100%',marginBottom:12}}
-              placeholder={leaveEdit.t==='sick'? 'เช่น เป็นไข้ ไปหาหมอ' : leaveEdit.t==='personal'? 'เช่น ไปธุระที่บ้าน' : 'เช่น วันหยุดประจำสัปดาห์'}
-              value={leaveEdit.n} onChange={e=>setLeaveEdit({...leaveEdit,n:e.target.value})}/>
+
+            {isWork ? (
+              <div>
+                {statEdit.mode==='holiday' && (
+                  <div className="rounded-xl p-2 mb-2 text-[12.5px]" style={{background:'#FDECEE',color:'#8E2B39'}}>🆘 วันนี้เป็นวันหยุดที่มาช่วยงาน — ค่าแรง ×2 ตั้งแต่ชั่วโมงแรก</div>
+                )}
+                <div className="text-[11.5px] mb-1" style={{color:'var(--muted)'}}>เวลาเข้า-ออก (24 ชม.)</div>
+                {statEdit.pairs.map((pp,k)=>(
+                  <div key={k} className="flex items-center gap-2 mb-2">
+                    <input className="num" style={INP2} placeholder="เข้า" inputMode="numeric" value={pp.i}
+                      onChange={e=>{ const a=statEdit.pairs.slice(); a[k]={...a[k],i:e.target.value}; setStatEdit({...statEdit,pairs:a}); }}
+                      onBlur={e=>{ const a=statEdit.pairs.slice(); a[k]={...a[k],i:attFmt(e.target.value)}; setStatEdit({...statEdit,pairs:a}); }}/>
+                    <span style={{color:'var(--muted)'}}>→</span>
+                    <input className="num" style={INP2} placeholder="ออก" inputMode="numeric" value={pp.o}
+                      onChange={e=>{ const a=statEdit.pairs.slice(); a[k]={...a[k],o:e.target.value}; setStatEdit({...statEdit,pairs:a}); }}
+                      onBlur={e=>{ const a=statEdit.pairs.slice(); a[k]={...a[k],o:attFmt(e.target.value)}; setStatEdit({...statEdit,pairs:a}); }}/>
+                    <button className="press" style={{border:'none',background:'none',color:'var(--neg)',fontSize:17,padding:'0 2px'}}
+                      onClick={()=>{ const a=statEdit.pairs.filter((_,x)=>x!==k); setStatEdit({...statEdit,pairs: a.length? a:[{i:'',o:''}]}); }}>✕</button>
+                  </div>
+                ))}
+                <button className="press kanit text-[13px] w-full py-2 rounded-xl mb-3" style={{border:'1px dashed var(--line)',background:'var(--card)',color:'var(--muted)'}}
+                  onClick={()=>setStatEdit({...statEdit,pairs:[...statEdit.pairs,{i:'',o:''}]})}>+ เพิ่มช่วง (ออกไปธุระแล้วกลับ)</button>
+
+                <div className="rounded-xl p-3 mb-3" style={{background:'var(--soft)'}}>
+                  <div className="flex items-center justify-between text-[13.5px]">
+                    <span style={{color:'var(--muted)'}}>รวมวันนี้</span>
+                    <b className="num" style={{color:'var(--primary)',fontSize:17}}>{net} ชม.</b>
+                  </div>
+                  <div className="flex items-center justify-between text-[13.5px] mt-1">
+                    <span style={{color:'var(--muted)'}}>เทียบกะปกติ ({shiftHrsOf(statEdit.pin)} ชม.)</span>
+                    <b className="num" style={{color: om>0?'#C68B4A': (om<0?'#CE4A5A':'var(--muted)'),fontSize:16}}>
+                      {om>0? '+'+om+' นาที (OT)' : om<0? om+' นาที (ขาด)' : 'พอดี'}
+                    </b>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div>
+                <div className="text-[11.5px] mb-1" style={{color:'var(--muted)'}}>เหตุผล / บันทึก {statEdit.mode==='off'?'(ไม่จำเป็น)':''}</div>
+                <input className="kanit" style={{fontFamily:'inherit',fontSize:14,border:'1px solid var(--line)',borderRadius:9,padding:'9px 10px',background:'var(--card)',color:'var(--ink)',width:'100%',marginBottom:12}}
+                  placeholder={statEdit.mode==='sick'?'เช่น เป็นไข้ ไปหาหมอ': statEdit.mode==='personal'?'เช่น ไปธุระที่บ้าน':'เช่น วันหยุดประจำสัปดาห์'}
+                  value={statEdit.note} onChange={e=>setStatEdit({...statEdit,note:e.target.value})}/>
+                <div className="text-[12px] mb-3" style={{color:'var(--muted)'}}>เลือกสถานะนี้จะลบเวลาเข้า-ออกของวันนั้นออก</div>
+              </div>
+            )}
+
             <div className="flex gap-2">
-              <button className="press kanit text-[14px] py-2.5 px-4 rounded-xl" style={{background:'var(--card)',border:'1px solid var(--line)'}} onClick={()=>!busy&&setLeaveEdit(null)}>ยกเลิก</button>
-              <button className="press kanit text-[14px] flex-1 py-2.5 rounded-xl text-white" style={{background:'var(--primary)',border:'none',fontWeight:600,opacity:busy?.6:1}} disabled={busy}
-                onClick={()=>saveLeave(leaveEdit.d, leaveEdit.pin, (leaveEdit.t==='off' && !leaveEdit.n) ? null : { t:leaveEdit.t, n:String(leaveEdit.n||'').trim() })}>บันทึก</button>
+              <button className="press kanit text-[14px] py-2.5 px-5 rounded-xl" style={{background:'var(--card)',border:'1px solid var(--line)'}} onClick={()=>!busy&&setStatEdit(null)}>ยกเลิก</button>
+              <button className="press kanit text-[14px] flex-1 py-2.5 rounded-xl text-white" style={{background:'var(--primary)',border:'none',fontWeight:600,opacity:busy?.6:1}} disabled={busy} onClick={saveStatus}>{busy?'กำลังบันทึก…':'บันทึก'}</button>
             </div>
           </div>
         </div>
         </Portal>
-      )}
+        );
+      })()}
 
       {edit && (
         <Portal>
@@ -3665,7 +4074,10 @@ function AttendPanel({ user }){
               </div>
               <div className="flex-1">
                 <div className="text-[11.5px] mb-1" style={{color:'var(--muted)'}}>พนักงาน</div>
-                <select className="kanit" style={INP} value={edit.pin} onChange={e=>setEdit({...edit,pin:e.target.value})}>
+                <select className="kanit" style={INP} value={edit.pin} onChange={e=>{
+                  const np=e.target.value;
+                  setEdit(prev=> prev.isNew? {...prev, pin:np, pairs:shiftPair(np)} : {...prev, pin:np});
+                }}>
                   <option value="">— เลือก —</option>
                   {pins.map(p=>(<option key={p} value={p}>{nameOf(p)}</option>))}
                 </select>
@@ -3700,12 +4112,43 @@ function AttendPanel({ user }){
             </div>
 
             <div className="flex gap-2">
-              <button className="press kanit text-[14px] py-2.5 px-5 rounded-xl" style={{background:'var(--card)',border:'1px solid var(--line)'}} onClick={()=>!busy&&setEdit(null)}>ยกเลิก</button>
-              <button className="press kanit text-[14px] flex-1 py-2.5 rounded-xl text-white" style={{background:'var(--primary)',border:'none',fontWeight:600,opacity:busy?.6:1}} disabled={busy} onClick={save}>{busy? 'กำลังบันทึก…':'บันทึก'}</button>
+              {!edit.isNew && (
+                <button className="press kanit text-[14px] py-2.5 px-4 rounded-xl" style={{background:'var(--card)',border:'1px solid var(--line)',color:'var(--neg)'}} disabled={busy}
+                  onClick={()=>{ if(confirm('ลบเวลาของวันนี้?\nจะกลายเป็น "หยุด" และเปลี่ยนเป็นลาได้')) setEdit({...edit, pairs:[{i:'',o:''}], _del:1}); }}>🗑 ลบ</button>
+              )}
+              <button className="press kanit text-[14px] py-2.5 px-4 rounded-xl" style={{background:'var(--card)',border:'1px solid var(--line)'}} onClick={()=>!busy&&setEdit(null)}>ยกเลิก</button>
+              <button className="press kanit text-[14px] flex-1 py-2.5 rounded-xl text-white" style={{background: edit._del?'var(--neg)':'var(--primary)',border:'none',fontWeight:600,opacity:busy?.6:1}} disabled={busy} onClick={save}>{busy? 'กำลังบันทึก…': (edit._del? 'ยืนยันลบ':'บันทึก')}</button>
             </div>
           </div>
         </div>
         </Portal>
+      )}
+
+      {view==='day' && !wide && pStat && (
+        <div className="card p-3 mb-3" style={{borderTop:'3px solid var(--primary)'}}>
+          <div className="kanit text-[15px] mb-2" style={{fontWeight:700,color:'var(--primary)'}}>📋 สรุปเดือนนี้ · {nameOf(who)}</div>
+          <div className="flex items-center justify-between py-1.5 text-[13.5px]" style={{borderBottom:'1px solid var(--line)'}}>
+            <span style={{color:'var(--muted)'}}>ทำงาน</span><b className="num" style={{color:'#3E7D3E'}}>{pStat.wk} วัน</b>
+          </div>
+          <div className="flex items-center justify-between py-1.5 text-[13.5px]" style={{borderBottom:'1px solid var(--line)'}}>
+            <span style={{color:'var(--muted)'}}>รวมชั่วโมง</span><b className="num" style={{color:'var(--primary)'}}>{pStat.wh} ชม.</b>
+          </div>
+          <div className="flex items-center justify-between py-1.5 text-[13.5px]" style={{borderBottom:'1px solid var(--line)'}}>
+            <span style={{color:'var(--muted)'}}>เกิน/ขาด (OT)</span>
+            <b className="num" style={{color: pStat.wot>=0?'#C68B4A':'#CE4A5A'}}>{pStat.wot>0?'+':''}{pStat.wot} น. = {minHr(pStat.wot)} ชม.</b>
+          </div>
+          {pStat.whol>0 && (
+            <div className="flex items-center justify-between py-1.5 text-[13.5px]" style={{borderBottom:'1px solid var(--line)'}}>
+              <span style={{color:'var(--muted)'}}>🆘 ทำงานวันหยุด</span><b className="num" style={{color:'#CE4A5A'}}>{pStat.whol} วัน · {pStat.wholH} ชม.×2</b>
+            </div>
+          )}
+          <div className="flex items-center justify-between py-1.5 text-[13.5px]">
+            <span style={{color:'var(--muted)'}}>หยุด / ป่วย / ลากิจ</span>
+            <b className="num">🏠{pStat.lv.off||0} · 🤒{pStat.lv.sick||0} · 📄{pStat.lv.personal||0}</b>
+          </div>
+          <button className="press kanit text-[14px] w-full mt-3 py-2.5 rounded-xl text-white" style={{background:'var(--primary)',border:'none',fontWeight:600}}
+            onClick={()=>saveSlip(who, pStat.rowsAll, pStat.wk, pStat.wh, pStat.lv, pStat.wot, pStat.whol)}>🖼 สร้างรูปสรุปส่งให้พนักงาน</button>
+        </div>
       )}
 
       <div className="text-[11.5px] text-center pb-4 pt-1" style={{color:'var(--muted)'}}>
@@ -3767,7 +4210,7 @@ function StaffPanel({ user, toast }){
 
   const openNew=()=>setEdit({
     id:'p'+ocUid(), name:'', phase:1, custom:0, kind:'staff', fpId:'',
-    shop:'owlcha', active:true, start:today(), end:'', phone:'', note:'', _new:true
+    shop:'owlcha', shiftIn:'', shiftOut:'', active:true, start:today(), end:'', phone:'', note:'', _new:true
   });
   const openEdit=(st)=>setEdit({ ...st, _new:false });
 
@@ -3782,6 +4225,8 @@ function StaffPanel({ user, toast }){
       kind:edit.kind==='maid'?'maid':'staff',
       fpId:String(edit.fpId||'').trim(),
       shop: (edit.shop==='teddy2'?'teddy2':'owlcha'),
+      shiftIn: attFmt(edit.shiftIn||''),
+      shiftOut: attFmt(edit.shiftOut||''),
       active: edit.active!==false,
       start:edit.start||'', end:edit.end||'',
       phone:String(edit.phone||'').trim(),
@@ -3883,6 +4328,7 @@ function StaffPanel({ user, toast }){
                   <span style={{color:'var(--muted)'}}>≈ <b className="num" style={{color:'var(--ink)'}}>{ocFmt(r.perDay,0)}</b> ฿/วัน</span>
                   {st.kind!=='maid' && <span style={{color:'var(--muted)'}}>OT <b className="num" style={{color:'var(--ink)'}}>{ocFmt(r.otHr,0)}</b> ฿/ชม.</span>}
                   <span style={{color:'var(--muted)'}}>เบี้ยขยัน <b className="num" style={{color:'var(--ink)'}}>{ocFmt(r.dilig,0)}</b> ฿</span>
+                  {st.shiftIn && st.shiftOut && <span style={{color:'var(--muted)'}}>กะ <b className="num" style={{color:'var(--ink)'}}>{st.shiftIn}–{st.shiftOut}</b></span>}
                   {st.kind==='maid' && st.offQuota>0 && <span style={{color:'var(--muted)'}}>หยุดฟรี <b className="num" style={{color:'var(--ink)'}}>{st.offQuota}</b> วัน</span>}
                   {st.kind==='maid' && st.extraRate>0 && <span style={{color:'var(--muted)'}}>ทำแทนหยุด <b className="num" style={{color:'var(--ink)'}}>{ocFmt(st.extraRate,0)}</b> ฿/วัน</span>}
                 </div>
@@ -3964,6 +4410,17 @@ function StaffPanel({ user, toast }){
                 <div className="text-[11.5px] mb-1" style={{color:'var(--muted)'}}>วันลาออก</div>
                 <input type="date" className="kanit" style={INP} value={edit.end||''} onChange={e=>setEdit({...edit,end:e.target.value})}/>
               </div>
+            </div>
+
+            <div className="text-[11.5px] mb-1" style={{color:'var(--muted)'}}>เวลางานประจำ (ใช้เป็นตัวอย่างตอนลงเวลาเอง)</div>
+            <div className="flex items-center gap-2 mb-2.5">
+              <input className="num" style={INP} inputMode="numeric" placeholder="เข้า เช่น 11:00" value={edit.shiftIn||''}
+                onChange={e=>setEdit({...edit,shiftIn:e.target.value})}
+                onBlur={e=>setEdit({...edit,shiftIn:attFmt(e.target.value)})}/>
+              <span style={{color:'var(--muted)'}}>→</span>
+              <input className="num" style={INP} inputMode="numeric" placeholder="ออก เช่น 21:00" value={edit.shiftOut||''}
+                onChange={e=>setEdit({...edit,shiftOut:e.target.value})}
+                onBlur={e=>setEdit({...edit,shiftOut:attFmt(e.target.value)})}/>
             </div>
 
             <div className="text-[11.5px] mb-1" style={{color:'var(--muted)'}}>เบอร์โทร</div>
