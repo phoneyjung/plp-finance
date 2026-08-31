@@ -172,6 +172,7 @@ var DELIVERY_URL='https://lin.ee/6IpVFW8?openExternalBrowser=1';
 var FIRESTORE='https://firestore.googleapis.com/v1/projects/plp-finance/databases/(default)/documents/owlMenu';
 var IMG_BASE=(location.hostname==='phoneyjung.github.io')?'':'https://phoneyjung.github.io/plp-finance/';
 var USE_PHOTO=true;   /* true = ใช้รูปถ่ายถ้ามี, false = ใช้ภาพวาดทั้งหมด */
+var DEEPLINK=true;    /* true = ปุ่มพรีออเดอร์ส่งชื่อเมนูไปเปิดให้ตรงตัว (ต้องแปะสคริปต์ใน order.html ก่อน) */
 /* ================================ */
 
 var CATEMOJI={'ขายดี':'⭐','เฟเวอริต':'💛','คลาสสิค':'🍵','พรีเมียมฟรุต':'🍑','นมสด':'🥛','ช็อคโกอาวล์':'🍫','โซดา':'🫧','ท็อปปิ้ง':'✨'};
@@ -302,6 +303,7 @@ function val(f){ if(!f)return null;
   if('doubleValue' in f)return f.doubleValue;
   if('booleanValue' in f)return f.booleanValue; return null }
 function fromDoc(d){var f=d.fields||{};return{
+  id:(d.name||'').split('/').pop(),
   n:val(f.nameTh)||val(f.name)||'', en:val(f.name)||'', p:val(f.price)||0,
   c:val(f.category)||'อื่นๆ', desc:val(f.desc)||'', photo:val(f.photo)||'',
   prep:val(f.prepMin)||0, active:(f.active&&f.active.booleanValue===false)?false:true,
@@ -336,6 +338,14 @@ var SNAPSHOT=[
 
 /* ---------- app ---------- */
 var $=function(s){return document.querySelector(s)};
+function orderUrl(it){
+  if(!DEEPLINK||!it) return ORDER_URL;
+  return ORDER_URL+(ORDER_URL.indexOf('?')>-1?'&':'?')+
+    'cat='+encodeURIComponent(it.c||'')+
+    '&menu='+encodeURIComponent(it.n||'')+
+    '&en='+encodeURIComponent(it.en||'')+
+    '&item='+encodeURIComponent(it.id||'');
+}
 var esc=function(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})};
 var GROUPS=[],gi=0,idx=0,layFlip=0;
 
@@ -409,6 +419,7 @@ function paint(){
     d.classList.remove('fade');
   },140);
 
+  $('#dkOrder').href=orderUrl(it);
   $('#count').textContent=(idx+1)+' / '+items.length;
   [].forEach.call($('#rail').children,function(b,i){b.classList.toggle('on',i===idx)});
   $('#prev').disabled=idx===0; $('#next').disabled=idx===items.length-1;
