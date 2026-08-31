@@ -70,27 +70,35 @@ header{padding:calc(10px + env(safe-area-inset-top)) 16px 6px;display:flex;align
   background:rgba(255,255,255,.72);border:1px solid var(--line);border-radius:999px;padding:6px 11px}
 .dot{width:6px;height:6px;border-radius:50%;background:#3EA76B;box-shadow:0 0 0 3px rgba(62,167,107,.18)}
 
-.cats{display:flex;flex-wrap:wrap;justify-content:center;gap:5px;padding:5px 10px 7px;flex:0 0 auto}
-.pill{flex:0 0 auto;display:flex;align-items:center;gap:4px;padding:5px 9px;border-radius:999px;
-  background:rgba(255,255,255,.7);border:1px solid var(--line);font-size:11px;color:var(--brown);white-space:nowrap;
+.catwrap{position:relative;flex:0 0 auto}
+.catwrap::before,.catwrap::after{content:"";position:absolute;top:0;bottom:0;width:26px;z-index:2;pointer-events:none}
+.catwrap::before{left:0;background:linear-gradient(to right,var(--c60),rgba(247,239,226,0))}
+.catwrap::after{right:0;background:linear-gradient(to left,var(--c60),rgba(247,239,226,0))}
+.cats{display:flex;gap:6px;overflow-x:auto;padding:6px 16px 8px;scrollbar-width:none;
+  scroll-snap-type:x proximity;-webkit-overflow-scrolling:touch}
+.cats::-webkit-scrollbar{display:none}
+.pill{flex:0 0 auto;scroll-snap-align:center;display:flex;align-items:center;gap:5px;padding:7px 13px;border-radius:999px;
+  background:rgba(255,255,255,.75);border:1px solid var(--line);font-size:12.5px;color:var(--brown);white-space:nowrap;
   transition:.25s cubic-bezier(.2,.8,.2,1)}
 .pill.on{background:linear-gradient(135deg,#4C3324,#2B1C13);color:#F6ECD9;border-color:transparent;
   box-shadow:0 12px 22px -14px rgba(44,29,20,.9);transform:translateY(-1px)}
-.pill em{font-style:normal;font-size:11px}
+.pill em{font-style:normal;font-size:13px}
 
 /* ---------- ฮีโร่: แก้วใหญ่ด้านบน ---------- */
 .hero{flex:1.618 1 0;min-height:0;display:flex;flex-direction:column;align-items:center;
   padding:2px 22px 0;position:relative}
 .count{position:absolute;right:4px;top:0;font-size:10.5px;color:var(--muted);letter-spacing:.08em;z-index:5}
-.stage{position:relative;flex:1 1 auto;min-height:0;width:100%;display:grid;place-items:center}
+.stage{position:relative;flex:1 1 auto;min-height:0;width:100%;display:grid;place-items:center;overflow:hidden}
 .stage .halo{position:absolute;width:64%;aspect-ratio:1;border-radius:50%;background:rgba(255,255,255,.5);
   filter:blur(2px);box-shadow:0 30px 62px -30px rgba(60,38,22,.5)}
-.stage .art{position:relative;height:100%;display:grid;place-items:center}
+.stage .shadow{position:absolute;bottom:5%;width:42%;height:22px;border-radius:50%;
+  background:rgba(70,45,25,.22);filter:blur(11px)}
+.stage .art{position:relative;height:100%;max-height:100%;display:grid;place-items:center}
 .stage .art.pop{animation:pop .5s cubic-bezier(.2,.8,.2,1)}
 @keyframes pop{0%{opacity:0;transform:translateY(16px) scale(.93)}100%{opacity:1;transform:none}}
 .stage svg{height:100%;width:auto;max-width:100%;filter:drop-shadow(0 22px 26px rgba(50,30,16,.28))}
-.stage img.photo{height:100%;width:auto;max-width:88%;object-fit:contain;border-radius:22px;
-  filter:drop-shadow(0 22px 28px rgba(50,30,16,.34))}
+.stage img.photo{height:100%;max-height:100%;width:auto;max-width:92%;object-fit:contain;
+  mix-blend-mode:multiply}
 
 .info{flex:0 0 auto;width:100%;text-align:center;transition:opacity .2s ease;padding-bottom:2px}
 .info.fade{opacity:0}
@@ -98,7 +106,9 @@ header{padding:calc(10px + env(safe-area-inset-top)) 16px 6px;display:flex;align
 .en{font-size:var(--t4);letter-spacing:.16em;text-transform:uppercase;color:var(--muted);margin-top:3px}
 .ds{font-size:var(--t3);line-height:1.55;color:#5C4634;margin:var(--s4) auto 0;max-width:34ch;
   display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.buy{display:flex;align-items:center;justify-content:center;margin-top:var(--s3)}
+.icons{display:flex;gap:16px;justify-content:center;align-items:center;margin-top:10px;min-height:26px}
+.icons img{width:26px;height:26px;opacity:.72}
+.buy{display:flex;align-items:center;justify-content:center;margin-top:var(--s4)}
 .pz{display:flex;align-items:baseline;gap:4px}
 .pz b{font-size:var(--t1);font-weight:600;letter-spacing:-.03em;line-height:1}
 .pz i{font-style:normal;font-size:var(--t3);color:var(--c10);font-weight:500}
@@ -172,18 +182,20 @@ header{padding:calc(10px + env(safe-area-inset-top)) 16px 6px;display:flex;align
   <div class="hours" id="hours"><i class="dot"></i><span>07:00–21:00</span></div>
 </header>
 
-<nav class="cats" id="cats"></nav>
+<div class="catwrap"><nav class="cats" id="cats"></nav></div>
 
 <section class="hero">
   <div class="count" id="count"></div>
   <div class="stage">
     <div class="halo"></div>
+    <div class="shadow"></div>
     <div class="art" id="heroArt"></div>
   </div>
   <div class="info" id="info">
     <h2 class="nm" id="dName">—</h2>
     <div class="en" id="dEn"></div>
     <p class="ds" id="dDesc"></p>
+    <div class="icons" id="dIcons"></div>
     <div class="buy">
       <div class="pz"><b id="dPrice">0</b><i>บาท</i></div>
     </div>
@@ -422,8 +434,10 @@ function buildCats(){
   });
 }
 function markCat(){
-  var ps=$('#cats').querySelectorAll('.pill');
+  var box=$('#cats'), ps=box.querySelectorAll('.pill');
   [].forEach.call(ps,function(p,i){ p.classList.toggle('on',i===gi) });
+  var on=ps[gi];
+  if(on) box.scrollTo({left:Math.max(0,on.offsetLeft-(box.clientWidth-on.offsetWidth)/2),behavior:'smooth'});
 }
 function grad(cat){
   for(var k in STYLES){ if(STYLES[k].cat===cat) break }
@@ -479,6 +493,19 @@ function mix(it){
   return p.join(' · ');
 }
 
+/* ไอคอนวัตถุดิบ (ไฟล์ ic-*.png ในโฟลเดอร์ owl-img) */
+function iconsFor(it){
+  var s=(it.n||'')+' '+(it.en||''), out=[];
+  var has=function(){for(var i=0;i<arguments.length;i++){if(s.indexOf(arguments[i])>-1)return true}return false};
+  if(it.c==='ท็อปปิ้ง') return ['ic-pearl'];
+  if(has('ชา','Tea','มัทฉะ','Matcha')) out.push('ic-tea');
+  if(has('นม','Milk','ลาเต้','Latte','ชีส','Cheese')) out.push('ic-milk');
+  if(has('ไข่มุก','บุก','Konjac','คริสตัล','Crystal','บราวน์','Brown')) out.push('ic-pearl');
+  if(has('พีช','Peach','องุ่น','Muscat','สตรอ','Strawberry','ลิ้นจี่','Lychee','เสาวรส','Passion','ส้ม','Orange','สละ','Sala')) out.push('ic-peach');
+  out.push('ic-ice');
+  return out.slice(0,4);
+}
+
 function buildDeck(){
   var n=FLAT.length; if(!n) return;
   $('#deck').innerHTML =
@@ -531,6 +558,9 @@ function paint(){
     $('#dEn').textContent=it.en||'owl cha';
     $('#dDesc').textContent=mix(it);
     $('#dPrice').textContent=it.p;
+    $('#dIcons').innerHTML=iconsFor(it).map(function(n){
+      return '<img src="'+imgUrl('owl-img/'+n+'.png')+'" alt="" onerror="this.remove()">';
+    }).join('');
     d.classList.remove('fade');
   },140);
 
