@@ -1,0 +1,459 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#F7EFE2">
+<title>OWL CHA — เมนู</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Kanit:wght@200;300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --cream:#F7EFE2; --ink:#2B1C13; --brown:#4C3324; --muted:#8B7460;
+  --gold:#C08A3E; --line:rgba(76,51,36,.12);
+  --shadow:0 20px 44px -24px rgba(58,36,22,.6);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{
+  margin:0;height:100dvh;overflow:hidden;color:var(--ink);background:var(--cream);
+  font-family:Kanit,"Noto Sans Thai",system-ui,sans-serif;font-weight:300;
+  display:flex;flex-direction:column;
+}
+img{display:block;max-width:100%}
+button{font:inherit;color:inherit;border:0;background:none;cursor:pointer}
+a{color:inherit;text-decoration:none}
+
+/* ---------- animated background ---------- */
+.bg{position:fixed;inset:0;z-index:-3;background:var(--cream);overflow:hidden}
+.bg .lay{position:absolute;inset:0;opacity:0;transition:opacity .7s ease}
+.bg .lay.on{opacity:1}
+.bg .grain{
+  position:absolute;inset:-50%;opacity:.05;z-index:2;pointer-events:none;
+  background-image:radial-gradient(rgba(60,40,25,.9) .6px,transparent .6px);background-size:4px 4px
+}
+.bg .arc{
+  position:absolute;left:50%;top:46%;width:132vw;height:132vw;transform:translate(-50%,-50%);
+  border-radius:50%;border:1px solid rgba(255,255,255,.35);z-index:1
+}
+.bg .arc.b{width:96vw;height:96vw;border-style:dashed;border-color:rgba(255,255,255,.4)}
+.leaf{position:absolute;opacity:.3;z-index:1}
+.leaf.l1{left:-6vw;top:8%;width:40vw;transform:rotate(-18deg)}
+.leaf.l2{right:-10vw;bottom:6%;width:52vw;transform:rotate(160deg)}
+
+/* ---------- header ---------- */
+header{padding:calc(10px + env(safe-area-inset-top)) 16px 6px;display:flex;align-items:center;gap:10px;flex:0 0 auto}
+.logo{width:36px;height:36px;border-radius:12px;box-shadow:0 6px 14px -8px rgba(44,29,20,.7)}
+.brand b{display:block;font-size:14px;font-weight:600;letter-spacing:.15em}
+.brand span{display:block;font-size:10px;color:var(--muted);margin-top:-2px}
+.hours{margin-left:auto;display:flex;align-items:center;gap:6px;font-size:10.5px;color:var(--brown);
+  background:rgba(255,255,255,.72);border:1px solid var(--line);border-radius:999px;padding:6px 11px}
+.dot{width:6px;height:6px;border-radius:50%;background:#3EA76B;box-shadow:0 0 0 3px rgba(62,167,107,.18)}
+
+.cats{display:flex;gap:7px;overflow-x:auto;padding:8px 16px 10px;flex:0 0 auto;scrollbar-width:none}
+.cats::-webkit-scrollbar{display:none}
+.pill{flex:0 0 auto;display:flex;align-items:center;gap:6px;padding:8px 14px;border-radius:999px;
+  background:rgba(255,255,255,.7);border:1px solid var(--line);font-size:12.5px;color:var(--brown);white-space:nowrap;
+  transition:.25s cubic-bezier(.2,.8,.2,1)}
+.pill.on{background:linear-gradient(135deg,#4C3324,#2B1C13);color:#F6ECD9;border-color:transparent;
+  box-shadow:0 12px 22px -14px rgba(44,29,20,.9);transform:translateY(-1px)}
+.pill em{font-style:normal}
+
+/* ---------- carousel ---------- */
+.deckWrap{position:relative;flex:1 1 auto;min-height:0;display:flex;flex-direction:column}
+.deck{display:flex;align-items:stretch;height:100%;overflow-x:auto;overflow-y:hidden;
+  scroll-snap-type:x mandatory;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.deck::-webkit-scrollbar{display:none}
+.spacer{flex:0 0 27%;height:100%}
+.item{flex:0 0 46%;scroll-snap-align:center;height:100%;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;padding:6px 0 2px}
+.item .box{position:relative;width:100%;flex:1 1 auto;min-height:0;display:grid;place-items:center;
+  transform-origin:50% 62%;will-change:transform}
+.item .halo{position:absolute;width:96%;aspect-ratio:1;border-radius:50%;background:rgba(255,255,255,.44);
+  filter:blur(1px);box-shadow:0 26px 54px -28px rgba(60,38,22,.5);transition:opacity .3s}
+.item svg{height:100%;width:auto;max-width:100%;filter:drop-shadow(0 20px 24px rgba(50,30,16,.26))}
+.item img.photo{height:100%;width:auto;max-width:94%;object-fit:contain;border-radius:24px;
+  filter:drop-shadow(0 20px 26px rgba(50,30,16,.34))}
+.item .cap{flex:0 0 auto;margin-top:9px;font-size:12px;font-weight:400;line-height:1.3;text-align:center;
+  max-width:96%;opacity:0;transition:opacity .3s,transform .3s}
+.item .cap b{display:block;font-weight:400;font-size:11px;color:var(--muted);margin-top:1px}
+.item .cap{display:none}
+.item.off .halo{opacity:.35}
+.tag{position:absolute;top:0;left:50%;transform:translateX(-50%);font-size:9.5px;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--brown);background:rgba(255,255,255,.8);border:1px solid var(--line);
+  padding:4px 11px;border-radius:999px}
+
+/* ---------- detail of active drink ---------- */
+.detail{flex:0 0 auto;text-align:center;padding:2px 24px 0;transition:opacity .2s ease}
+.detail.fade{opacity:0}
+.nm{font-size:24px;font-weight:600;line-height:1.2;letter-spacing:-.01em;margin:0}
+.en{font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);margin-top:4px}
+.ds{font-size:12.5px;line-height:1.6;color:#5C4634;margin:8px auto 0;max-width:32ch;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.chips{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin-top:10px}
+.chips span{font-size:10.5px;color:var(--brown);background:rgba(255,255,255,.72);border:1px solid var(--line);
+  border-radius:999px;padding:6px 11px}
+.pz{display:flex;align-items:baseline;justify-content:center;gap:3px;margin-top:10px}
+.pz b{font-size:34px;font-weight:600;letter-spacing:-.03em;line-height:1}
+.pz i{font-style:normal;font-size:13px;color:var(--muted)}
+
+.nav{position:absolute;top:34%;width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.82);
+  display:grid;place-items:center;font-size:19px;color:var(--brown);box-shadow:0 10px 24px -14px rgba(50,30,16,.8);
+  backdrop-filter:blur(6px);z-index:5}
+.nav.l{left:8px}.nav.r{right:8px}
+.nav[disabled]{opacity:.25}
+
+.hint{position:absolute;top:4px;left:16px;font-size:10.5px;color:var(--muted);z-index:5;
+  background:rgba(255,255,255,.72);border:1px solid var(--line);border-radius:999px;padding:5px 11px;
+  animation:hint 2.4s ease-in-out infinite;transition:opacity .5s}
+@keyframes hint{0%,100%{transform:translateX(0)}50%{transform:translateX(7px)}}
+
+/* ---------- footer ---------- */
+.rail{flex:0 0 auto;display:flex;gap:4px;justify-content:center;padding:12px 20px 6px;overflow:hidden}
+.rail b{height:3px;flex:1 1 auto;max-width:34px;border-radius:99px;background:rgba(76,51,36,.16);transition:.35s}
+.rail b.on{background:var(--gold);transform:scaleY(1.8)}
+.dock{flex:0 0 auto;display:flex;gap:10px;padding:6px 16px calc(10px + env(safe-area-inset-bottom))}
+.dk{flex:1;display:flex;align-items:center;justify-content:center;gap:8px;height:48px;border-radius:17px;
+  font-size:14px;font-weight:500;box-shadow:var(--shadow);transition:transform .18s}
+.dk:active{transform:scale(.97)}
+.dk.main{background:linear-gradient(135deg,#4C3324,#241710);color:#F6ECD9}
+.dk.alt{background:rgba(255,255,255,.9);color:var(--brown);border:1px solid var(--line)}
+.count{position:absolute;right:16px;top:6px;font-size:11px;color:var(--muted);letter-spacing:.08em;z-index:5}
+
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+@media (min-width:520px){body{max-width:520px;margin:0 auto;box-shadow:0 0 60px rgba(60,40,25,.12)}}
+</style>
+</head>
+<body>
+
+<div class="bg" id="bg">
+  <div class="lay on" id="lay0"></div>
+  <div class="lay" id="lay1"></div>
+  <div class="arc"></div><div class="arc b"></div>
+  <svg class="leaf l1" viewBox="0 0 200 260" fill="none"><path d="M100 6C40 60 8 130 30 200c22 66 96 66 130 10 34-56 18-150-60-204Z" fill="rgba(255,255,255,.5)"/><path d="M100 20v210" stroke="rgba(120,90,60,.35)" stroke-width="2"/><path d="M100 70 60 110M100 110 55 150M100 150 65 186M100 70l38 40M100 110l42 40M100 150l34 36" stroke="rgba(120,90,60,.28)" stroke-width="2"/></svg>
+  <svg class="leaf l2" viewBox="0 0 200 260" fill="none"><path d="M100 6C40 60 8 130 30 200c22 66 96 66 130 10 34-56 18-150-60-204Z" fill="rgba(255,255,255,.42)"/><path d="M100 20v210" stroke="rgba(120,90,60,.3)" stroke-width="2"/><path d="M100 80 58 122M100 130 60 168M100 80l40 42M100 130l38 38" stroke="rgba(120,90,60,.24)" stroke-width="2"/></svg>
+  <div class="grain"></div>
+</div>
+
+<header>
+  <img class="logo" alt="Owl Cha" src="data:image/png;base64,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">
+  <div class="brand"><b>OWL CHA</b><span>สาขา ม.ศิลปากร นครปฐม</span></div>
+  <div class="hours" id="hours"><i class="dot"></i><span>09:00–20:00</span></div>
+</header>
+
+<nav class="cats" id="cats"></nav>
+
+<div class="deckWrap">
+  <div class="count" id="count"></div>
+  <div class="deck" id="deck"></div>
+  <button class="nav l" id="prev">‹</button>
+  <button class="nav r" id="next">›</button>
+  <div class="hint" id="hint">ปัดซ้าย–ขวา ดูเมนู →</div>
+</div>
+
+<div class="detail" id="detail">
+  <h2 class="nm" id="dName">—</h2>
+  <div class="en" id="dEn"></div>
+  <p class="ds" id="dDesc"></p>
+  <div class="chips" id="dChips"></div>
+  <div class="pz"><b id="dPrice">0</b><i>บาท</i></div>
+</div>
+
+<div class="rail" id="rail"></div>
+<div class="dock">
+  <a class="dk main" id="dkOrder" target="_blank" rel="noopener">🧋 พรีออเดอร์</a>
+  <a class="dk alt" id="dkDeli" target="_blank" rel="noopener">🛵 เดลิเวอรี</a>
+</div>
+
+<script>
+/* ============ CONFIG ============ */
+var ORDER_URL='https://phoneyjung.github.io/plp-finance/order.html';
+var DELIVERY_URL='https://lin.ee/6IpVFW8?openExternalBrowser=1';
+var FIRESTORE='https://firestore.googleapis.com/v1/projects/plp-finance/databases/(default)/documents/owlMenu';
+var IMG_BASE=(location.hostname==='phoneyjung.github.io')?'':'https://phoneyjung.github.io/plp-finance/';
+var USE_PHOTO=true;   /* true = ใช้รูปถ่ายถ้ามี, false = ใช้ภาพวาดทั้งหมด */
+/* ================================ */
+
+var CATEMOJI={'ขายดี':'⭐','เฟเวอริต':'💛','คลาสสิค':'🍵','พรีเมียมฟรุต':'🍑','นมสด':'🥛','ช็อคโกอาวล์':'🍫','โซดา':'🫧','ท็อปปิ้ง':'✨'};
+var ORDER=['ขายดี','เฟเวอริต','คลาสสิค','พรีเมียมฟรุต','นมสด','ช็อคโกอาวล์','โซดา','ท็อปปิ้ง'];
+
+/* ---- ชุดสีของเครื่องดื่มแต่ละแบบ (ใช้วาดภาพ + พื้นหลัง) ---- */
+var STYLES={
+  peach:     {liq:['#FFC79B','#F0805C'], foam:'#FFF0E2', bg:['#FDE3CE','#F6C6A6'], garnish:'peach', name:'พีช'},
+  muscat:    {liq:['#E3EFAE','#A9C452'], foam:'#F4F7E2', bg:['#EDF3D4','#CBDCA0'], garnish:'grape'},
+  matcha:    {liq:['#CBE1A2','#6E9A4B'], foam:'#F3F6E6', bg:['#E4EFCF','#BCD3A0'], garnish:'leaf'},
+  thai:      {liq:['#F5B074','#D0691F'], foam:'#FFF3E3', bg:['#FBDDBE','#EFB98A'], garnish:'star'},
+  green:     {liq:['#DCE9BB','#8FAF64'], foam:'#F5F7E9', bg:['#E9F0D8','#C9DBAE'], garnish:'leaf'},
+  milk:      {liq:['#FFFBF4','#E7D5BE'], foam:'#FFFDF8', bg:['#F6EEE2','#E4D3BE'], garnish:'none'},
+  choco:     {liq:['#C79B74','#5B3A22'], foam:'#F0E0CE', bg:['#EBDAC6','#C7A585'], garnish:'none'},
+  soda:      {liq:['#CDEDF3','#5FBAD0'], foam:'#EAF8FB', bg:['#DEF0F4','#B4DDE6'], garnish:'bubble'},
+  strawberry:{liq:['#FFC3CE','#E04B62'], foam:'#FFEFF2', bg:['#FBDFE4','#F0B7C1'], garnish:'berry'},
+  lychee:    {liq:['#FBEAEE','#DCA9B7'], foam:'#FFF6F8', bg:['#F8E7EB','#E5C6CE'], garnish:'bubble'},
+  passion:   {liq:['#FFDD97','#E59B32'], foam:'#FFF4DF', bg:['#FCEBC7','#F0CE93'], garnish:'star'},
+  coffee:    {liq:['#CBA383','#4E3320'], foam:'#EFE0D0', bg:['#EADCCB','#C4A98F'], garnish:'bean'},
+  mint:      {liq:['#D7F0E2','#6FBF9A'], foam:'#EFFAF4', bg:['#E2F3EA','#BCE2D1'], garnish:'leaf'},
+  topping:   {liq:['#F0E2CB','#C6A87F'], foam:'#FBF3E6', bg:['#F2E7D5','#D9C4A4'], garnish:'pearl'},
+  milktea:   {liq:['#F2DFC4','#C69257'], foam:'#FBF2E4', bg:['#F5E9D6','#DFC9A6'], garnish:'pearl'},
+  tea:       {liq:['#EED7AC','#B98B4E'], foam:'#FBF1DF', bg:['#F4E7CE','#DCC49B'], garnish:'leaf'}
+};
+function styleOf(it){
+  var s=(it.n||'')+' '+(it.en||'');
+  var has=function(){for(var i=0;i<arguments.length;i++){if(s.indexOf(arguments[i])>-1)return true}return false};
+  if(it.c==='ท็อปปิ้ง') return STYLES.topping;
+  if(has('พีช','Peach')) return STYLES.peach;
+  if(has('มัสแคท','Muscat','องุ่น')) return STYLES.muscat;
+  if(has('มัทฉะ','Matcha')) return STYLES.matcha;
+  if(has('สตรอ','Strawberry')) return STYLES.strawberry;
+  if(has('ลิ้นจี่','Lychee')) return STYLES.lychee;
+  if(has('เสาวรส','Passion')) return STYLES.passion;
+  if(has('กาแฟ','Coffee')) return STYLES.coffee;
+  if(has('มินท์','Mint')) return STYLES.mint;
+  if(has('ช็อค','Choc','ไมโล','Milo')) return STYLES.choco;
+  if(has('ชาไทย','Thai Tea')) return STYLES.thai;
+  if(has('โซดา','Soda')) return STYLES.soda;
+  if(has('ชานม','Milk Tea','ไต้หวัน','Taiwan','บราวน์','Brown Sugar')) return STYLES.milktea;
+  if(has('เขียว','Green','มะลิ','Jasmine')) return STYLES.green;
+  if(has('นมสด','Fresh Milk','นม')) return STYLES.milk;
+  return STYLES.tea;
+}
+
+/* ---------- ภาพวาดแก้ว (SVG) ---------- */
+var uid=0;
+function garnishSVG(kind,cx,cy){
+  switch(kind){
+    case 'peach': return '<g transform="translate('+cx+','+cy+')"><circle r="20" fill="#F79A6E"/><path d="M0-20a20 20 0 0 1 0 40" fill="#EF7F55"/><path d="M-2-20c-2-8 4-13 10-14-2 8-4 12-10 14Z" fill="#7FA85C"/></g>';
+    case 'grape': return '<g transform="translate('+cx+','+cy+')" fill="#B7CE63"><circle cx="-11" cy="0" r="8"/><circle cx="2" cy="-6" r="8"/><circle cx="3" cy="9" r="8"/><circle cx="15" cy="2" r="8"/><path d="M2-14c0-7 6-10 12-10-3 6-6 9-12 10Z" fill="#7FA85C"/></g>';
+    case 'leaf': return '<g transform="translate('+cx+','+cy+') rotate(-18)"><path d="M0-22C-16-8-18 10-6 18 6 26 20 14 20-4 20-14 10-18 0-22Z" fill="#88AF63"/><path d="M2-18C-4-4-4 8 0 18" stroke="#5E824A" stroke-width="2" fill="none"/></g>';
+    case 'berry': return '<g transform="translate('+cx+','+cy+')"><path d="M0 20c-12-6-16-18-12-27 3-7 18-9 24 0 5 8 1 21-12 27Z" fill="#E25370"/><path d="M-9-9h18l-3-8h-12Z" fill="#7FA85C"/><g fill="#FFF0F3"><circle cx="-4" cy="2" r="1.6"/><circle cx="4" cy="-2" r="1.6"/><circle cx="0" cy="9" r="1.6"/><circle cx="7" cy="7" r="1.6"/></g></g>';
+    case 'star': return '<g transform="translate('+cx+','+cy+')" fill="#F2C15A"><path d="M0-20 6-6l15 2-11 10 3 15L0 14l-13 7 3-15-11-10 15-2Z"/></g>';
+    case 'bean': return '<g transform="translate('+cx+','+cy+') rotate(24)"><ellipse rx="12" ry="17" fill="#6B4429"/><path d="M0-16c-5 6-5 26 0 32" stroke="#3E2717" stroke-width="2.6" fill="none"/></g>';
+    case 'pearl': return '<g transform="translate('+cx+','+cy+')" fill="#4A3222"><circle cx="-10" cy="4" r="7"/><circle cx="6" cy="-4" r="7"/><circle cx="10" cy="12" r="6"/></g>';
+    case 'bubble': return '<g transform="translate('+cx+','+cy+')" fill="rgba(255,255,255,.85)"><circle cx="0" cy="0" r="7"/><circle cx="14" cy="10" r="4.5"/><circle cx="-12" cy="12" r="3.5"/></g>';
+    default: return '';
+  }
+}
+function drinkSVG(it){
+  var st=styleOf(it), id='g'+(uid++), s=(it.n||'')+' '+(it.en||'');
+  var cheese = /ชีส|Cheese/.test(s);
+  var pearls = /ไข่มุก|ชานม|Milk Tea|บราวน์|Brown|บุก|Konjac|คริสตัล|Crystal/.test(s) || it.c==='ท็อปปิ้ง';
+  var soda   = /โซดา|Soda/.test(s);
+  var milkTop= /นมสด|Fresh Milk|ลาเต้|Latte/.test(s);
+  var g='';
+  /* pearls */
+  if(pearls){
+    g+='<g fill="rgba(45,28,16,.82)">';
+    var px=[70,92,113,80,103,124,68,96];
+    var py=[300,306,299,283,286,282,268,266];
+    for(var i=0;i<px.length;i++) g+='<circle cx="'+px[i]+'" cy="'+py[i]+'" r="9"/>';
+    g+='</g>';
+  }
+  if(soda){
+    g+='<g fill="rgba(255,255,255,.7)">';
+    var bx=[72,96,118,84,106,70,124,92];
+    var by=[250,232,258,206,190,176,214,160];
+    var br=[5,3.5,4.5,3,5,3.5,3,4];
+    for(var j=0;j<bx.length;j++) g+='<circle cx="'+bx[j]+'" cy="'+by[j]+'" r="'+br[j]+'"/>';
+    g+='</g>';
+  }
+  return ''+
+  '<svg viewBox="0 0 200 400" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="'+String(it.n||'').replace(/"/g,'')+'">'+
+    '<defs>'+
+      '<linearGradient id="liq'+id+'" x1="0" y1="0" x2="0" y2="1">'+
+        '<stop offset="0" stop-color="'+st.liq[0]+'"/><stop offset="1" stop-color="'+st.liq[1]+'"/></linearGradient>'+
+      '<linearGradient id="gls'+id+'" x1="0" y1="0" x2="1" y2="0">'+
+        '<stop offset="0" stop-color="rgba(255,255,255,.55)"/><stop offset=".45" stop-color="rgba(255,255,255,.12)"/>'+
+        '<stop offset="1" stop-color="rgba(255,255,255,.42)"/></linearGradient>'+
+      '<clipPath id="cup'+id+'"><path d="M52 118h96l-11 208a20 20 0 0 1-20 19H83a20 20 0 0 1-20-19Z"/></clipPath>'+
+    '</defs>'+
+    /* garnish behind cup */
+    garnishSVG(st.garnish,160,150)+
+    /* straw */
+    '<g><rect x="120" y="52" width="13" height="86" rx="6" fill="#FFFFFF" opacity=".92"/>'+
+      '<rect x="120" y="52" width="13" height="86" rx="6" fill="'+st.liq[1]+'" opacity=".25"/></g>'+
+    /* lid */
+    (cheese
+      ? '<path d="M44 118c0-30 25-46 56-46s56 16 56 46Z" fill="#FFFFFF" opacity=".9"/><rect x="40" y="112" width="120" height="16" rx="8" fill="#FFFFFF"/>'
+      : '<rect x="40" y="100" width="120" height="20" rx="10" fill="#FFFFFF" opacity=".95"/><rect x="46" y="92" width="108" height="12" rx="6" fill="#FFFFFF" opacity=".6"/>')+
+    /* cup body */
+    '<path d="M52 118h96l-11 208a20 20 0 0 1-20 19H83a20 20 0 0 1-20-19Z" fill="rgba(255,255,255,.55)"/>'+
+    '<g clip-path="url(#cup'+id+')">'+
+      '<rect x="52" y="150" width="96" height="200" fill="url(#liq'+id+')"/>'+
+      (cheese? '<rect x="52" y="128" width="96" height="46" fill="'+st.foam+'"/><rect x="52" y="168" width="96" height="8" fill="rgba(255,255,255,.55)"/>':'')+
+      (milkTop&&!cheese? '<rect x="52" y="130" width="96" height="40" fill="'+st.foam+'" opacity=".85"/>':'')+
+      g+
+      '<rect x="52" y="118" width="96" height="232" fill="url(#gls'+id+')"/>'+
+      '<rect x="66" y="150" width="9" height="170" rx="4.5" fill="rgba(255,255,255,.5)"/>'+
+    '</g>'+
+    '<path d="M52 118h96l-11 208a20 20 0 0 1-20 19H83a20 20 0 0 1-20-19Z" fill="none" stroke="rgba(255,255,255,.85)" stroke-width="3"/>'+
+    /* owl band */
+    '<g transform="translate(100,214)" opacity=".92">'+
+      '<rect x="-26" y="-20" width="52" height="40" rx="14" fill="rgba(255,255,255,.86)"/>'+
+      '<g fill="#33220F"><circle cx="-10" cy="-3" r="8.5"/><circle cx="10" cy="-3" r="8.5"/></g>'+
+      '<g fill="#FFFFFF"><circle cx="-8" cy="-5" r="3"/><circle cx="12" cy="-5" r="3"/></g>'+
+      '<path d="M0 4l5 7h-10Z" fill="#C08A3E"/>'+
+    '</g>'+
+  '</svg>';
+}
+
+/* ---------- data ---------- */
+function val(f){ if(!f)return null;
+  if('stringValue' in f)return f.stringValue;
+  if('integerValue' in f)return parseInt(f.integerValue,10);
+  if('doubleValue' in f)return f.doubleValue;
+  if('booleanValue' in f)return f.booleanValue; return null }
+function fromDoc(d){var f=d.fields||{};return{
+  n:val(f.nameTh)||val(f.name)||'', en:val(f.name)||'', p:val(f.price)||0,
+  c:val(f.category)||'อื่นๆ', desc:val(f.desc)||'', photo:val(f.photo)||'',
+  prep:val(f.prepMin)||0, active:(f.active&&f.active.booleanValue===false)?false:true,
+  sort:(val(f.sortOrder)==null?999:val(f.sortOrder))}}
+async function loadMenu(){
+  var out=[],token='',guard=0;
+  do{
+    var r=await fetch(FIRESTORE+'?pageSize=100'+(token?'&pageToken='+encodeURIComponent(token):''),{cache:'no-store'});
+    if(!r.ok) throw new Error('http '+r.status);
+    var j=await r.json();
+    (j.documents||[]).forEach(function(d){out.push(fromDoc(d))});
+    token=j.nextPageToken||'';
+  }while(token&&++guard<12);
+  return out.filter(function(x){return x.active&&x.n});
+}
+var SNAPSHOT=[
+ ['มัทฉะลาเต้มะพร้าว','Coconut Matcha Latte',49,'ขายดี'],['ชาพีชชีส','Peach Tea Cheese',64,'ขายดี'],
+ ['ชาองุ่นไชน์มัสแคทชีส','Shine Muscat Cheese',54,'ขายดี'],['ชาเขียวมะลิชีส','Jasmine Green Tea Cheese',39,'ขายดี'],
+ ['ชาไทย','Thai Tea',29,'เฟเวอริต'],['ชาเขียวนม','Green Milk Tea',29,'เฟเวอริต'],
+ ['ชานมกาแฟ','Coffee Milk Tea',29,'เฟเวอริต'],['ชานมมินท์','Mint Milk Tea',29,'เฟเวอริต'],
+ ['ชานมไต้หวัน','Taiwan Milk Tea',24,'คลาสสิค'],['ชาเขียวมะลิ','Jasmine Green Tea',19,'คลาสสิค'],
+ ['ชาเสาวรส','Passion Fruit Tea',24,'คลาสสิค'],['ชาพีช','Peach Tea',44,'พรีเมียมฟรุต'],
+ ['ชาองุ่นไชน์มัสแคท','Shine Muscat Tea',34,'พรีเมียมฟรุต'],['ชาพีชส้ม','Peach Orange Tea',44,'พรีเมียมฟรุต'],
+ ['พีชส้มโซดา','Peach Orange Soda',44,'พรีเมียมฟรุต'],['นมสด','Fresh Milk',34,'นมสด'],
+ ['นมสดชมพู','Nom Chompoo',34,'นมสด'],['นมสดคาราเมล','Caramel Fresh Milk',39,'นมสด'],
+ ['นมสดไมโล','Milo Fresh Milk',39,'นมสด'],['ดับเบิ้ลช็อค','Double Choc',44,'นมสด'],
+ ['ชาไทยช็อคโก','Choco Owl Thai Tea',39,'ช็อคโกอาวล์'],['ฟรุตตี้มิลค์สตรอว์เบอร์รี่','Fruity Milk Strawberry',44,'ช็อคโกอาวล์'],
+ ['สตรอว์เบอร์รี่โซดา','Strawberry Soda',24,'โซดา'],['ลิ้นจี่โซดา','Lychee Soda',24,'โซดา'],
+ ['เสาวรสโซดา','Passion Fruit Soda',24,'โซดา'],['สละโซดา','Sala Soda',24,'โซดา'],
+ ['ชีส','Cheese',20,'ท็อปปิ้ง'],['ไข่มุกบุก','Konjac',10,'ท็อปปิ้ง'],['คริสตัลบราวน์ชูการ์','Brown Sugar Crystal',10,'ท็อปปิ้ง']
+].map(function(a,i){return {n:a[0],en:a[1],p:a[2],c:a[3],desc:'',photo:'',prep:0,active:true,sort:i}});
+
+/* ---------- app ---------- */
+var $=function(s){return document.querySelector(s)};
+var esc=function(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})};
+var GROUPS=[],gi=0,idx=0,layFlip=0;
+
+function imgUrl(p){ if(!p)return ''; if(/^(https?:|data:)/.test(p))return p; return IMG_BASE+String(p).replace(/^\.?\//,'') }
+function group(items){
+  var m={};items.forEach(function(it){(m[it.c]=m[it.c]||[]).push(it)});
+  return Object.keys(m).sort(function(a,b){var x=ORDER.indexOf(a),y=ORDER.indexOf(b);return (x<0?99:x)-(y<0?99:y)})
+    .map(function(k){m[k].sort(function(a,b){return a.sort-b.sort||a.p-b.p});return{name:k,items:m[k]}});
+}
+function buildCats(){
+  $('#cats').innerHTML=GROUPS.map(function(g,i){
+    return '<button class="pill'+(i===gi?' on':'')+'" data-i="'+i+'"><em>'+(CATEMOJI[g.name]||'🍹')+'</em>'+esc(g.name)+'</button>'}).join('');
+  [].forEach.call($('#cats').querySelectorAll('.pill'),function(b){
+    b.onclick=function(){ gi=+b.dataset.i; buildCats(); buildDeck(); var p=$('#cats').querySelectorAll('.pill')[gi];
+      if(p) p.parentNode.scrollTo({left:p.offsetLeft-70,behavior:'smooth'}) };
+  });
+}
+function cardHTML(it,i){
+  var u=USE_PHOTO?imgUrl(it.photo):'';
+  var art=u
+    ? '<img class="photo" src="'+esc(u)+'" alt="'+esc(it.n)+'" onerror="this.outerHTML=window.__art('+i+')">'
+    : drinkSVG(it);
+  return '<article class="item off" data-i="'+i+'">'+
+      '<div class="box"><div class="halo"></div>'+art+'</div>'+
+      '<div class="cap">'+esc(it.n)+'<b>'+it.p+' บาท</b></div>'+
+    '</article>';
+}
+window.__art=function(i){ return drinkSVG(GROUPS[gi].items[i]) };
+function cards(){ return [].slice.call($('#deck').querySelectorAll('.item')) }
+
+function buildDeck(){
+  var items=GROUPS[gi].items;
+  $('#deck').innerHTML='<i class="spacer"></i>'+items.map(cardHTML).join('')+'<i class="spacer"></i>';
+  $('#rail').innerHTML=items.map(function(_,i){return '<b class="'+(i?'':'on')+'"></b>'}).join('');
+  $('#deck').scrollLeft=0; idx=0; layout(); paint();
+}
+
+/* วางสเกล/ความจางของแก้วซ้าย-ขวา + หา index ที่อยู่กลางจอ */
+function layout(){
+  var deck=$('#deck'), cs=cards(); if(!cs.length)return;
+  var mid=deck.scrollLeft+deck.clientWidth/2, best=0, bd=1e9;
+  cs.forEach(function(c,i){
+    var cc=c.offsetLeft+c.offsetWidth/2, d=(cc-mid)/c.offsetWidth, ad=Math.min(Math.abs(d),2.2);
+    var box=c.querySelector('.box');
+    if(box) box.style.transform='translateY('+(ad*14)+'px) scale('+(1-ad*.26)+') rotate('+(d*3)+'deg)';
+    c.style.opacity=String(Math.max(.3,1-ad*.42));
+    c.classList.toggle('off',ad>.35);
+    if(Math.abs(cc-mid)<bd){ bd=Math.abs(cc-mid); best=i }
+  });
+  if(best!==idx){ idx=best; paint() }
+}
+
+function paint(){
+  var items=GROUPS[gi].items, it=items[idx]; if(!it)return;
+  var st=styleOf(it);
+  var lay=layFlip?$('#lay0'):$('#lay1'), cur=layFlip?$('#lay1'):$('#lay0');
+  lay.style.background='radial-gradient(120% 80% at 50% 8%, '+st.bg[0]+' 0%, '+st.bg[1]+' 58%, #F3E7D6 100%)';
+  lay.classList.add('on'); cur.classList.remove('on'); layFlip=layFlip?0:1;
+  document.querySelector('meta[name=theme-color]').setAttribute('content',st.bg[0]);
+
+  var d=$('#detail'); d.classList.add('fade');
+  setTimeout(function(){
+    $('#dName').textContent=it.n;
+    $('#dEn').textContent=it.en||'owl cha';
+    $('#dDesc').textContent=(it.desc&&it.desc!==it.n)?it.desc:'ชงสดใหม่ทุกแก้ว เลือกความหวานและน้ำแข็งได้ตอนสั่ง';
+    var ch='<span>🧊 ปรับหวาน/น้ำแข็งได้</span>';
+    if(it.prep) ch+='<span>⏱ ~'+it.prep+' นาที</span>';
+    ch+='<span>'+(CATEMOJI[it.c]||'🍹')+' '+esc(it.c)+'</span>';
+    $('#dChips').innerHTML=ch;
+    $('#dPrice').textContent=it.p;
+    d.classList.remove('fade');
+  },140);
+
+  $('#count').textContent=(idx+1)+' / '+items.length;
+  [].forEach.call($('#rail').children,function(b,i){b.classList.toggle('on',i===idx)});
+  $('#prev').disabled=idx===0; $('#next').disabled=idx===items.length-1;
+}
+
+function go(d){
+  var c=cards()[idx+d]; if(!c)return;
+  var deck=$('#deck');
+  deck.scrollTo({left:c.offsetLeft-(deck.clientWidth-c.offsetWidth)/2,behavior:'smooth'});
+}
+$('#prev').onclick=function(){go(-1)}; $('#next').onclick=function(){go(1)};
+document.addEventListener('keydown',function(e){ if(e.key==='ArrowRight')go(1); if(e.key==='ArrowLeft')go(-1) });
+
+/* scroll → ปรับสเกลแก้วข้างๆ + เปลี่ยน index */
+(function(){
+  var deck=$('#deck'), tick=false;
+  deck.addEventListener('scroll',function(){
+    if(tick)return; tick=true;
+    requestAnimationFrame(function(){ layout(); tick=false });
+  },{passive:true});
+  window.addEventListener('resize',function(){ layout() });
+})();
+
+/* แตะแก้วข้างๆ เพื่อเลื่อนไปเมนูนั้น */
+$('#deck').addEventListener('click',function(e){
+  var c=e.target.closest && e.target.closest('.item'); if(!c)return;
+  var i=+c.dataset.i; if(i===idx)return;
+  go(i-idx);
+});
+
+/* hint hides after first swipe */
+(function(){ var h=$('#hint'), hide=function(){h.style.opacity='0';setTimeout(function(){h.remove()},600)};
+  $('#deck').addEventListener('scroll',hide,{once:true,passive:true});
+  setTimeout(hide,6000); })();
+
+/* links + hours */
+$('#dkOrder').href=ORDER_URL; $('#dkDeli').href=DELIVERY_URL;
+(function(){var h=new Date().getHours(),open=(h>=9&&h<20),el=$('#hours');
+  el.querySelector('span').textContent=(open?'เปิดอยู่ · ':'ปิดแล้ว · ')+'09:00–20:00';
+  if(!open) el.querySelector('.dot').style.background='#C4614A'})();
+
+/* boot */
+function start(items){ GROUPS=group(items); if(!GROUPS.length)return; buildCats(); buildDeck() }
+loadMenu().then(function(x){ if(!x.length)throw new Error('empty'); start(x) })
+  .catch(function(e){ console.warn('snapshot:',e); start(SNAPSHOT) });
+</script>
+</body>
+</html>
