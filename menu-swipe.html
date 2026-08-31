@@ -101,7 +101,9 @@ header{padding:calc(10px + env(safe-area-inset-top)) 16px 6px;display:flex;align
 .stage .art.pop{animation:pop .5s cubic-bezier(.2,.8,.2,1)}
 @keyframes pop{0%{opacity:0;transform:translateY(16px) scale(.93)}100%{opacity:1;transform:none}}
 .stage svg{height:100%;max-height:100%;width:auto;max-width:100%;filter:drop-shadow(0 22px 26px rgba(50,30,16,.28))}
-.stage img.photo{width:100%;height:100%;object-fit:contain;mix-blend-mode:multiply}
+.stage img.photo{width:100%;height:100%;object-fit:contain;mix-blend-mode:multiply;
+  opacity:0;transition:opacity .35s ease}
+.stage img.photo.rdy{opacity:1}
 
 .info{flex:0 0 auto;width:100%;display:grid;grid-template-columns:1.618fr 1fr;gap:14px;
   align-items:end;text-align:left;transition:opacity .2s ease;
@@ -141,7 +143,8 @@ header{padding:calc(10px + env(safe-area-inset-top)) 16px 6px;display:flex;align
   display:grid;place-items:center;box-shadow:0 0 0 2px rgba(255,255,255,.28);
   transition:transform .34s cubic-bezier(.2,.8,.2,1),box-shadow .3s}
 .item .box svg{height:88%;width:auto}
-.item .box img.photo{width:100%;height:100%;object-fit:cover}
+.item .box img.photo{width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity .3s ease}
+.item .box img.photo.rdy{opacity:1}
 .item .cap{margin-top:26px;font-size:10px;line-height:1.25;text-align:center;max-width:100%;padding:0 4px;
   color:rgba(246,236,217,.6);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:.3s}
 .item .cap b{display:block;font-weight:500;font-size:10px;color:rgba(192,138,62,.75);margin-top:2px}
@@ -460,7 +463,9 @@ function gradOf(it){ var g=styleOf(it).bg; return 'linear-gradient(150deg,'+g[0]
 function artHTML(it,i,cls){
   var u=USE_PHOTO?imgUrl(it.photo):'';
   return u
-    ? '<img class="photo'+(cls?' '+cls:'')+'" src="'+esc(u)+'" alt="'+esc(it.n)+'" onerror="this.outerHTML=window.__art('+i+')">'
+    ? '<img class="photo'+(cls?' '+cls:'')+'" src="'+esc(u)+'" alt="'+esc(it.n)+'" '+
+      'onload="this.classList.add(\'rdy\')" '+
+      'onerror="this.outerHTML=window.__art('+i+')">'
     : drinkSVG(it);
 }
 function cardHTML(it,i){
