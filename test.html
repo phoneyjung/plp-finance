@@ -3208,12 +3208,7 @@ function AttendPanel({ user }){
   /* ส่วนต่างจากกะปกติ เป็น "นาที" — บวก = ทำเกิน (OT) · ลบ = เข้าสาย/ออกก่อน */
   const otMinOf=(pin, netMin)=> Math.round((netMin||0) - shiftHrsOf(pin)*60);
   /* แปลงนาทีเป็นข้อความ เช่น +1:25 / -0:15 */
-  const minTxt=(m)=>{
-    if(!m) return '–';
-    const sg=m<0?'-':'+', a=Math.abs(m);
-    const h=Math.floor(a/60), mm=a%60;
-    return sg + (h? h+':'+String(mm).padStart(2,'0') : mm+' น.');
-  };
+  const minTxt=(m)=> !m ? '–' : ((m>0?'+':'') + m + ' น.');
   const minHr=(m)=> Math.round((m/60)*100)/100;
   const setHol=async(d,pin,on)=>{
     if(!db) return;
@@ -3301,7 +3296,8 @@ function AttendPanel({ user }){
         const rows=[];
         if(v && (shopF==='all' || shopOf(d,who)===shopF)){
           const pr=parseRow(v);
-          rows.push({ pin:who, ...v, ...pr, shop:shopOf(d,who), otMin:otMinOf(who,pr.netMin), hol:isHol(d,who) });
+          const hl=isHol(d,who);
+          rows.push({ pin:who, ...v, ...pr, shop:shopOf(d,who), otMin: hl?0:otMinOf(who,pr.netMin), hol:hl });
         }
         out.push({ d, rows, full:true });
       }
@@ -3312,7 +3308,7 @@ function AttendPanel({ user }){
         .filter(p=> who==='all' || String(p)===who)
         .filter(p=> shopF==='all' || shopOf(d,p)===shopF)
         .sort((a,b)=>(+a)-(+b))
-        .map(p=>{ const pr=parseRow(scans[d][p]||{}); return { pin:p, ...(scans[d][p]||{}), ...pr, shop:shopOf(d,p), otMin:otMinOf(p,pr.netMin), hol:isHol(d,p) }; });
+        .map(p=>{ const pr=parseRow(scans[d][p]||{}); const hl=isHol(d,p); return { pin:p, ...(scans[d][p]||{}), ...pr, shop:shopOf(d,p), otMin: hl?0:otMinOf(p,pr.netMin), hol:hl }; });
       if(rows.length) out.push({ d, rows });
     });
     return out;
@@ -3323,11 +3319,11 @@ function AttendPanel({ user }){
     Object.keys(scans||{}).forEach(d=>{
       Object.keys(scans[d]||{}).forEach(p=>{
         const r=parseRow(scans[d][p]||{});
-        if(!per[p]) per[p]={ pin:p, days:0, hours:0, manual:0, open:0, byShop:{}, otMin:0, hol:0 };
+        if(!per[p]) per[p]={ pin:p, days:0, hours:0, manual:0, open:0, byShop:{}, otMin:0, hol:0, holHours:0 };
         per[p].days++;
         per[p].hours+=r.net;
-        per[p].otMin+=otMinOf(p,r.netMin);
-        if(isHol(d,p)) per[p].hol++;
+        const hl2=isHol(d,p);
+        if(hl2){ per[p].hol++; per[p].holHours+=r.net; } else per[p].otMin+=otMinOf(p,r.netMin);
         const sid=shopOf(d,p);
         if(!per[p].byShop[sid]) per[p].byShop[sid]={ days:0, hours:0 };
         per[p].byShop[sid].days++;
@@ -3634,7 +3630,7 @@ function AttendPanel({ user }){
                   })}
                   <div className="num" style={{width:48,textAlign:'right'}}>{r.days}</div>
                   <div className="num" style={{width:64,textAlign:'right',fontWeight:700,color:'var(--primary)'}}>{r.hours}</div>
-                  <div className="num" style={{width:52,textAlign:'right',fontWeight:700,color: r.ot>0?'#C68B4A':'var(--muted)'}}>{r.ot>0? '+'+r.ot:'–'}</div>
+                  <div className="num text-[12px]" style={{width:52,textAlign:'right',fontWeight:700,color: r.otMin>0?'#C68B4A':(r.otMin<0?'#CE4A5A':'var(--muted)')}}>{r.otMin? (r.otMin>0?'+':'')+minHr(r.otMin)+'ช':'–'}</div>
                   <div className="num" style={{width:48,textAlign:'right',color: r.hol>0?'#CE4A5A':'var(--muted)',fontWeight: r.hol>0?700:400}}>{r.hol>0? r.hol:'–'}</div>
                 </div>
               ))}
@@ -3646,7 +3642,7 @@ function AttendPanel({ user }){
                 })}
                 <div className="num" style={{width:48,textAlign:'right'}}>{stat.days}</div>
                 <div className="num" style={{width:64,textAlign:'right',color:'var(--primary)'}}>{stat.hours}</div>
-                <div className="num" style={{width:52,textAlign:'right',color:'#C68B4A'}}>{sum.reduce((a,b)=>a+(b.ot||0),0)||'–'}</div>
+                <div className="num text-[12px]" style={{width:52,textAlign:'right',color:'#C68B4A'}}>{(()=>{const t=sum.reduce((a,b)=>a+(b.otMin||0),0);return t?(t>0?'+':'')+minHr(t)+'ช':'–';})()}</div>
                 <div className="num" style={{width:48,textAlign:'right',color:'#CE4A5A'}}>{sum.reduce((a,b)=>a+(b.hol||0),0)||'–'}</div>
               </div>
             </div>
@@ -3735,7 +3731,7 @@ function AttendPanel({ user }){
                   ))}
                 </div>
                 <div className="num" style={{width:80,padding:'9px 8px',textAlign:'right',fontWeight:700,display:'flex',alignItems:'center',justifyContent:'flex-end',color: r.net>=10?'#3E7D3E':'var(--ink)'}}>{r.net? r.net+'ช':'–'}</div>
-                <div className="num" style={{width:62,padding:'9px 4px',textAlign:'right',display:'flex',alignItems:'center',justifyContent:'flex-end',fontWeight:700,color: r.ot>0?'#C68B4A':'var(--muted)'}}>{r.ot>0? '+'+r.ot+'ช' : '–'}</div>
+                <div className="num" style={{width:62,padding:'9px 4px',textAlign:'right',display:'flex',alignItems:'center',justifyContent:'flex-end',fontWeight:700,fontSize:12,color: r.hol?'#CE4A5A':(r.otMin>0?'#C68B4A':(r.otMin<0?'#CE4A5A':'var(--muted)'))}}>{r.hol? '×2' : minTxt(r.otMin)}</div>
                 <div style={{width:96,padding:'9px 4px',textAlign:'center',display:'flex',alignItems:'center',justifyContent:'center',gap:4}} className="text-[11px]">
                   <button className="press kanit text-[10.5px]" title="ทำงานวันหยุด ค่าแรง×2"
                     style={{border:'1px solid '+(r.hol?'#CE4A5A':'var(--line)'),background: r.hol?'#CE4A5A':'var(--card)',color: r.hol?'#fff':'var(--muted)',borderRadius:999,padding:'2px 8px',fontWeight:600}}
@@ -3799,7 +3795,7 @@ function AttendPanel({ user }){
                   {r.pairs.length>1 && <span className="text-[10.5px]" style={{color:'var(--muted)'}}>{r.pairs.length} ช่วง</span>}
                   {r.fixed>0 && <span className="text-[10.5px]" style={{color:'var(--muted)',opacity:.75}}>ตัดซ้ำ {r.fixed}</span>}
                   <div className="num text-[13px]" style={{fontWeight:700,color: r.net>=10?'#3E7D3E':'var(--ink)'}}>{r.net? r.net+' ชม.':'–'}</div>
-                  {r.ot>0 && <span className="num text-[11px]" style={{color:'#C68B4A',fontWeight:700}}>OT+{r.ot}</span>}
+                  {!r.hol && r.otMin!==0 && <span className="num text-[11px]" style={{color: r.otMin>0?'#C68B4A':'#CE4A5A',fontWeight:700}}>{minTxt(r.otMin)}</span>}
                   {r.hol && <span className="text-[10.5px]" style={{color:'#CE4A5A',fontWeight:700}}>🆘×2</span>}
                   <span className="text-[12px]" style={{color:'var(--muted)'}}>✏️</span>
                 </div>
@@ -3823,18 +3819,18 @@ function AttendPanel({ user }){
 
       {detail && (()=>{
         const rowsAll=[];
-        let wk=0, wh=0, wot=0, whol=0; const lv={off:0,sick:0,personal:0};
+        let wk=0, wh=0, wot=0, whol=0, wholH=0; const lv={off:0,sick:0,personal:0};
         for(let d=1; d<=maxDay; d++){
           const v=(scans&&scans[d]&&scans[d][detail])? scans[d][detail] : null;
           const r=v? parseRow(v) : null;
           const lvv=leaveOf(d,detail);
           const hol=isHol(d,detail);
-          const otMin=r? otMinOf(detail,r.netMin) : 0;
-          if(r){ wk++; wh+=r.net; wot+=otMin; if(hol) whol++; }
+          const otMin=(r && !hol)? otMinOf(detail,r.netMin) : 0;
+          if(r){ wk++; wh+=r.net; wot+=otMin; if(hol){ whol++; wholH+=r.net; } }
           else { const t=(lvv&&lvv.t)||'off'; lv[t]=(lv[t]||0)+1; }
           rowsAll.push({ d, r, lv:lvv, dt:new Date(Y,M-1,d), otMin, hol });
         }
-        wh=Math.round(wh*10)/10;
+        wh=Math.round(wh*10)/10; wholH=Math.round(wholH*10)/10;
         return (
           <Portal>
           <div style={{position:'fixed',inset:0,background:'rgba(20,26,34,.55)',zIndex:118,display:'flex',alignItems: wide?'center':'flex-end',justifyContent:'center',padding: wide?20:0}} onClick={()=>!busy&&setDetail(null)}>
@@ -3852,8 +3848,8 @@ function AttendPanel({ user }){
                 <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-[12.5px]">
                   <span style={{color:'var(--muted)'}}>ทำงาน <b className="num" style={{color:'#3E7D3E'}}>{wk}</b> วัน</span>
                   <span style={{color:'var(--muted)'}}>รวม <b className="num" style={{color:'var(--primary)'}}>{wh}</b> ชม.</span>
-                  <span style={{color:'var(--muted)'}}>OT <b className="num" style={{color:'#C68B4A'}}>{wot}</b> ชม.</span>
-                  {whol>0 && <span style={{color:'var(--muted)'}}>🆘 วันหยุด <b className="num" style={{color:'#CE4A5A'}}>{whol}</b></span>}
+                  <span style={{color:'var(--muted)'}}>เกิน/ขาด <b className="num" style={{color: wot>=0?'#C68B4A':'#CE4A5A'}}>{wot>0?'+':''}{wot}</b> นาที = <b className="num" style={{color: wot>=0?'#C68B4A':'#CE4A5A'}}>{minHr(wot)}</b> ชม.</span>
+                  {whol>0 && <span style={{color:'var(--muted)'}}>🆘 วันหยุด <b className="num" style={{color:'#CE4A5A'}}>{whol}</b> วัน ({wholH} ชม.×2)</span>}
                   <span style={{color:'var(--muted)'}}>🏠 หยุด <b className="num" style={{color:'var(--ink)'}}>{lv.off||0}</b></span>
                   <span style={{color:'var(--muted)'}}>🤒 ป่วย <b className="num" style={{color:'#CE4A5A'}}>{lv.sick||0}</b></span>
                   <span style={{color:'var(--muted)'}}>📄 ลากิจ <b className="num" style={{color:'#C68B4A'}}>{lv.personal||0}</b></span>
@@ -3887,11 +3883,11 @@ function AttendPanel({ user }){
                             {r.manual && <span className="text-[10.5px]" style={{color:'var(--muted)'}}>&#9999;</span>}
                           </div>
                           <div className="num" style={{width:66,textAlign:'right',fontWeight:700,color: r.net>=10?'#3E7D3E':'var(--ink)'}}>{r.net? r.net+'ช':'–'}</div>
-                          <div className="num" style={{width:52,textAlign:'right',fontWeight:700,color: ot>0?'#C68B4A':'var(--muted)'}}>{ot>0? '+'+ot+'ช':'–'}</div>
+                          <div className="num text-[11.5px]" style={{width:58,textAlign:'right',fontWeight:700,color: hol?'#CE4A5A':(otMin>0?'#C68B4A':(otMin<0?'#CE4A5A':'var(--muted)'))}}>{hol? '×2' : minTxt(otMin)}</div>
                           <div style={{width:52,textAlign:'center'}}>
-                            <button className="press kanit text-[10.5px]" title="ทำงานวันหยุด ×2"
-                              style={{border:'1px solid '+(hol?'#CE4A5A':'var(--line)'),background: hol?'#CE4A5A':'var(--card)',color: hol?'#fff':'var(--muted)',borderRadius:999,padding:'2px 7px',fontWeight:600}}
-                              onClick={()=>setHol(d,detail,!hol)}>{hol?'×2':'ปกติ'}</button>
+                            <button className="press kanit text-[10.5px]"
+                              style={{border:'1px solid '+(hol?'#CE4A5A':'var(--line)'),background: hol?'#CE4A5A':'var(--card)',color: hol?'#fff':'var(--ink)',borderRadius:999,padding:'2px 8px',fontWeight:600}}
+                              onClick={()=>openStatus(d,detail)}>⚙️</button>
                           </div>
                           <div style={{width:44,textAlign:'right'}}>
                             <button className="press kanit text-[12px]" style={{border:'1px solid var(--line)',background:'var(--card)',borderRadius:8,padding:'3px 9px'}} onClick={()=>openEdit(d,detail)}>&#9999;</button>
