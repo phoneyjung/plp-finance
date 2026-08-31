@@ -78,58 +78,67 @@ header{padding:calc(10px + env(safe-area-inset-top)) 16px 6px;display:flex;align
   box-shadow:0 12px 22px -14px rgba(44,29,20,.9);transform:translateY(-1px)}
 .pill em{font-style:normal;font-size:11px}
 
-/* ---------- carousel ---------- */
-.deckWrap{position:relative;flex:1.618 1 0;min-height:0;display:flex;flex-direction:column}
-.deck{display:flex;align-items:stretch;height:100%;overflow-x:auto;overflow-y:hidden;
-  scroll-snap-type:x mandatory;scrollbar-width:none;-webkit-overflow-scrolling:touch}
-.deck::-webkit-scrollbar{display:none}
-.spacer{flex:0 0 27%;height:100%}
-.item{flex:0 0 46%;scroll-snap-align:center;height:100%;display:flex;flex-direction:column;
-  align-items:center;justify-content:center;padding:6px 0 2px}
-.item .box{position:relative;width:100%;flex:1 1 auto;min-height:0;display:grid;place-items:center;
-  transform-origin:50% 62%;will-change:transform}
-.item .halo{position:absolute;width:96%;aspect-ratio:1;border-radius:50%;background:rgba(255,255,255,.44);
-  filter:blur(1px);box-shadow:0 26px 54px -28px rgba(60,38,22,.5);transition:opacity .3s}
-.item svg{height:100%;width:auto;max-width:100%;filter:drop-shadow(0 20px 24px rgba(50,30,16,.26))}
-.item img.photo{height:100%;width:auto;max-width:94%;object-fit:contain;border-radius:24px;
-  filter:drop-shadow(0 20px 26px rgba(50,30,16,.34))}
-.item .cap{flex:0 0 auto;margin-top:9px;font-size:12px;font-weight:400;line-height:1.3;text-align:center;
-  max-width:96%;opacity:0;transition:opacity .3s,transform .3s}
-.item .cap b{display:block;font-weight:400;font-size:11px;color:var(--muted);margin-top:1px}
-.item .cap{display:none}
-.item.off .halo{opacity:.35}
-.tag{position:absolute;top:0;left:50%;transform:translateX(-50%);font-size:9.5px;letter-spacing:.14em;
-  text-transform:uppercase;color:var(--brown);background:rgba(255,255,255,.8);border:1px solid var(--line);
-  padding:4px 11px;border-radius:999px}
+/* ---------- ฮีโร่: แก้วใหญ่ด้านบน ---------- */
+.hero{flex:1.618 1 0;min-height:0;display:flex;flex-direction:column;align-items:center;
+  padding:2px 22px 0;position:relative}
+.count{position:absolute;right:4px;top:0;font-size:10.5px;color:var(--muted);letter-spacing:.08em;z-index:5}
+.stage{position:relative;flex:1 1 auto;min-height:0;width:100%;display:grid;place-items:center}
+.stage .halo{position:absolute;width:64%;aspect-ratio:1;border-radius:50%;background:rgba(255,255,255,.5);
+  filter:blur(2px);box-shadow:0 30px 62px -30px rgba(60,38,22,.5)}
+.stage .art{position:relative;height:100%;display:grid;place-items:center}
+.stage .art.pop{animation:pop .5s cubic-bezier(.2,.8,.2,1)}
+@keyframes pop{0%{opacity:0;transform:translateY(16px) scale(.93)}100%{opacity:1;transform:none}}
+.stage svg{height:100%;width:auto;max-width:100%;filter:drop-shadow(0 22px 26px rgba(50,30,16,.28))}
+.stage img.photo{height:100%;width:auto;max-width:88%;object-fit:contain;border-radius:22px;
+  filter:drop-shadow(0 22px 28px rgba(50,30,16,.34))}
 
-/* ---------- detail of active drink ---------- */
-.detail{flex:1 1 0;min-height:0;display:flex;flex-direction:column;justify-content:center;
-  text-align:center;padding:0 24px;transition:opacity .2s ease}
-.detail.fade{opacity:0}
+.info{flex:0 0 auto;width:100%;text-align:center;transition:opacity .2s ease;padding-bottom:2px}
+.info.fade{opacity:0}
 .nm{font-size:var(--t2);font-weight:600;line-height:1.2;letter-spacing:-.01em;margin:0}
-.en{font-size:var(--t4);letter-spacing:.16em;text-transform:uppercase;color:var(--muted);margin-top:4px}
-.ds{font-size:var(--t3);line-height:1.6;color:#5C4634;margin:var(--s4) auto 0;max-width:32ch;
+.en{font-size:var(--t4);letter-spacing:.16em;text-transform:uppercase;color:var(--muted);margin-top:3px}
+.ds{font-size:var(--t3);line-height:1.55;color:#5C4634;margin:var(--s4) auto 0;max-width:34ch;
   display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.chips{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin-top:var(--s3)}
-.chips span{font-size:var(--t4);color:var(--brown);background:rgba(255,255,255,.72);border:1px solid var(--line);
-  border-radius:999px;padding:6px 11px}
-.pz{display:flex;align-items:baseline;justify-content:center;gap:4px;margin-top:var(--s3)}
+.buy{display:flex;align-items:center;justify-content:center;margin-top:var(--s3)}
+.pz{display:flex;align-items:baseline;gap:4px}
 .pz b{font-size:var(--t1);font-weight:600;letter-spacing:-.03em;line-height:1}
 .pz i{font-style:normal;font-size:var(--t3);color:var(--c10);font-weight:500}
 
-.nav{position:absolute;top:34%;width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.82);
-  display:grid;place-items:center;font-size:19px;color:var(--c10);box-shadow:0 10px 24px -14px rgba(50,30,16,.8);
-  backdrop-filter:blur(6px);z-index:5}
-.nav.l{left:8px}.nav.r{right:8px}
-.nav[disabled]{opacity:.25}
+/* ---------- แถบเมนูด้านล่าง: ปัดเลือกแก้ว ---------- */
+/* แถบน้ำตาลกินพื้นที่แค่ครึ่งล่าง แก้วที่เลือกจะโผล่พ้นขอบบนของแถบขึ้นมาครึ่งใบ */
+.strip{position:relative;flex:0 0 auto;margin:0 12px;padding:0 0 12px}
+.strip::before{content:"";position:absolute;left:0;right:0;top:60px;bottom:0;border-radius:26px;
+  background:linear-gradient(140deg,#432E20,#241710);box-shadow:0 18px 38px -24px rgba(30,18,10,.95);z-index:0}
+.deck{position:relative;z-index:1;display:flex;padding-top:38px;overflow-x:auto;overflow-y:hidden;
+  scroll-snap-type:x mandatory;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.deck::-webkit-scrollbar{display:none}
+.spacer{flex:0 0 34%}
+.item{flex:0 0 32%;scroll-snap-align:center;display:flex;flex-direction:column;align-items:center;
+  padding:2px 0 0;cursor:pointer}
+.item .box{width:68px;height:68px;flex:0 0 68px;border-radius:50%;position:relative;overflow:hidden;
+  display:grid;place-items:center;box-shadow:0 0 0 2px rgba(255,255,255,.28);
+  transition:transform .34s cubic-bezier(.2,.8,.2,1),box-shadow .3s}
+.item .box svg{height:88%;width:auto}
+.item .box img.photo{width:100%;height:100%;object-fit:cover}
+.item .cap{margin-top:26px;font-size:10px;line-height:1.25;text-align:center;max-width:100%;padding:0 4px;
+  color:rgba(246,236,217,.6);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:.3s}
+.item .cap b{display:block;font-weight:500;font-size:10px;color:rgba(192,138,62,.75);margin-top:2px}
+/* ใบที่เลือก: ขยาย 1.5 เท่า แล้วยกขึ้นให้ครึ่งบนพ้นแถบน้ำตาล */
+.item.on .box{transform:scale(1.5) translateY(-11px);
+  box-shadow:0 0 0 3px rgba(247,239,226,.9),0 14px 26px -10px rgba(20,12,6,.75)}
+.item.on .cap{color:#F6ECD9;font-weight:500}
+.item.on .cap b{color:var(--c10)}
 
-.hint{position:absolute;top:4px;left:16px;font-size:10.5px;color:var(--muted);z-index:5;
-  background:rgba(255,255,255,.72);border:1px solid var(--line);border-radius:999px;padding:5px 11px;
-  animation:hint 2.4s ease-in-out infinite;transition:opacity .5s}
-@keyframes hint{0%,100%{transform:translateX(0)}50%{transform:translateX(7px)}}
+.nav{position:absolute;top:53px;width:38px;height:38px;border-radius:50%;background:#fff;
+  display:grid;place-items:center;font-size:18px;color:var(--c30);z-index:6;
+  box-shadow:0 10px 22px -12px rgba(20,12,6,.9)}
+.nav.l{left:-8px}.nav.r{right:-8px}
+
+.hint{position:absolute;left:50%;transform:translateX(-50%);bottom:-16px;font-size:10px;color:var(--muted);
+  z-index:5;animation:hint 2.4s ease-in-out infinite;transition:opacity .5s;white-space:nowrap}
+@keyframes hint{0%,100%{transform:translate(-50%,0)}50%{transform:translate(calc(-50% + 6px),0)}}
 
 /* ---------- footer ---------- */
-.rail{flex:0 0 auto;display:flex;gap:4px;justify-content:center;padding:12px 20px 6px;overflow:hidden}
+.rail{flex:0 0 auto;display:flex;gap:4px;justify-content:center;padding:10px 20px 2px;overflow:hidden}
 .rail b{height:3px;flex:1 1 auto;max-width:34px;border-radius:99px;background:rgba(76,51,36,.16);transition:.35s}
 .rail b.on{background:var(--gold);transform:scaleY(1.8)}
 .dock{flex:0 0 auto;display:flex;gap:10px;padding:6px 16px calc(10px + env(safe-area-inset-bottom))}
@@ -165,20 +174,26 @@ header{padding:calc(10px + env(safe-area-inset-top)) 16px 6px;display:flex;align
 
 <nav class="cats" id="cats"></nav>
 
-<div class="deckWrap">
+<section class="hero">
   <div class="count" id="count"></div>
+  <div class="stage">
+    <div class="halo"></div>
+    <div class="art" id="heroArt"></div>
+  </div>
+  <div class="info" id="info">
+    <h2 class="nm" id="dName">—</h2>
+    <div class="en" id="dEn"></div>
+    <p class="ds" id="dDesc"></p>
+    <div class="buy">
+      <div class="pz"><b id="dPrice">0</b><i>บาท</i></div>
+    </div>
+  </div>
+</section>
+
+<div class="strip">
   <div class="deck" id="deck"></div>
   <button class="nav l" id="prev">‹</button>
   <button class="nav r" id="next">›</button>
-  <div class="hint" id="hint">ปัดซ้าย–ขวา ดูเมนู →</div>
-</div>
-
-<div class="detail" id="detail">
-  <h2 class="nm" id="dName">—</h2>
-  <div class="en" id="dEn"></div>
-  <p class="ds" id="dDesc"></p>
-  <div class="chips" id="dChips"></div>
-  <div class="pz"><b id="dPrice">0</b><i>บาท</i></div>
 </div>
 
 <div class="rail" id="rail"></div>
@@ -410,32 +425,67 @@ function markCat(){
   var ps=$('#cats').querySelectorAll('.pill');
   [].forEach.call(ps,function(p,i){ p.classList.toggle('on',i===gi) });
 }
-function cardHTML(it,i){
+function grad(cat){
+  for(var k in STYLES){ if(STYLES[k].cat===cat) break }
+  return 'linear-gradient(150deg,#F3E7D4,#DCC8AA)';
+}
+function gradOf(it){ var g=styleOf(it).bg; return 'linear-gradient(150deg,'+g[0]+','+g[1]+')' }
+function artHTML(it,i,cls){
   var u=USE_PHOTO?imgUrl(it.photo):'';
-  var art=u
-    ? '<img class="photo" src="'+esc(u)+'" alt="'+esc(it.n)+'" onerror="this.outerHTML=window.__art('+i+')">'
+  return u
+    ? '<img class="photo'+(cls?' '+cls:'')+'" src="'+esc(u)+'" alt="'+esc(it.n)+'" onerror="this.outerHTML=window.__art('+i+')">'
     : drinkSVG(it);
-  return '<article class="item off" data-i="'+i+'">'+
-      '<div class="box"><div class="halo"></div>'+art+'</div>'+
-      '<div class="cap">'+esc(it.n)+'<b>'+it.p+' บาท</b></div>'+
+}
+function cardHTML(it,i){
+  return '<article class="item" data-i="'+i+'">'+
+      '<div class="box" style="background:'+gradOf(it)+'">'+artHTML(it,i)+'</div>'+
+      '<div class="cap">'+esc(it.n)+'<b>'+it.p+' ฿</b></div>'+
     '</article>';
 }
 window.__art=function(i){ return drinkSVG(FLAT[i]) };
 function cards(){ return [].slice.call($('#deck').querySelectorAll('.item')) }
 
-/* โคลนใบแรก/ใบสุดท้ายไว้หัวท้าย → ปัดสุดแล้ววนกลับแบบไม่สะดุด */
+/* ---- ส่วนผสม: ใช้ desc จาก Firestore ก่อน ถ้าไม่มีก็ประกอบจากชื่อเมนู ---- */
+function mix(it){
+  if(it.desc && it.desc!==it.n) return it.desc;
+  var s=(it.n||'')+' '+(it.en||''), p=[];
+  var has=function(){for(var i=0;i<arguments.length;i++){if(s.indexOf(arguments[i])>-1)return true}return false};
+  if(it.c==='ท็อปปิ้ง') return 'ท็อปปิ้งเพิ่มในเครื่องดื่มได้ทุกแก้ว';
+  if(has('มัทฉะ','Matcha'))            p.push('มัทฉะชิซุโอกะ');
+  else if(has('ชาไทย','Thai Tea'))     p.push('ชาไทยแท้');
+  else if(has('เขียว','Green','มะลิ','Jasmine')) p.push('ชาเขียวมะลิ');
+  else if(has('ชานม','Milk Tea','ไต้หวัน','Taiwan')) p.push('ชาอัสสัม');
+  else if(has('กาแฟ','Coffee'))        p.push('เอสเปรสโซ');
+  else if(has('พีช','Peach'))          p.push('ชาพีช');
+  else if(has('มัสแคท','Muscat','องุ่น')) p.push('ชาองุ่นไชน์มัสแคท');
+  else if(has('เสาวรส','Passion'))     p.push('ชาเสาวรส');
+  else if(has('ลิ้นจี่','Lychee'))      p.push('น้ำลิ้นจี่');
+  else if(has('สตรอ','Strawberry'))    p.push('สตรอว์เบอร์รี่');
+  else if(has('สละ','Sala'))           p.push('น้ำสละ');
+  else if(has('ช็อค','Choc','ไมโล','Milo')) p.push('ผงโกโก้เข้มข้น');
+  else if(has('มินท์','Mint'))          p.push('มินท์เย็น');
+  else if(has('นมสด','Fresh Milk'))     p.push('นมสดพาสเจอไรซ์');
+  if(has('นมสด','Fresh Milk','ลาเต้','Latte','ชานม','Milk Tea','นม') && p[0]!=='นมสดพาสเจอไรซ์') p.push('นมสด');
+  if(has('มะพร้าว','Coconut')) p.push('กะทิมะพร้าว');
+  if(has('ส้ม','Orange')) p.push('น้ำส้ม');
+  if(has('ชมพู','Chompoo')) p.push('ไซรัปนมชมพู');
+  if(has('คาราเมล','Caramel')) p.push('คาราเมล');
+  if(has('บราวน์','Brown Sugar')) p.push('บราวน์ชูการ์');
+  if(has('โซดา','Soda')) p.push('โซดาซ่า');
+  if(has('ชีส','Cheese')) p.push('ชีสโฟมเค็มหอม');
+  if(has('ไข่มุก','บุก','Konjac')) p.push('ไข่มุกบุก');
+  if(!p.length) p.push('ชงสดใหม่ทุกแก้ว');
+  p.push('ปรับหวาน–น้ำแข็งได้');
+  return p.join(' · ');
+}
+
 function buildDeck(){
   var n=FLAT.length; if(!n) return;
   $('#deck').innerHTML =
-    '<i class="spacer"></i>' +
-    cardHTML(FLAT[n-1], n-1) +
-    FLAT.map(cardHTML).join('') +
-    cardHTML(FLAT[0], 0) +
-    '<i class="spacer"></i>';
+    '<i class="spacer"></i>' + cardHTML(FLAT[n-1], n-1) +
+    FLAT.map(cardHTML).join('') + cardHTML(FLAT[0], 0) + '<i class="spacer"></i>';
   idx=0; gi=FLAT[0].gi;
-  buildRail();
-  center(1,false);
-  layout(); paint();
+  buildRail(); center(1,false); layout(); paint();
 }
 function buildRail(){
   var g=GROUPS[gi]; if(!g) return;
@@ -448,25 +498,15 @@ function center(domIdx,smooth){
 }
 function nearest(){
   var deck=$('#deck'), cs=cards(), mid=deck.scrollLeft+deck.clientWidth/2, best=0, bd=1e9;
-  cs.forEach(function(c,i){
-    var d=Math.abs(c.offsetLeft+c.offsetWidth/2-mid);
-    if(d<bd){ bd=d; best=i }
-  });
+  cs.forEach(function(c,i){ var d=Math.abs(c.offsetLeft+c.offsetWidth/2-mid); if(d<bd){bd=d;best=i} });
   return best;
 }
-/* วางสเกล/ความจางของแก้วซ้าย-ขวา + หา index ที่อยู่กลางจอ */
+/* ไฮไลต์แก้วที่อยู่กลางแถบ + หา index จริง */
 function layout(){
-  var deck=$('#deck'), cs=cards(); if(!cs.length)return;
-  var mid=deck.scrollLeft+deck.clientWidth/2, best=0, bd=1e9;
-  cs.forEach(function(c,i){
-    var cc=c.offsetLeft+c.offsetWidth/2, d=(cc-mid)/c.offsetWidth, ad=Math.min(Math.abs(d),2.2);
-    var box=c.querySelector('.box');
-    if(box) box.style.transform='translateY('+(ad*14)+'px) scale('+(1-ad*.26)+') rotate('+(d*3)+'deg)';
-    c.style.opacity=String(Math.max(.3,1-ad*.42));
-    c.classList.toggle('off',ad>.35);
-    if(Math.abs(cc-mid)<bd){ bd=Math.abs(cc-mid); best=i }
-  });
-  var real=+cs[best].dataset.i;
+  var cs=cards(); if(!cs.length)return;
+  var j=nearest();
+  cs.forEach(function(c,i){ c.classList.toggle('on',i===j) });
+  var real=+cs[j].dataset.i;
   if(real!==idx){ idx=real; paint() }
 }
 function paint(){
@@ -478,27 +518,28 @@ function paint(){
   document.querySelector('meta[name=theme-color]').setAttribute('content',st.bg[0]);
   setBg(it.c);
 
-  var d=$('#detail'); d.classList.add('fade');
+  /* แก้วใหญ่ด้านบน */
+  var art=$('#heroArt');
+  art.innerHTML=artHTML(it,idx);
+  art.classList.remove('pop'); void art.offsetWidth; art.classList.add('pop');
+
+  var d=$('#info'); d.classList.add('fade');
   var seq=++paintSeq;
   setTimeout(function(){
-    if(seq!==paintSeq) return;            /* กันข้อความค้างของแก้วก่อนหน้า */
+    if(seq!==paintSeq) return;
     $('#dName').textContent=it.n;
     $('#dEn').textContent=it.en||'owl cha';
-    $('#dDesc').textContent=(it.desc&&it.desc!==it.n)?it.desc:'ชงสดใหม่ทุกแก้ว เลือกความหวานและน้ำแข็งได้ตอนสั่ง';
-    var ch='<span>🧊 ปรับหวาน/น้ำแข็งได้</span>';
-    if(it.prep) ch+='<span>⏱ ~'+it.prep+' นาที</span>';
-    ch+='<span>'+(CATEMOJI[it.c]||'🍹')+' '+esc(it.c)+'</span>';
-    $('#dChips').innerHTML=ch;
+    $('#dDesc').textContent=mix(it);
     $('#dPrice').textContent=it.p;
     d.classList.remove('fade');
   },140);
 
+  var bb=$('#buyBtn'); if(bb) bb.href=orderUrl(it);
   $('#dkOrder').href=orderUrl(it);
   if(it.gi!==gi){ gi=it.gi; markCat(); buildRail(); }
   else { [].forEach.call($('#rail').children,function(b,i){ b.classList.toggle('on',i===it.ci) }); }
   $('#count').textContent=(it.ci+1)+' / '+GROUPS[gi].items.length;
 }
-/* เลื่อนทีละแก้ว — สุดหมวดก็ไหลเข้าหมวดถัดไป สุดท้ายวนกลับหมวดแรก */
 function go(d){ center(nearest()+d,true) }
 function jumpToCat(g){
   var first=0;
@@ -532,9 +573,9 @@ $('#deck').addEventListener('click',function(e){
 });
 
 /* hint hides after first swipe */
-(function(){ var h=$('#hint'), hide=function(){h.style.opacity='0';setTimeout(function(){h.remove()},600)};
-  $('#deck').addEventListener('scroll',hide,{once:true,passive:true});
-  setTimeout(hide,6000); })();
+(function(){ var h=$('#hint'); if(!h) return;
+  var hide=function(){h.style.opacity='0';setTimeout(function(){h.remove()},600)};
+  $('#deck').addEventListener('scroll',hide,{once:true,passive:true}); setTimeout(hide,6000); })();
 
 /* พื้นหลังรูป — โหลดล่วงหน้าแล้วสลับแบบ crossfade ตามหมวด */
 var bgFlip=0, bgNow='', bgCache={};
