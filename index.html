@@ -3195,11 +3195,28 @@ function AttendPanel({ user }){
     }
     return cfg.shiftHrs || 10;
   };
-  /* ส่วนต่างจากกะปกติ เป็น "นาที" — บวก = ทำเกิน (OT) · ลบ = เข้าสาย/ออกก่อน */
+  /* OT (นาที) — มาก่อนเวลาไม่บวก · เข้าสายหัก · ออกช้าบวก · ออกก่อนหัก */
+  const otMinFrom=(pin, pr)=>{
+    const st=stOf(pin);
+    if(st && st.shiftIn && st.shiftOut && pr && pr.pairs && pr.pairs.length){
+      const sIn=attHM(st.shiftIn), sOut=attHM(st.shiftOut);
+      const first=pr.pairs[0], last=pr.pairs[pr.pairs.length-1];
+      const aIn=attHM(first.i), aOut=attHM(last.o);
+      if(sIn!=null && sOut!=null && aIn!=null && aOut!=null){
+        const late = Math.max(0, aIn - sIn);   /* มาก่อน = 0 ไม่บวกให้ */
+        let over = aOut - sOut;                /* ออกช้า = บวก · ออกก่อน = ลบ */
+        if(over > 720) over -= 1440;           /* กันเคสข้ามเที่ยงคืน */
+        if(over < -720) over += 1440;
+        return Math.round(over - late);
+      }
+    }
+    /* ไม่ได้ตั้งกะประจำ → เทียบจากชั่วโมงรวม */
+    return Math.round(((pr&&pr.netMin)||0) - shiftHrsOf(pin)*60);
+  };
   const otMinOf=(pin, netMin)=> Math.round((netMin||0) - shiftHrsOf(pin)*60);
-  /* แปลงนาทีเป็นข้อความ เช่น +1:25 / -0:15 */
   const minTxt=(m)=> !m ? '–' : ((m>0?'+':'') + m + ' น.');
-  const minHr=(m)=> Math.round((m/60)*100)/100;
+  /* แปลงนาทีเป็นชั่วโมง — ตัดเศษทิ้ง (เข้าหาศูนย์) */
+  const minHr=(m)=> (Math.trunc((m||0)/60) || 0);
   const setHol=async(d,pin,on)=>{
     if(!db) return;
     try{
@@ -3287,7 +3304,7 @@ function AttendPanel({ user }){
         if(v && (shopF==='all' || shopOf(d,who)===shopF)){
           const pr=parseRow(v);
           const hl=isHol(d,who);
-          rows.push({ pin:who, ...v, ...pr, shop:shopOf(d,who), otMin: hl?0:otMinOf(who,pr.netMin), hol:hl });
+          rows.push({ pin:who, ...v, ...pr, shop:shopOf(d,who), otMin: hl?0:otMinFrom(who,pr), hol:hl });
         }
         out.push({ d, rows, full:true });
       }
@@ -3298,7 +3315,7 @@ function AttendPanel({ user }){
         .filter(p=> who==='all' || String(p)===who)
         .filter(p=> shopF==='all' || shopOf(d,p)===shopF)
         .sort((a,b)=>(+a)-(+b))
-        .map(p=>{ const pr=parseRow(scans[d][p]||{}); const hl=isHol(d,p); return { pin:p, ...(scans[d][p]||{}), ...pr, shop:shopOf(d,p), otMin: hl?0:otMinOf(p,pr.netMin), hol:hl }; });
+        .map(p=>{ const pr=parseRow(scans[d][p]||{}); const hl=isHol(d,p); return { pin:p, ...(scans[d][p]||{}), ...pr, shop:shopOf(d,p), otMin: hl?0:otMinFrom(p,pr), hol:hl }; });
       if(rows.length) out.push({ d, rows });
     });
     return out;
@@ -3313,7 +3330,7 @@ function AttendPanel({ user }){
         per[p].days++;
         per[p].hours+=r.net;
         const hl2=isHol(d,p);
-        if(hl2){ per[p].hol++; per[p].holHours+=r.net; } else per[p].otMin+=otMinOf(p,r.netMin);
+        if(hl2){ per[p].hol++; per[p].holHours+=r.net; } else per[p].otMin+=otMinFrom(p,r);
         const sid=shopOf(d,p);
         if(!per[p].byShop[sid]) per[p].byShop[sid]={ days:0, hours:0 };
         per[p].byShop[sid].days++;
@@ -3340,7 +3357,7 @@ function AttendPanel({ user }){
       const r=v? parseRow(v) : null;
       const lvv=leaveOf(d,who);
       const hol=isHol(d,who);
-      const otMin=(r && !hol)? otMinOf(who,r.netMin) : 0;
+      const otMin=(r && !hol)? otMinFrom(who,r) : 0;
       if(r){ wk++; wh+=r.net; wot+=otMin; if(hol){ whol++; wholH+=r.net; } }
       else { const t=(lvv&&lvv.t)||'off'; lv[t]=(lv[t]||0)+1; }
       rowsAll.push({ d, r, lv:lvv, dt:new Date(yy,mm-1,d), otMin, hol });
@@ -3506,7 +3523,7 @@ function AttendPanel({ user }){
       x.font='400 13px Kanit,sans-serif'; x.fillStyle='rgba(255,255,255,.6)';
       x.fillText('Owl Cha / Teddy · ออกให้วันที่ '+today(), PAD, 100);
       /* กล่องสรุป */
-      const otH=minHr(wot||0);
+      const otH=minHr(wot||0);  /* ตัดเศษแล้ว */
       const box=[['ทำงาน',wk+' วัน','#2E7D4F'],['รวมชั่วโมง',wh+' ชม.','#8A5A3B'],
                  ['OT สุทธิ',(otH>0?'+':'')+otH+' ชม.', otH>=0?'#C68B4A':'#CE4A5A'],['วันหยุด×2',(whol||0)+' วัน','#CE4A5A'],
                  ['หยุด',(lv.off||0)+' วัน','#7A828C'],['ป่วย/ลากิจ',((lv.sick||0)+(lv.personal||0))+' วัน','#A05A8A']];
@@ -3549,7 +3566,9 @@ function AttendPanel({ user }){
         }
       });
       x.fillStyle='#B4AA96'; x.font='400 11.5px Kanit,sans-serif';
-      x.fillText('* +/- นาที = เทียบกับกะปกติ '+shiftHrsOf(pin)+' ชม./วัน (บวก=ทำเกิน · ลบ=เข้าสาย/ออกก่อน)', PAD, H-38);
+      const st0=stOf(pin);
+      const shiftTxt=(st0&&st0.shiftIn&&st0.shiftOut)? (st0.shiftIn+'–'+st0.shiftOut) : (shiftHrsOf(pin)+' ชม./วัน');
+      x.fillText('* +/- นาที = เทียบกะ '+shiftTxt+' (ออกช้า=บวก · เข้าสาย/ออกก่อน=ลบ · มาก่อนเวลาไม่บวกให้)', PAD, H-38);
       x.fillText('  รวมทั้งเดือน '+(wot>0?'+':'')+(wot||0)+' นาที = '+(otH>0?'+':'')+otH+' ชม.  ·  หากพบข้อมูลไม่ตรง แจ้งหัวหน้าได้ทันที', PAD, H-20);
       c.toBlob(bl=>{
         const u=URL.createObjectURL(bl);
@@ -3877,7 +3896,7 @@ function AttendPanel({ user }){
           const r=v? parseRow(v) : null;
           const lvv=leaveOf(d,detail);
           const hol=isHol(d,detail);
-          const otMin=(r && !hol)? otMinOf(detail,r.netMin) : 0;
+          const otMin=(r && !hol)? otMinFrom(detail,r) : 0;
           if(r){ wk++; wh+=r.net; wot+=otMin; if(hol){ whol++; wholH+=r.net; } }
           else { const t=(lvv&&lvv.t)||'off'; lv[t]=(lv[t]||0)+1; }
           rowsAll.push({ d, r, lv:lvv, dt:new Date(Y,M-1,d), otMin, hol });
@@ -3983,7 +4002,20 @@ function AttendPanel({ user }){
           if(a!=null && b!=null){ let dd=b-a; if(dd<0) dd+=1440; netM+=dd; }
         });
         const net=Math.round(netM/60*10)/10;
-        const om=isWork? Math.round(netM - shiftHrsOf(statEdit.pin)*60) : 0;
+        let om=0;
+        if(isWork){
+          const st0=stOf(statEdit.pin);
+          const p0=statEdit.pairs.filter(pp=>attFmt(pp.i));
+          if(st0 && st0.shiftIn && st0.shiftOut && p0.length){
+            const sI=attHM(st0.shiftIn), sO=attHM(st0.shiftOut);
+            const aI=attHM(attFmt(p0[0].i)), aO=attHM(attFmt(p0[p0.length-1].o));
+            if(sI!=null&&sO!=null&&aI!=null&&aO!=null){
+              const lt=Math.max(0,aI-sI); let ov=aO-sO;
+              if(ov>720) ov-=1440; if(ov<-720) ov+=1440;
+              om=Math.round(ov-lt);
+            }
+          } else om=Math.round(netM - shiftHrsOf(statEdit.pin)*60);
+        }
         const INP2={fontFamily:'inherit',fontSize:15,border:'1px solid var(--line)',borderRadius:9,padding:'9px 10px',background:'var(--card)',color:'var(--ink)',width:'100%',textAlign:'center'};
         return (
         <Portal>
@@ -4032,7 +4064,7 @@ function AttendPanel({ user }){
                     <b className="num" style={{color:'var(--primary)',fontSize:17}}>{net} ชม.</b>
                   </div>
                   <div className="flex items-center justify-between text-[13.5px] mt-1">
-                    <span style={{color:'var(--muted)'}}>เทียบกะปกติ ({shiftHrsOf(statEdit.pin)} ชม.)</span>
+                    <span style={{color:'var(--muted)'}}>{(()=>{const s0=stOf(statEdit.pin); return (s0&&s0.shiftIn&&s0.shiftOut)? ('เทียบกะ '+s0.shiftIn+'–'+s0.shiftOut) : ('เทียบกะปกติ ('+shiftHrsOf(statEdit.pin)+' ชม.)');})()}</span>
                     <b className="num" style={{color: om>0?'#C68B4A': (om<0?'#CE4A5A':'var(--muted)'),fontSize:16}}>
                       {om>0? '+'+om+' นาที (OT)' : om<0? om+' นาที (ขาด)' : 'พอดี'}
                     </b>
