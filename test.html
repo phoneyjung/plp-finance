@@ -3337,6 +3337,27 @@ function AttendPanel({ user }){
       .sort((a,b)=>b.hours-a.hours);
   },[scans,shopMap,staff,holMap,cfg]);
 
+  /* สรุปของคนที่เลือกอยู่ (โหมดรายวัน) */
+  const pStat=React.useMemo(()=>{
+    if(who==='all' || !scans) return null;
+    const yy=+ym.slice(0,4), mm=+ym.slice(5,7);
+    const nDay=new Date(yy,mm,0).getDate();
+    const last = (ym===ymOf(today()))? +today().slice(8,10) : nDay;
+    let wk=0, wh=0, wot=0, whol=0, wholH=0;
+    const lv={off:0,sick:0,personal:0}; const rowsAll=[];
+    for(let d=1; d<=last; d++){
+      const v=(scans[d]||{})[who];
+      const r=v? parseRow(v) : null;
+      const lvv=leaveOf(d,who);
+      const hol=isHol(d,who);
+      const otMin=(r && !hol)? otMinOf(who,r.netMin) : 0;
+      if(r){ wk++; wh+=r.net; wot+=otMin; if(hol){ whol++; wholH+=r.net; } }
+      else { const t=(lvv&&lvv.t)||'off'; lv[t]=(lv[t]||0)+1; }
+      rowsAll.push({ d, r, lv:lvv, dt:new Date(yy,mm-1,d), otMin, hol });
+    }
+    return { wk, wh:Math.round(wh*10)/10, wot, whol, wholH:Math.round(wholH*10)/10, lv, rowsAll };
+  },[scans,who,ym,leaveMap,holMap,staff,cfg]);
+
   const stat=React.useMemo(()=>{
     let dd=0, hh=0, op=0;
     Object.keys(scans||{}).forEach(d=>Object.keys(scans[d]||{}).forEach(p=>{
@@ -3590,6 +3611,25 @@ function AttendPanel({ user }){
         )}
         {view==='day' && (
           <button className="press kanit text-[13.5px] w-full mt-2.5 py-2 rounded-xl text-white" style={{background:'var(--primary)',border:'none',fontWeight:600}} onClick={openAdd}>+ ลงเวลาเอง</button>
+        )}
+
+        {view==='day' && pStat && (
+          <div className="rounded-2xl p-3 mt-2.5" style={{background:'var(--soft)'}}>
+            <div className="flex items-center justify-between mb-2">
+              <div className="kanit text-[14px]" style={{fontWeight:700}}>📋 สรุปของ {nameOf(who)}</div>
+              <button className="press kanit text-[12.5px]" style={{border:'none',background:'var(--primary)',color:'#fff',borderRadius:10,padding:'5px 12px',fontWeight:600}}
+                onClick={()=>saveSlip(who, pStat.rowsAll, pStat.wk, pStat.wh, pStat.lv, pStat.wot, pStat.whol)}>🖼 สร้างรูปสรุป</button>
+            </div>
+            <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-[12.5px]">
+              <span style={{color:'var(--muted)'}}>ทำงาน <b className="num" style={{color:'#3E7D3E'}}>{pStat.wk}</b> วัน</span>
+              <span style={{color:'var(--muted)'}}>รวม <b className="num" style={{color:'var(--primary)'}}>{pStat.wh}</b> ชม.</span>
+              <span style={{color:'var(--muted)'}}>เกิน/ขาด <b className="num" style={{color: pStat.wot>=0?'#C68B4A':'#CE4A5A'}}>{pStat.wot>0?'+':''}{pStat.wot}</b> นาที = <b className="num" style={{color: pStat.wot>=0?'#C68B4A':'#CE4A5A'}}>{minHr(pStat.wot)}</b> ชม.</span>
+              {pStat.whol>0 && <span style={{color:'var(--muted)'}}>🆘 <b className="num" style={{color:'#CE4A5A'}}>{pStat.whol}</b> วัน ({pStat.wholH} ชม.×2)</span>}
+              <span style={{color:'var(--muted)'}}>🏠 <b className="num">{pStat.lv.off||0}</b></span>
+              <span style={{color:'var(--muted)'}}>🤒 <b className="num" style={{color:'#CE4A5A'}}>{pStat.lv.sick||0}</b></span>
+              <span style={{color:'var(--muted)'}}>📄 <b className="num" style={{color:'#C68B4A'}}>{pStat.lv.personal||0}</b></span>
+            </div>
+          </div>
         )}
       </div>
 
