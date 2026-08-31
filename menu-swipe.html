@@ -347,7 +347,7 @@ function orderUrl(it){
     '&item='+encodeURIComponent(it.id||'');
 }
 var esc=function(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})};
-var GROUPS=[],gi=0,idx=0,layFlip=0;
+var GROUPS=[], FLAT=[], gi=0, idx=0, layFlip=0, paintSeq=0;   /* idx = ตำแหน่งในรายการรวมทุกหมวด */
 
 function imgUrl(p){ if(!p)return ''; if(/^(https?:|data:)/.test(p))return p; return IMG_BASE+String(p).replace(/^\.?\//,'') }
 function group(items){
@@ -355,13 +355,25 @@ function group(items){
   return Object.keys(m).sort(function(a,b){var x=ORDER.indexOf(a),y=ORDER.indexOf(b);return (x<0?99:x)-(y<0?99:y)})
     .map(function(k){m[k].sort(function(a,b){return a.sort-b.sort||a.p-b.p});return{name:k,items:m[k]}});
 }
-function buildCats(){
-  $('#cats').innerHTML=GROUPS.map(function(g,i){
-    return '<button class="pill'+(i===gi?' on':'')+'" data-i="'+i+'"><em>'+(CATEMOJI[g.name]||'🍹')+'</em>'+esc(g.name)+'</button>'}).join('');
-  [].forEach.call($('#cats').querySelectorAll('.pill'),function(b){
-    b.onclick=function(){ gi=+b.dataset.i; buildCats(); buildDeck(); var p=$('#cats').querySelectorAll('.pill')[gi];
-      if(p) p.parentNode.scrollTo({left:p.offsetLeft-70,behavior:'smooth'}) };
+/* รวมทุกหมวดเป็นรายการเดียว → ปัดยาวได้เรื่อยๆ ข้ามหมวดไปเอง */
+function flatten(){
+  FLAT=[];
+  GROUPS.forEach(function(g,gx){
+    g.items.forEach(function(it,cx){ it.gi=gx; it.ci=cx; FLAT.push(it) });
   });
+}
+function buildCats(){
+  $('#cats').innerHTML = GROUPS.map(function(g,i){
+    return '<button class="pill'+(i===gi?' on':'')+'" data-i="'+i+'"><em>'+(CATEMOJI[g.name]||'🍹')+'</em>'+esc(g.name)+'</button>';
+  }).join('');
+  [].forEach.call($('#cats').querySelectorAll('.pill'),function(b){
+    b.onclick=function(){ jumpToCat(+b.dataset.i) };
+  });
+}
+function markCat(){
+  var ps=$('#cats').querySelectorAll('.pill');
+  [].forEach.call(ps,function(p,i){ p.classList.toggle('on',i===gi) });
+  var on=ps[gi]; if(on) on.parentNode.scrollTo({left:Math.max(0,on.offsetLeft-70),behavior:'smooth'});
 }
 function cardHTML(it,i){
   var u=USE_PHOTO?imgUrl(it.photo):'';
@@ -373,16 +385,40 @@ function cardHTML(it,i){
       '<div class="cap">'+esc(it.n)+'<b>'+it.p+' บาท</b></div>'+
     '</article>';
 }
-window.__art=function(i){ return drinkSVG(GROUPS[gi].items[i]) };
+window.__art=function(i){ return drinkSVG(FLAT[i]) };
 function cards(){ return [].slice.call($('#deck').querySelectorAll('.item')) }
 
+/* โคลนใบแรก/ใบสุดท้ายไว้หัวท้าย → ปัดสุดแล้ววนกลับแบบไม่สะดุด */
 function buildDeck(){
-  var items=GROUPS[gi].items;
-  $('#deck').innerHTML='<i class="spacer"></i>'+items.map(cardHTML).join('')+'<i class="spacer"></i>';
-  $('#rail').innerHTML=items.map(function(_,i){return '<b class="'+(i?'':'on')+'"></b>'}).join('');
-  $('#deck').scrollLeft=0; idx=0; layout(); paint();
+  var n=FLAT.length; if(!n) return;
+  $('#deck').innerHTML =
+    '<i class="spacer"></i>' +
+    cardHTML(FLAT[n-1], n-1) +
+    FLAT.map(cardHTML).join('') +
+    cardHTML(FLAT[0], 0) +
+    '<i class="spacer"></i>';
+  idx=0; gi=FLAT[0].gi;
+  buildRail();
+  center(1,false);
+  layout(); paint();
 }
-
+function buildRail(){
+  var g=GROUPS[gi]; if(!g) return;
+  $('#rail').innerHTML=g.items.map(function(_,i){return '<b class="'+(i===FLAT[idx].ci?'on':'')+'"></b>'}).join('');
+}
+function center(domIdx,smooth){
+  var cs=cards(), c=cs[domIdx]; if(!c) return;
+  var deck=$('#deck');
+  deck.scrollTo({left:c.offsetLeft-(deck.clientWidth-c.offsetWidth)/2, behavior:smooth?'smooth':'auto'});
+}
+function nearest(){
+  var deck=$('#deck'), cs=cards(), mid=deck.scrollLeft+deck.clientWidth/2, best=0, bd=1e9;
+  cs.forEach(function(c,i){
+    var d=Math.abs(c.offsetLeft+c.offsetWidth/2-mid);
+    if(d<bd){ bd=d; best=i }
+  });
+  return best;
+}
 /* วางสเกล/ความจางของแก้วซ้าย-ขวา + หา index ที่อยู่กลางจอ */
 function layout(){
   var deck=$('#deck'), cs=cards(); if(!cs.length)return;
@@ -395,11 +431,11 @@ function layout(){
     c.classList.toggle('off',ad>.35);
     if(Math.abs(cc-mid)<bd){ bd=Math.abs(cc-mid); best=i }
   });
-  if(best!==idx){ idx=best; paint() }
+  var real=+cs[best].dataset.i;
+  if(real!==idx){ idx=real; paint() }
 }
-
 function paint(){
-  var items=GROUPS[gi].items, it=items[idx]; if(!it)return;
+  var it=FLAT[idx]; if(!it)return;
   var st=styleOf(it);
   var lay=layFlip?$('#lay0'):$('#lay1'), cur=layFlip?$('#lay1'):$('#lay0');
   lay.style.background='radial-gradient(120% 80% at 50% 8%, '+st.bg[0]+' 0%, '+st.bg[1]+' 58%, #F3E7D6 100%)';
@@ -407,7 +443,9 @@ function paint(){
   document.querySelector('meta[name=theme-color]').setAttribute('content',st.bg[0]);
 
   var d=$('#detail'); d.classList.add('fade');
+  var seq=++paintSeq;
   setTimeout(function(){
+    if(seq!==paintSeq) return;            /* กันข้อความค้างของแก้วก่อนหน้า */
     $('#dName').textContent=it.n;
     $('#dEn').textContent=it.en||'owl cha';
     $('#dDesc').textContent=(it.desc&&it.desc!==it.n)?it.desc:'ชงสดใหม่ทุกแก้ว เลือกความหวานและน้ำแข็งได้ตอนสั่ง';
@@ -420,25 +458,31 @@ function paint(){
   },140);
 
   $('#dkOrder').href=orderUrl(it);
-  $('#count').textContent=(idx+1)+' / '+items.length;
-  [].forEach.call($('#rail').children,function(b,i){b.classList.toggle('on',i===idx)});
-  $('#prev').disabled=idx===0; $('#next').disabled=idx===items.length-1;
+  if(it.gi!==gi){ gi=it.gi; markCat(); buildRail(); }
+  else { [].forEach.call($('#rail').children,function(b,i){ b.classList.toggle('on',i===it.ci) }); }
+  $('#count').textContent=(it.ci+1)+' / '+GROUPS[gi].items.length;
 }
-
-function go(d){
-  var c=cards()[idx+d]; if(!c)return;
-  var deck=$('#deck');
-  deck.scrollTo({left:c.offsetLeft-(deck.clientWidth-c.offsetWidth)/2,behavior:'smooth'});
+/* เลื่อนทีละแก้ว — สุดหมวดก็ไหลเข้าหมวดถัดไป สุดท้ายวนกลับหมวดแรก */
+function go(d){ center(nearest()+d,true) }
+function jumpToCat(g){
+  var first=0;
+  for(var i=0;i<FLAT.length;i++){ if(FLAT[i].gi===g){ first=i; break } }
+  center(first+1,true);
 }
 $('#prev').onclick=function(){go(-1)}; $('#next').onclick=function(){go(1)};
 document.addEventListener('keydown',function(e){ if(e.key==='ArrowRight')go(1); if(e.key==='ArrowLeft')go(-1) });
 
-/* scroll → ปรับสเกลแก้วข้างๆ + เปลี่ยน index */
+/* scroll → ปรับสเกลแก้วข้างๆ + วนลูปเมื่อไปโดนใบโคลนหัว/ท้าย */
 (function(){
-  var deck=$('#deck'), tick=false;
+  var deck=$('#deck'), tick=false, settle=null;
   deck.addEventListener('scroll',function(){
-    if(tick)return; tick=true;
-    requestAnimationFrame(function(){ layout(); tick=false });
+    if(!tick){ tick=true; requestAnimationFrame(function(){ layout(); tick=false }) }
+    clearTimeout(settle);
+    settle=setTimeout(function(){
+      var cs=cards(), n=cs.length-2, j=nearest();      /* cs[0] และ cs[n+1] คือใบโคลน */
+      if(j===0) center(n,false);                       /* ปัดถอยเลยใบแรก → เด้งไปใบสุดท้ายจริง */
+      else if(j===n+1) center(1,false);                /* ปัดเลยใบสุดท้าย → เด้งกลับใบแรกจริง */
+    },140);
   },{passive:true});
   window.addEventListener('resize',function(){ layout() });
 })();
@@ -446,8 +490,9 @@ document.addEventListener('keydown',function(e){ if(e.key==='ArrowRight')go(1); 
 /* แตะแก้วข้างๆ เพื่อเลื่อนไปเมนูนั้น */
 $('#deck').addEventListener('click',function(e){
   var c=e.target.closest && e.target.closest('.item'); if(!c)return;
-  var i=+c.dataset.i; if(i===idx)return;
-  go(i-idx);
+  var cs=cards(), j=cs.indexOf(c);
+  if(j<0 || j===nearest()) return;
+  center(j,true);
 });
 
 /* hint hides after first swipe */
@@ -462,7 +507,7 @@ $('#dkOrder').href=ORDER_URL; $('#dkDeli').href=DELIVERY_URL;
   if(!open) el.querySelector('.dot').style.background='#C4614A'})();
 
 /* boot */
-function start(items){ GROUPS=group(items); if(!GROUPS.length)return; buildCats(); buildDeck() }
+function start(items){ GROUPS=group(items); if(!GROUPS.length)return; flatten(); buildCats(); buildDeck() }
 loadMenu().then(function(x){ if(!x.length)throw new Error('empty'); start(x) })
   .catch(function(e){ console.warn('snapshot:',e); start(SNAPSHOT) });
 </script>
