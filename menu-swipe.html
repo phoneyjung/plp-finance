@@ -10,9 +10,19 @@
 <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@200;300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root{
-  --cream:#F7EFE2; --ink:#2B1C13; --brown:#4C3324; --muted:#8B7460;
-  --gold:#C08A3E; --line:rgba(76,51,36,.12);
+  /* ===== 60 / 30 / 10 =====
+     60% พื้น: ครีมกระดาษ · 30% โครงสร้าง: น้ำตาลไม้/ขาวนวล · 10% แอคเซนต์: ทอง */
+  --c60:#F7EFE2;            /* พื้นหลังหลัก */
+  --c60b:rgba(255,255,255,.72); /* การ์ด/ชิป = พื้นเดียวกันแต่สว่างขึ้น */
+  --c30:#4C3324;            /* น้ำตาลไม้ — ตัวหนังสือ ปุ่มหลัก ชิปที่เลือก */
+  --c30b:#8B7460;           /* น้ำตาลจาง — ข้อความรอง */
+  --c10:#C08A3E;            /* ทอง — ใช้น้อยๆ เฉพาะจุดที่อยากให้ตาไปหยุด */
+  --cream:var(--c60); --ink:#2B1C13; --brown:var(--c30); --muted:var(--c30b);
+  --gold:var(--c10); --line:rgba(76,51,36,.12);
   --shadow:0 20px 44px -24px rgba(58,36,22,.6);
+  /* ===== สเกลทอง (φ≈1.618) ===== */
+  --t1:34px; --t2:21px; --t3:13px; --t4:10.5px;   /* ราคา · ชื่อ · คำอธิบาย · ป้ายเล็ก */
+  --s1:34px; --s2:21px; --s3:13px; --s4:8px;      /* ระยะห่าง */
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 body{
@@ -26,6 +36,16 @@ a{color:inherit;text-decoration:none}
 
 /* ---------- animated background ---------- */
 .bg{position:fixed;inset:0;z-index:-3;background:var(--cream);overflow:hidden}
+.bg .photo{position:absolute;inset:0;background-size:cover;background-position:center;
+  opacity:0;transition:opacity .7s ease;z-index:0}
+.bg .photo.on{opacity:1}
+body.hasBg .bg .lay{mix-blend-mode:multiply;opacity:0}
+body.hasBg .bg .lay.on{opacity:.55}
+body.hasBg .bg .arc,body.hasBg .leaf{opacity:.14}
+body.hasBg .bg .grain{opacity:.03}
+/* ม่านครีมจางๆ ท้ายจอ — กันพื้นหลังเข้มกลืนตัวหนังสือ */
+body.hasBg .bg::after{content:"";position:absolute;left:0;right:0;bottom:0;height:44%;z-index:3;
+  background:linear-gradient(to top,rgba(247,239,226,.94) 0%,rgba(247,239,226,.72) 42%,rgba(247,239,226,0) 100%)}
 .bg .lay{position:absolute;inset:0;opacity:0;transition:opacity .7s ease}
 .bg .lay.on{opacity:1}
 .bg .grain{
@@ -60,7 +80,7 @@ header{padding:calc(10px + env(safe-area-inset-top)) 16px 6px;display:flex;align
 .pill em{font-style:normal}
 
 /* ---------- carousel ---------- */
-.deckWrap{position:relative;flex:1 1 auto;min-height:0;display:flex;flex-direction:column}
+.deckWrap{position:relative;flex:1.618 1 0;min-height:0;display:flex;flex-direction:column}
 .deck{display:flex;align-items:stretch;height:100%;overflow-x:auto;overflow-y:hidden;
   scroll-snap-type:x mandatory;scrollbar-width:none;-webkit-overflow-scrolling:touch}
 .deck::-webkit-scrollbar{display:none}
@@ -84,21 +104,22 @@ header{padding:calc(10px + env(safe-area-inset-top)) 16px 6px;display:flex;align
   padding:4px 11px;border-radius:999px}
 
 /* ---------- detail of active drink ---------- */
-.detail{flex:0 0 auto;text-align:center;padding:2px 24px 0;transition:opacity .2s ease}
+.detail{flex:1 1 0;min-height:0;display:flex;flex-direction:column;justify-content:center;
+  text-align:center;padding:0 24px;transition:opacity .2s ease}
 .detail.fade{opacity:0}
-.nm{font-size:24px;font-weight:600;line-height:1.2;letter-spacing:-.01em;margin:0}
-.en{font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);margin-top:4px}
-.ds{font-size:12.5px;line-height:1.6;color:#5C4634;margin:8px auto 0;max-width:32ch;
+.nm{font-size:var(--t2);font-weight:600;line-height:1.2;letter-spacing:-.01em;margin:0}
+.en{font-size:var(--t4);letter-spacing:.16em;text-transform:uppercase;color:var(--muted);margin-top:4px}
+.ds{font-size:var(--t3);line-height:1.6;color:#5C4634;margin:var(--s4) auto 0;max-width:32ch;
   display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.chips{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin-top:10px}
-.chips span{font-size:10.5px;color:var(--brown);background:rgba(255,255,255,.72);border:1px solid var(--line);
+.chips{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin-top:var(--s3)}
+.chips span{font-size:var(--t4);color:var(--brown);background:rgba(255,255,255,.72);border:1px solid var(--line);
   border-radius:999px;padding:6px 11px}
-.pz{display:flex;align-items:baseline;justify-content:center;gap:3px;margin-top:10px}
-.pz b{font-size:34px;font-weight:600;letter-spacing:-.03em;line-height:1}
-.pz i{font-style:normal;font-size:13px;color:var(--muted)}
+.pz{display:flex;align-items:baseline;justify-content:center;gap:4px;margin-top:var(--s3)}
+.pz b{font-size:var(--t1);font-weight:600;letter-spacing:-.03em;line-height:1}
+.pz i{font-style:normal;font-size:var(--t3);color:var(--c10);font-weight:500}
 
 .nav{position:absolute;top:34%;width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.82);
-  display:grid;place-items:center;font-size:19px;color:var(--brown);box-shadow:0 10px 24px -14px rgba(50,30,16,.8);
+  display:grid;place-items:center;font-size:19px;color:var(--c10);box-shadow:0 10px 24px -14px rgba(50,30,16,.8);
   backdrop-filter:blur(6px);z-index:5}
 .nav.l{left:8px}.nav.r{right:8px}
 .nav[disabled]{opacity:.25}
@@ -117,7 +138,7 @@ header{padding:calc(10px + env(safe-area-inset-top)) 16px 6px;display:flex;align
   font-size:14px;font-weight:500;box-shadow:var(--shadow);transition:transform .18s}
 .dk:active{transform:scale(.97)}
 .dk.main{background:linear-gradient(135deg,#4C3324,#241710);color:#F6ECD9}
-.dk.alt{background:rgba(255,255,255,.9);color:var(--brown);border:1px solid var(--line)}
+.dk.alt{background:rgba(255,255,255,.9);color:var(--brown);border:1px solid rgba(192,138,62,.32)}
 .count{position:absolute;right:16px;top:6px;font-size:11px;color:var(--muted);letter-spacing:.08em;z-index:5}
 
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
@@ -127,6 +148,8 @@ header{padding:calc(10px + env(safe-area-inset-top)) 16px 6px;display:flex;align
 <body>
 
 <div class="bg" id="bg">
+  <div class="photo" id="bgA"></div>
+  <div class="photo" id="bgB"></div>
   <div class="lay on" id="lay0"></div>
   <div class="lay" id="lay1"></div>
   <div class="arc"></div><div class="arc b"></div>
@@ -171,6 +194,18 @@ var ORDER_URL='https://phoneyjung.github.io/plp-finance/order.html';
 var DELIVERY_URL='https://lin.ee/6IpVFW8?openExternalBrowser=1';
 var FIRESTORE='https://firestore.googleapis.com/v1/projects/plp-finance/databases/(default)/documents/owlMenu';
 var IMG_BASE=(location.hostname==='phoneyjung.github.io')?'':'https://phoneyjung.github.io/plp-finance/';
+/* รูปพื้นหลัง — เว้นว่างทั้งหมด = ใช้พื้นหลังไล่สีอย่างเดียว (เหมือนเดิม) */
+var BG_IMAGE='owl-img/bg-paper.jpg';      /* ใบเริ่มต้น / หมวดที่ไม่ได้ระบุ */
+var BG_MAP={                              /* จะสลับพื้นหลังตามหมวดที่ปัดถึง */
+  'ขายดี':'owl-img/bg-paper.jpg',
+  'เฟเวอริต':'owl-img/bg-paper.jpg',
+  'คลาสสิค':'owl-img/bg-matcha.jpg',
+  'พรีเมียมฟรุต':'owl-img/bg-peach.jpg',
+  'นมสด':'owl-img/bg-milk.jpg',
+  'ช็อคโกอาวล์':'owl-img/bg-cocoa.jpg',
+  'โซดา':'owl-img/bg-paper.jpg',
+  'ท็อปปิ้ง':'owl-img/bg-paper.jpg'
+};
 var USE_PHOTO=true;   /* true = ใช้รูปถ่ายถ้ามี, false = ใช้ภาพวาดทั้งหมด */
 var DEEPLINK=true;    /* true = ปุ่มพรีออเดอร์ส่งชื่อเมนูไปเปิดให้ตรงตัว (ต้องแปะสคริปต์ใน order.html ก่อน) */
 /* ================================ */
@@ -441,6 +476,7 @@ function paint(){
   lay.style.background='radial-gradient(120% 80% at 50% 8%, '+st.bg[0]+' 0%, '+st.bg[1]+' 58%, #F3E7D6 100%)';
   lay.classList.add('on'); cur.classList.remove('on'); layFlip=layFlip?0:1;
   document.querySelector('meta[name=theme-color]').setAttribute('content',st.bg[0]);
+  setBg(it.c);
 
   var d=$('#detail'); d.classList.add('fade');
   var seq=++paintSeq;
@@ -499,6 +535,25 @@ $('#deck').addEventListener('click',function(e){
 (function(){ var h=$('#hint'), hide=function(){h.style.opacity='0';setTimeout(function(){h.remove()},600)};
   $('#deck').addEventListener('scroll',hide,{once:true,passive:true});
   setTimeout(hide,6000); })();
+
+/* พื้นหลังรูป — โหลดล่วงหน้าแล้วสลับแบบ crossfade ตามหมวด */
+var bgFlip=0, bgNow='', bgCache={};
+function setBg(cat){
+  var url=imgUrl((BG_MAP&&BG_MAP[cat])||BG_IMAGE||'');
+  if(!url||url===bgNow) return;
+  if(bgCache[url]==='bad') return;
+  var apply=function(){
+    var show=bgFlip?$('#bgA'):$('#bgB'), hide=bgFlip?$('#bgB'):$('#bgA');
+    show.style.backgroundImage='url("'+url+'")';
+    show.classList.add('on'); hide.classList.remove('on');
+    bgFlip=bgFlip?0:1; bgNow=url; document.body.classList.add('hasBg');
+  };
+  if(bgCache[url]==='ok') return apply();
+  var im=new Image();
+  im.onload=function(){ bgCache[url]='ok'; apply() };
+  im.onerror=function(){ bgCache[url]='bad' };   /* โหลดไม่ขึ้น = ใช้พื้นหลังไล่สีเดิม ไม่พัง */
+  im.src=url;
+}
 
 /* links + hours */
 $('#dkOrder').href=ORDER_URL; $('#dkDeli').href=DELIVERY_URL;
