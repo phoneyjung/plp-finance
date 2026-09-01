@@ -5163,6 +5163,972 @@ function OCTabPay({ toast }){
 /* ================ END OWL COST ================ */
 
 
+/* ================ 🧺 LAUNDRY PAY — เงินเดือนร้านซักผ้า (Otteri/Teddy1/Teddy2) ================
+   Firestore: owlCost/laundryPay  { positions[], cfg:{otteri,teddy1,teddy2}, staff[], months{} }
+   เวลาเข้าออกใช้ fpScans/{YYYY-MM} ร่วมกับระบบสแกนนิ้ว (namespace เดียวกับ Owl Cha)
+   Teddy 2 = รหัสจริงจากเครื่องสแกน · Otteri แนะนำรหัสเสมือน 801+ · Teddy 1 = 901+
+   ========================================================================================== */
+const LN_SHOPS=[
+  { id:'otteri', label:'Otteri',  emoji:'🦦', color:'#0E7A5F' },
+  { id:'teddy1', label:'Teddy 1', emoji:'🧸', color:'#C68B4A' },
+  { id:'teddy2', label:'Teddy 2', emoji:'🧸', color:'#2E8FC4' },
+];
+const lnShopInfo=(id)=> LN_SHOPS.find(x=>x.id===id) || LN_SHOPS[2];
+const LN_CFG_SEED=()=>({ rates:{partner:0,maid:0,super:0}, dilig:500, diligMinDays:26, diligGrace:0, divisor:26, shiftHrs:11, otMult:2, otGrace:15, partnerMinHrs:5 });
+const LN_POS_SEED=[
+  { id:'partner', name:'หุ้นส่วน', emoji:'🤝' },
+  { id:'maid',    name:'แม่บ้าน',  emoji:'🧹' },
+  { id:'super',   name:'ผู้ดูแล',  emoji:'👔' },
+];
+const LN_WD=['อา','จ','อ','พ','พฤ','ศ','ส'];
+const lnPosOf=(pay,id)=> ((pay&&pay.positions)||LN_POS_SEED).find(p=>p.id===id) || { id:id, name:id||'-', emoji:'👤' };
+const lnCfgOf=(pay,shopId)=>{
+  const c=(pay&&pay.cfg&&pay.cfg[shopId])||{};
+  const seed=LN_CFG_SEED();
+  return { ...seed, ...c, rates:{ ...seed.rates, ...(c.rates||{}) } };
+};
+const lnNorm=(v)=>({
+  positions:(v.positions&&v.positions.length)? v.positions : LN_POS_SEED.map(p=>({...p})),
+  cfg:{ otteri:{...LN_CFG_SEED(),...((v.cfg||{}).otteri||{})}, teddy1:{...LN_CFG_SEED(),...((v.cfg||{}).teddy1||{})}, teddy2:{...LN_CFG_SEED(),...((v.cfg||{}).teddy2||{})} },
+  staff:v.staff||[],
+  months:v.months||{}
+});
+const lnRateOf=(st,cfg)=> (Number(st.custom)>0)? Number(st.custom) : (Number((cfg.rates||{})[st.pos])||0);
+const lnMinTxt=(m)=> !m ? '–' : ((m>0?'+':'−') + Math.abs(m) + ' น.');
+
+/* ---- คำนวณเงินเดือนซักผ้า 1 สาขา 1 เดือน — อ่านตรงจาก fpScans ---- */
+function lnPayCalc(pay, ym, shopId, fp){
+  const cfg=lnCfgOf(pay,shopId);
+  const m=((pay&&pay.months)||{})[ym]||{};
+  const adv=m.adv||{}, bonus=m.bonus||{}, dg=m.dilig||{}, otMan=m.ot||{};
+  const nDays=ocPayDays(ym);
+  const F=fp||{};
+  const fd=F.d||{}, fs=F.shop||{}, fl=F.leave||{}, fh=F.hol||{};
+  const rows=[]; const crossInfo={};
+  ((pay&&pay.staff)||[]).forEach(st=>{
+    const pin=String(st.fpId||'').trim();
+    const partner=(st.pos==='partner');
+    const minHrs= partner? ((st.minHrs!==''&&st.minHrs!=null)? Number(st.minHrs):(Number(cfg.partnerMinHrs)||5)) : 0;
+    const rate=lnRateOf(st,cfg);
+    const hourRate=rate/(cfg.divisor||26)/(cfg.shiftHrs||11);
+    const sIn= st.shiftIn? attHM(st.shiftIn):null;
+    const sOut= st.shiftOut? attHM(st.shiftOut):null;
+    const gr=(cfg.otGrace!=null? Number(cfg.otGrace):15);
+    const dGrace=(cfg.diligGrace!=null? Number(cfg.diligGrace):0);
+    let days=0,holDays=0,holPay=0,otMin=0,missMin=0,lateDays=0,lateMin=0,shortDays=0,openDays=0;
+    const daily=[]; const other={};
+    for(let d=1;d<=nDays;d++){
+      const eff= pin? (((fs[String(d)]||{})[pin]) || st.shop || shopId) : (st.shop||shopId);
+      const rec= pin? ((fd[String(d)]||{})[pin]) : null;
+      const list= rec? fpClean(rec.t) : [];
+      const lv= pin? ((fl[String(d)]||{})[pin]) : null;
+      const hol= pin? !!((fh[String(d)]||{})[pin]) : false;
+      let netMin=0; const pairs=[];
+      for(let k=0;k+1<list.length;k+=2){
+        const a=attHM(list[k]), b=attHM(list[k+1]);
+        if(a!=null&&b!=null){ let mm=b-a; if(mm<0)mm+=1440; netMin+=mm; pairs.push({i:list[k],o:list[k+1]}); }
+      }
+      const open=(list.length%2===1);
+      if(eff!==shopId){ if(netMin>0||hol) other[eff]=(other[eff]||0)+1; continue; }
+      if(!(netMin>0)){
+        if(open){ openDays++; daily.push({d, open:true, tIn:list[0]||'', tOut:''}); }
+        else if(lv) daily.push({d, leave:lv});
+        continue;
+      }
+      const hrs=netMin/60;
+      const tIn=pairs[0].i, tOut=pairs[pairs.length-1].o;
+      if(partner && minHrs>0 && hrs<minHrs){ shortDays++; daily.push({d, tIn, tOut, hrs, short:true}); continue; }
+      const aIn=attHM(tIn), aOut=attHM(tOut);
+      let dOt=0;
+      if(hol){
+        holDays++; holPay+=hrs*hourRate*2;
+      } else {
+        days++;
+        if(sIn!=null&&sOut!=null&&aIn!=null&&aOut!=null){
+          /* เทียบกะประจำ · มาก่อนเวลาไม่บวก · ผ่อนผัน 15 น.แรก */
+          let late=Math.max(0,aIn-sIn);
+          let over=aOut-sOut; if(over>720)over-=1440; if(over<-720)over+=1440;
+          late=Math.max(0,late-gr);
+          over= over>0? Math.max(0,over-gr) : Math.min(0,over+gr);
+          dOt=Math.round(over-late);
+        } else {
+          const df=Math.round(netMin-(cfg.shiftHrs||11)*60);
+          dOt = df>gr? df-gr : (df<-gr? df+gr : 0);
+        }
+        if(dOt>0) otMin+=dOt;
+        else if(dOt<0 && !partner) missMin+=(-dOt);
+        if(sIn!=null&&aIn!=null){ const lt=aIn-sIn; if(lt>dGrace){ lateDays++; lateMin+=lt; } }
+      }
+      daily.push({d, tIn, tOut, hrs, hol, ot:dOt, edited:!!(rec&&rec.m)});
+    }
+    if(Object.keys(other).length) crossInfo[st.id]=other;
+    const home=(st.shop===shopId);
+    const advList=adv[st.id]||[];
+    if(!home && days+holDays+shortDays===0) return;
+    if(st.active===false && days+holDays===0 && !advList.length && !(Number(bonus[st.id])||0) && !(Number(otMan[st.id])||0)) return;
+    const base=Math.round(rate/(cfg.divisor||26)*days);
+    const otAuto=Math.floor(otMin/60);
+    const otRestMin=otMin%60;
+    const otManH=Number(otMan[st.id])||0;
+    const otH=otAuto+otManH;
+    const otB=Math.round(otH*hourRate*(cfg.otMult||2));
+    const missH= partner? 0 : Math.floor(missMin/60);
+    const missRestMin= partner? 0 : (missMin%60);
+    const missB=Math.round(missH*hourRate);
+    holPay=Math.round(holPay);
+    const workedDays=days+holDays;
+    const diligMinDays=(cfg.diligMinDays!=null? Number(cfg.diligMinDays):26);
+    const diligAuto=(lateDays===0 && workedDays>=diligMinDays);
+    let dl;
+    if(dg[st.id]===0) dl=0;
+    else if(dg[st.id]===1) dl=(cfg.dilig||0);
+    else dl= diligAuto? (cfg.dilig||0) : 0;
+    const bn=Number(bonus[st.id])||0;
+    const advT=advList.reduce((s,e)=>s+(Number(e.amt)||0),0);
+    const net=base+otB+dl+bn+holPay-missB;
+    rows.push({ st, pos:lnPosOf(pay,st.pos), partner, rate, hourRate, days, holDays, holPay, base,
+      otMin, otRestMin, otAuto, otManH, otH, otB, missMin, missH, missRestMin, missB,
+      lateDays, lateMin, shortDays, minHrs, openDays, dl, diligAuto,
+      diligForced:(dg[st.id]===0||dg[st.id]===1), dgVal:dg[st.id], workedDays, diligMinDays,
+      bn, advList, advT, net, toPay:net-advT, daily, home });
+  });
+  rows.sort((a,b)=> (a.home===b.home?0:(a.home?-1:1)) || String(a.st.name).localeCompare(b.st.name,'th'));
+  const total=rows.reduce((s,r)=>s+r.net,0);
+  return { rows, total, nDays, cfg, crossInfo };
+}
+
+/* ---- สลิป PNG รายคน ---- */
+async function lnPaySlipImage(pay,ym,shopId,stId,shopName){
+  try{ if(document.fonts&&document.fonts.ready) await document.fonts.ready; }catch(e){}
+  const fp=await db.collection('fpScans').doc(ym).get().then(s=>s.exists?(s.data()||{}):{}).catch(()=>({}));
+  const calc=lnPayCalc(pay,ym,shopId,fp);
+  const r=calc.rows.find(x=>x.st.id===stId); if(!r) return;
+  const daysRows=r.daily;
+  const W=860, headH=132, sumH=92, colH=40, rowH=36, footH=104;
+  const advRows=(r.advList&&r.advList.length)? r.advList.length+1 : 0;
+  const H=headH+sumH+colH+Math.max(1,daysRows.length)*rowH+advRows*32+footH+70;
+  const cv=document.createElement('canvas'); cv.width=W*2; cv.height=H*2;
+  const g=cv.getContext('2d'); g.scale(2,2);
+  const FN=(w,s)=>w+' '+s+'px Kanit, "Noto Sans Thai", sans-serif';
+  const num=v=>Math.round(v||0).toLocaleString('en-US');
+  g.fillStyle='#FBF6EC'; g.fillRect(0,0,W,H);
+  g.fillStyle='#113D6C'; g.fillRect(0,0,W,headH);
+  g.fillStyle='#FFFFFF'; g.font=FN(700,25); g.textAlign='left';
+  g.fillText('สลิปเงินเดือน · '+r.st.name,30,42);
+  g.font=FN(400,16); g.fillStyle='#CFE2F5';
+  g.fillText(shopName+' · '+ocPayLabel(ym)+' · '+((r.pos.emoji||'')+' '+r.pos.name),30,72);
+  g.fillText('ทำงาน '+r.workedDays+' วัน'+(r.holDays?(' (วันหยุด×2 '+r.holDays+' วัน)'):'')+(r.lateDays?(' · สาย '+r.lateDays+' วัน'):'')+(r.shortDays?(' · ตัด '+r.shortDays+' วัน (<'+r.minHrs+'ชม.)'):''),30,100);
+  const chips=[['ฐาน ('+r.days+'ว)',r.base],['OT '+(r.otH||0)+' ชม.',r.otB],['หยุด×2',r.holPay],['เบี้ยขยัน',r.dl],['โบนัส/หัก',r.bn],['หักขาด '+(r.missH||0)+' ชม.',-(r.missB||0)]];
+  chips.forEach((c,k)=>{
+    const x=30+k*136;
+    g.font=FN(400,13); g.fillStyle='#8A8072'; g.textAlign='left'; g.fillText(c[0],x,headH+32);
+    g.font=FN(700,18); g.fillStyle= c[1]<0? '#B0483C':'#1E2A38';
+    g.fillText((c[1]<0?'−':'')+num(Math.abs(c[1])),x,headH+58);
+  });
+  const cols=[['วัน',66,'right'],['เข้า',210,'center'],['ออก',330,'center'],['ชม.',430,'right'],['OT',520,'right'],['หมายเหตุ',830,'right']];
+  const ty0=headH+sumH;
+  g.fillStyle='#E3ECF6'; g.fillRect(0,ty0,W,colH);
+  g.font=FN(600,14.5); g.fillStyle='#113D6C';
+  cols.forEach(c=>{ g.textAlign=c[2]; g.fillText(c[0],c[1],ty0+27); });
+  let y=ty0+colH;
+  daysRows.forEach((o,i)=>{
+    g.fillStyle= i%2? '#F2EDE2':'#FAF6ED'; g.fillRect(0,y,W,rowH);
+    g.font=FN(400,14); g.fillStyle='#3B3B33';
+    g.textAlign='right'; g.fillText(String(o.d),cols[0][1],y+24);
+    if(o.leave){
+      const li=leaveInfo(o.leave.t);
+      g.textAlign='left'; g.fillStyle='#8A8072';
+      g.fillText(li.emoji+' '+li.label+(o.leave.n?(' · '+o.leave.n):''),150,y+24);
+    } else {
+      g.textAlign='center'; g.fillText(o.tIn||'–',cols[1][1],y+24); g.fillText(o.tOut||'–',cols[2][1],y+24);
+      g.textAlign='right'; g.fillText(o.hrs!=null? (Math.round(o.hrs*10)/10).toFixed(1):'–',cols[3][1],y+24);
+      g.fillStyle= (o.ot||0)>0? '#0E7A5F' : ((o.ot||0)<0? '#B0483C':'#9AA1AB');
+      g.fillText(o.hol?'—':lnMinTxt(o.ot||0),cols[4][1],y+24);
+      g.fillStyle='#8A8072';
+      const nts=[]; if(o.hol)nts.push('วันหยุด×2'); if(o.short)nts.push('ไม่ถึงขั้นต่ำ'); if(o.open)nts.push('เวลาไม่ครบคู่'); if(o.edited)nts.push('แก้มือ');
+      g.fillText(nts.join(' · '),cols[5][1],y+24);
+    }
+    y+=rowH;
+  });
+  if(!daysRows.length){ g.font=FN(400,14); g.fillStyle='#9AA1AB'; g.textAlign='center'; g.fillText('ไม่มีข้อมูลเวลาในเดือนนี้',W/2,y+24); y+=rowH; }
+  y+=10;
+  g.font=FN(400,13.5); g.fillStyle='#6B6357'; g.textAlign='left';
+  g.fillText('รวม OT '+r.otMin+' นาที → คิด '+r.otAuto+' ชม.'+(r.otRestMin?(' (เศษ '+r.otRestMin+' นาทีตัดทิ้ง)'):'')+(r.otManH?(' · เพิ่มมือ '+r.otManH+' ชม.'):'')+' × '+((calc.cfg.otMult)||2),30,y+8);
+  y+=28;
+  if(advRows){
+    g.font=FN(600,14.5); g.fillStyle='#B0483C'; g.fillText('เบิก/หักระหว่างเดือน',30,y+6);
+    y+=26;
+    r.advList.forEach(e=>{
+      g.font=FN(400,14); g.fillStyle='#6B6357'; g.textAlign='left';
+      g.fillText((e.d? ('วันที่ '+e.d+' · '):'')+(e.note||'เบิก'),46,y+4);
+      g.textAlign='right'; g.fillStyle='#B0483C'; g.fillText('−'+num(e.amt),W-30,y+4);
+      y+=30;
+    });
+  }
+  y+=8;
+  g.fillStyle='#113D6C'; g.fillRect(0,y,W,footH);
+  g.font=FN(400,15.5); g.fillStyle='#CFE2F5'; g.textAlign='left';
+  g.fillText('ยอดเดือนนี้ '+num(r.net)+(r.advT?('  −  เบิกไปแล้ว '+num(r.advT)):''),30,y+38);
+  g.font=FN(700,26); g.fillStyle='#FFFFFF';
+  g.fillText('คงเหลือจ่ายจริง',30,y+78);
+  g.textAlign='right'; g.fillText(num(r.toPay)+' ฿',W-30,y+78);
+  const url=cv.toDataURL('image/png');
+  const a=document.createElement('a');
+  a.href=url; a.download='slip-'+shopId+'-'+ym+'-'+String(r.st.id).replace(/[^a-z0-9]/gi,'')+'.png';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+}
+
+/* ---- 👥 พนักงาน + 💵 เรทเงินเดือน (ร้านซักผ้า) ---- */
+function LnStaffPanel({ shop, user, toast }){
+  const [pay,setPay]=useState(null);
+  const [tab,setTab]=useState('on');
+  const [scope,setScope]=useState('shop');
+  const [edit,setEdit]=useState(null);
+  const [cfgOpen,setCfgOpen]=useState(false);
+  const [cfgDraft,setCfgDraft]=useState(null);
+  const [busy,setBusy]=useState(false);
+  const [msg,setMsg]=useState('');
+  const ro = user.role!=='admin';
+
+  useEffect(()=>{
+    let stop=false;
+    if(!db){ setPay(lnNorm({})); return; }
+    db.collection('owlCost').doc('laundryPay').get()
+      .then(s=>{ if(!stop) setPay(lnNorm(s.exists? (s.data()||{}) : {})); })
+      .catch(()=>{ if(!stop) setPay(lnNorm({})); });
+    return ()=>{ stop=true; };
+  },[]);
+
+  if(pay===null) return <div style={{padding:'40px 0',textAlign:'center',color:'var(--muted)'}}>กำลังโหลด…</div>;
+
+  const cfg=lnCfgOf(pay,shop.id);
+  const staff=pay.staff||[];
+  const isOn=(st)=> st.active!==false;
+  const inScope=(st)=> scope==='all' || (st.shop||'teddy2')===shop.id;
+  const list=staff.filter(st=>inScope(st) && (tab==='on'? isOn(st):!isOn(st)));
+  const nOn=staff.filter(st=>inScope(st)&&isOn(st)).length;
+  const nOff=staff.filter(st=>inScope(st)&&!isOn(st)).length;
+
+  const saveDoc=async(patch,local)=>{
+    if(!db) return false;
+    setBusy(true); setMsg('');
+    try{
+      await db.collection('owlCost').doc('laundryPay').set(patch,{merge:true});
+      setPay(p=>lnNorm({ ...(p||{}), ...local }));
+      setMsg('บันทึกแล้ว'); setTimeout(()=>setMsg(''),1600);
+      setBusy(false); return true;
+    }catch(e){ setMsg('บันทึกไม่สำเร็จ · '+((e&&e.message)||'')); setBusy(false); return false; }
+  };
+  const saveStaff=async(next)=>{ const ok=await saveDoc({staff:next},{staff:next}); if(ok) setEdit(null); };
+
+  const openNew=()=>setEdit({ id:'L'+ocUid(), name:'', pos:'maid', custom:0, shop:shop.id, fpId:'',
+    shiftIn:'', shiftOut:'', minHrs:'', active:true, start:today(), end:'', phone:'', note:'', _new:true });
+  const commit=()=>{
+    if(!edit) return;
+    const nm=String(edit.name||'').trim();
+    if(!nm){ setMsg('ใส่ชื่อก่อน'); return; }
+    const fpId=String(edit.fpId||'').trim();
+    if(fpId && staff.some(x=>x.id!==edit.id && String(x.fpId||'')===fpId)){ setMsg('รหัสสแกน #'+fpId+' ซ้ำกับคนอื่น'); return; }
+    const clean={ id:edit.id, name:nm,
+      pos:(pay.positions.some(p=>p.id===edit.pos)? edit.pos : 'maid'),
+      custom:parseFloat(edit.custom)||0,
+      shop:(LN_SHOPS.some(s=>s.id===edit.shop)? edit.shop : shop.id),
+      fpId,
+      shiftIn:attFmt(edit.shiftIn||''), shiftOut:attFmt(edit.shiftOut||''),
+      minHrs:(edit.pos==='partner' && edit.minHrs!==''&&edit.minHrs!=null)? (parseFloat(edit.minHrs)||0) : '',
+      active:edit.active!==false, start:edit.start||'', end:edit.end||'',
+      phone:String(edit.phone||'').trim(), note:String(edit.note||'').trim() };
+    saveStaff(edit._new? [...staff,clean] : staff.map(x=>x.id===clean.id? clean:x));
+  };
+  const setOff=(st)=>{
+    if(!confirm('บันทึกว่า '+st.name+' ลาออก?\nจะไม่ขึ้นในหน้าเงินเดือนเดือนใหม่ แต่ข้อมูลเดือนเก่ายังอยู่ครบ')) return;
+    saveStaff(staff.map(x=>x.id===st.id? {...x,active:false,end:x.end||today()}:x));
+  };
+  const setOn=(st)=>saveStaff(staff.map(x=>x.id===st.id? {...x,active:true,end:''}:x));
+  const del=(st)=>{
+    if(!confirm('ลบ '+st.name+' ออกถาวร?\nแนะนำให้กด "ลาออก" แทน เพื่อเก็บประวัติไว้')) return;
+    saveStaff(staff.filter(x=>x.id!==st.id));
+  };
+
+  /* ---- เรท + ตำแหน่ง ---- */
+  const openCfg=()=>{ setCfgDraft({ cfg:JSON.parse(JSON.stringify(cfg)), positions:JSON.parse(JSON.stringify(pay.positions)) }); setCfgOpen(true); };
+  const saveCfg=async()=>{
+    if(!cfgDraft) return;
+    const c=cfgDraft.cfg;
+    ['dilig','diligMinDays','diligGrace','divisor','shiftHrs','otMult','otGrace','partnerMinHrs'].forEach(k=>{ c[k]=parseFloat(c[k]); if(isNaN(c[k])) c[k]=LN_CFG_SEED()[k]; });
+    Object.keys(c.rates||{}).forEach(k=>{ c.rates[k]=parseFloat(c.rates[k])||0; });
+    const ok=await saveDoc({ cfg:{ [shop.id]:c }, positions:cfgDraft.positions },
+      { cfg:{ ...pay.cfg, [shop.id]:c }, positions:cfgDraft.positions });
+    if(ok) setCfgOpen(false);
+  };
+  const addPos=()=>{
+    const nm=prompt('ชื่อตำแหน่งใหม่ (เช่น พนักงานพาร์ทไทม์)');
+    if(!nm||!nm.trim()) return;
+    const id='pos'+ocUid();
+    setCfgDraft(dd=>({ ...dd, positions:[...dd.positions,{id,name:nm.trim(),emoji:'👤'}], cfg:{...dd.cfg, rates:{...dd.cfg.rates,[id]:0}} }));
+  };
+  const delPos=(pid)=>{
+    if(staff.some(x=>x.pos===pid)){ alert('มีพนักงานใช้ตำแหน่งนี้อยู่ ลบไม่ได้'); return; }
+    setCfgDraft(dd=>({ ...dd, positions:dd.positions.filter(p=>p.id!==pid) }));
+  };
+
+  const INP={fontFamily:'inherit',fontSize:14,border:'1px solid var(--line)',borderRadius:9,padding:'8px 10px',background:'var(--card)',color:'var(--ink)',width:'100%'};
+  const NUMW={...INP,width:76,textAlign:'right',padding:'6px 8px'};
+  const fpHint = shop.id==='otteri'? 'แนะนำรหัสเสมือน 801, 802, …' : shop.id==='teddy1'? 'แนะนำรหัสเสมือน 901, 902, …' : 'ใช้เลขจริงจากเครื่องสแกนนิ้ว (เครื่องเดียวกับ Owl Cha)';
+
+  return (
+    <div className="px-3 pt-3">
+      <div className="card p-3 mb-3">
+        <div className="kanit text-[15px] mb-2" style={{fontWeight:700,color:'var(--primary)'}}>👥 พนักงานร้านซักผ้า · {shop.name}</div>
+        <div className="flex gap-1.5">
+          <button className="press kanit text-[13px] flex-1 py-1.5 rounded-xl" style={{border:'1px solid var(--line)',background:tab==='on'?'var(--primary)':'var(--card)',color:tab==='on'?'#fff':'var(--ink)'}} onClick={()=>setTab('on')}>ทำงานอยู่ ({nOn})</button>
+          <button className="press kanit text-[13px] flex-1 py-1.5 rounded-xl" style={{border:'1px solid var(--line)',background:tab==='off'?'var(--primary)':'var(--card)',color:tab==='off'?'#fff':'var(--ink)'}} onClick={()=>setTab('off')}>ลาออกแล้ว ({nOff})</button>
+        </div>
+        <div className="flex gap-1.5 mt-2">
+          <button className="press kanit text-[12px] px-3 py-1 rounded-full" style={{border:'none',background:scope==='shop'?'var(--soft)':'transparent',color:'var(--primary)'}} onClick={()=>setScope('shop')}>เฉพาะ {shop.name}</button>
+          <button className="press kanit text-[12px] px-3 py-1 rounded-full" style={{border:'none',background:scope==='all'?'var(--soft)':'transparent',color:'var(--primary)'}} onClick={()=>setScope('all')}>ทุกสาขาซักผ้า</button>
+        </div>
+        {!ro && tab==='on' && (
+          <button className="press kanit text-[13.5px] w-full mt-2.5 py-2 rounded-xl text-white" style={{background:'var(--primary)',border:'none',fontWeight:600}} onClick={openNew}>+ เพิ่มพนักงาน</button>
+        )}
+      </div>
+
+      <div className="card p-3 mb-3">
+        <div className="flex items-center">
+          <div className="kanit text-[13.5px]" style={{fontWeight:600}}>💵 เรทเงินเดือน · {shop.name}</div>
+          {!ro && <button className="press kanit text-[12px] px-2.5 py-1 rounded-lg ml-auto" style={{border:'1px solid var(--line)',background:'var(--card)'}} onClick={openCfg}>แก้ไข</button>}
+        </div>
+        <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-[12.5px] mt-2" style={{color:'var(--muted)'}}>
+          {pay.positions.map(p=>(
+            <span key={p.id}>{p.emoji} {p.name} <b className="num" style={{color:'var(--ink)'}}>{ocFmt(Number(cfg.rates[p.id])||0,0)}</b></span>
+          ))}
+        </div>
+        <div className="flex flex-wrap gap-x-4 gap-y-1 text-[12px] mt-2 pt-2" style={{color:'var(--muted)',borderTop:'1px dashed var(--line)'}}>
+          <span>เบี้ยขยัน <b className="num" style={{color:'var(--ink)'}}>{ocFmt(cfg.dilig,0)}</b> (≥{cfg.diligMinDays} วัน + ไม่สาย)</span>
+          <span>ตัวหารวัน <b className="num" style={{color:'var(--ink)'}}>{cfg.divisor}</b></span>
+          <span>ชม./กะ <b className="num" style={{color:'var(--ink)'}}>{cfg.shiftHrs}</b></span>
+          <span>OT × <b className="num" style={{color:'var(--ink)'}}>{cfg.otMult}</b> (ผ่อนผัน {cfg.otGrace} น.)</span>
+          <span>หุ้นส่วนขั้นต่ำ <b className="num" style={{color:'var(--ink)'}}>{cfg.partnerMinHrs}</b> ชม./วัน</span>
+        </div>
+      </div>
+
+      {msg && <div className="kanit text-[12.5px] mb-2" style={{color:'var(--primary)'}}>{msg}</div>}
+
+      {list.map(st=>{
+        const p=lnPosOf(pay,st.pos), si=lnShopInfo(st.shop);
+        const rate=lnRateOf(st,cfg);
+        return (
+          <div key={st.id} className="card p-3 mb-2">
+            <div className="flex items-start gap-2">
+              <div style={{fontSize:22,lineHeight:'26px'}}>{p.emoji}</div>
+              <div style={{flex:1,minWidth:0}}>
+                <div className="kanit text-[14.5px]" style={{fontWeight:600}}>{st.name} <span className="text-[11.5px]" style={{fontWeight:400,color:si.color}}>· {si.emoji} {si.label}</span></div>
+                <div className="text-[12px]" style={{color:'var(--muted)'}}>
+                  {p.name}{rate>0? ' · ฐาน '+ocFmt(rate,0) : ' · ยังไม่ตั้งเรท'}{st.custom>0?' (กำหนดเอง)':''}
+                  {st.shiftIn&&st.shiftOut? ' · กะ '+st.shiftIn+'–'+st.shiftOut : ''}
+                  {st.fpId? ' · สแกน#'+st.fpId : ' · ยังไม่ผูกรหัสสแกน'}
+                </div>
+                {(st.phone||st.note||st.start)&&(
+                  <div className="text-[11.5px] mt-0.5" style={{color:'var(--muted)'}}>
+                    {st.start? 'เริ่ม '+st.start:''}{st.end? ' · ออก '+st.end:''}{st.phone? ' · 📞 '+st.phone:''}{st.note? ' · 📝 '+st.note:''}
+                  </div>
+                )}
+              </div>
+              {!ro && (
+                <div className="flex flex-col gap-1">
+                  <button className="press kanit text-[12px] px-2.5 py-1 rounded-lg" style={{border:'1px solid var(--line)',background:'var(--card)'}} onClick={()=>setEdit({...st,_new:false})}>แก้ไข</button>
+                  {isOn(st)
+                    ? <button className="press kanit text-[12px] px-2.5 py-1 rounded-lg" style={{border:'1px solid var(--line)',background:'var(--card)',color:'#B0483C'}} onClick={()=>setOff(st)}>ลาออก</button>
+                    : <React.Fragment>
+                        <button className="press kanit text-[12px] px-2.5 py-1 rounded-lg" style={{border:'1px solid var(--line)',background:'var(--card)',color:'#0E7A5F'}} onClick={()=>setOn(st)}>กลับมา</button>
+                        <button className="press kanit text-[12px] px-2.5 py-1 rounded-lg" style={{border:'1px solid var(--line)',background:'var(--card)',color:'#B0483C'}} onClick={()=>del(st)}>ลบ</button>
+                      </React.Fragment>}
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })}
+      {!list.length && <div className="text-[13px] py-6 text-center" style={{color:'var(--muted)'}}>{tab==='on'? 'ยังไม่มีพนักงาน — กด "+ เพิ่มพนักงาน" ได้เลย':'ไม่มีคนลาออก'}</div>}
+
+      {edit && (
+        <div className="ovl" style={{position:'fixed',inset:0,background:'rgba(30,25,18,.45)',zIndex:60,display:'flex',alignItems:'flex-end',justifyContent:'center'}} onClick={()=>setEdit(null)}>
+          <div className="card" style={{width:'100%',maxWidth:480,maxHeight:'88vh',overflowY:'auto',borderRadius:'20px 20px 0 0',padding:16}} onClick={e=>e.stopPropagation()}>
+            <div className="kanit text-[15px] mb-3" style={{fontWeight:700}}>{edit._new?'เพิ่มพนักงาน':'แก้ไข · '+edit.name}</div>
+            <div className="grid gap-2.5" style={{gridTemplateColumns:'1fr 1fr'}}>
+              <div style={{gridColumn:'1/-1'}}>
+                <div className="text-[12px] mb-1" style={{color:'var(--muted)'}}>ชื่อ</div>
+                <input className="kanit" style={INP} value={edit.name} onChange={e=>setEdit({...edit,name:e.target.value})}/>
+              </div>
+              <div>
+                <div className="text-[12px] mb-1" style={{color:'var(--muted)'}}>ตำแหน่ง</div>
+                <select className="kanit" style={INP} value={edit.pos} onChange={e=>setEdit({...edit,pos:e.target.value})}>
+                  {pay.positions.map(p=><option key={p.id} value={p.id}>{p.emoji} {p.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <div className="text-[12px] mb-1" style={{color:'var(--muted)'}}>สาขาหลัก</div>
+                <select className="kanit" style={INP} value={edit.shop} onChange={e=>setEdit({...edit,shop:e.target.value})}>
+                  {LN_SHOPS.map(s=><option key={s.id} value={s.id}>{s.emoji} {s.label}</option>)}
+                </select>
+              </div>
+              <div>
+                <div className="text-[12px] mb-1" style={{color:'var(--muted)'}}>ฐานกำหนดเอง (0 = ใช้เรทตำแหน่ง)</div>
+                <input className="num" style={INP} inputMode="numeric" value={edit.custom||''} placeholder="0" onChange={e=>setEdit({...edit,custom:e.target.value})}/>
+              </div>
+              <div>
+                <div className="text-[12px] mb-1" style={{color:'var(--muted)'}}>รหัสสแกนนิ้ว</div>
+                <input className="num" style={INP} inputMode="numeric" placeholder={shop.id==='otteri'?'เช่น 801':shop.id==='teddy1'?'เช่น 901':'เช่น 21'} value={edit.fpId||''} onChange={e=>setEdit({...edit,fpId:e.target.value})}/>
+              </div>
+              <div>
+                <div className="text-[12px] mb-1" style={{color:'var(--muted)'}}>กะเข้า</div>
+                <input className="num" style={INP} placeholder="09:00" value={edit.shiftIn||''} onChange={e=>setEdit({...edit,shiftIn:e.target.value})}/>
+              </div>
+              <div>
+                <div className="text-[12px] mb-1" style={{color:'var(--muted)'}}>กะออก</div>
+                <input className="num" style={INP} placeholder="20:00" value={edit.shiftOut||''} onChange={e=>setEdit({...edit,shiftOut:e.target.value})}/>
+              </div>
+              {edit.pos==='partner' && (
+                <div>
+                  <div className="text-[12px] mb-1" style={{color:'var(--muted)'}}>ชม.ขั้นต่ำ/วัน (ว่าง = ตามตั้งค่า)</div>
+                  <input className="num" style={INP} inputMode="numeric" placeholder="5" value={edit.minHrs} onChange={e=>setEdit({...edit,minHrs:e.target.value})}/>
+                </div>
+              )}
+              <div>
+                <div className="text-[12px] mb-1" style={{color:'var(--muted)'}}>วันเริ่มงาน</div>
+                <input className="num" style={INP} type="date" value={edit.start||''} onChange={e=>setEdit({...edit,start:e.target.value})}/>
+              </div>
+              <div>
+                <div className="text-[12px] mb-1" style={{color:'var(--muted)'}}>วันลาออก</div>
+                <input className="num" style={INP} type="date" value={edit.end||''} onChange={e=>setEdit({...edit,end:e.target.value})}/>
+              </div>
+              <div style={{gridColumn:'1/-1'}}>
+                <div className="text-[12px] mb-1" style={{color:'var(--muted)'}}>เบอร์โทร</div>
+                <input className="num" style={INP} inputMode="tel" value={edit.phone||''} onChange={e=>setEdit({...edit,phone:e.target.value})}/>
+              </div>
+              <div style={{gridColumn:'1/-1'}}>
+                <div className="text-[12px] mb-1" style={{color:'var(--muted)'}}>บันทึกเพิ่มเติม</div>
+                <textarea className="kanit" style={{...INP,minHeight:56}} value={edit.note||''} onChange={e=>setEdit({...edit,note:e.target.value})}/>
+              </div>
+            </div>
+            <div className="text-[11.5px] mt-2" style={{color:'var(--muted)'}}>💡 รหัสสแกน: {fpHint}</div>
+            <div className="flex gap-2 mt-3">
+              <button className="press kanit flex-1 py-2.5 rounded-xl" style={{border:'1px solid var(--line)',background:'var(--card)'}} onClick={()=>setEdit(null)}>ยกเลิก</button>
+              <button className="press kanit flex-1 py-2.5 rounded-xl text-white" style={{background:'var(--primary)',border:'none',fontWeight:600}} disabled={busy} onClick={commit}>บันทึก</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {cfgOpen && cfgDraft && (
+        <div className="ovl" style={{position:'fixed',inset:0,background:'rgba(30,25,18,.45)',zIndex:60,display:'flex',alignItems:'flex-end',justifyContent:'center'}} onClick={()=>setCfgOpen(false)}>
+          <div className="card" style={{width:'100%',maxWidth:480,maxHeight:'88vh',overflowY:'auto',borderRadius:'20px 20px 0 0',padding:16}} onClick={e=>e.stopPropagation()}>
+            <div className="kanit text-[15px] mb-1" style={{fontWeight:700}}>💵 เรทเงินเดือน · {shop.name}</div>
+            <div className="text-[11.5px] mb-3" style={{color:'var(--muted)'}}>เรทแยกรายสาขา · ตำแหน่งใช้ร่วมกันทุกสาขา</div>
+            {cfgDraft.positions.map(p=>(
+              <div key={p.id} className="flex items-center gap-2 mb-2">
+                <div className="kanit text-[13.5px]" style={{flex:1}}>{p.emoji} {p.name}</div>
+                <input className="num" style={NUMW} inputMode="numeric" value={cfgDraft.cfg.rates[p.id]!=null? cfgDraft.cfg.rates[p.id]:''} placeholder="0"
+                  onChange={e=>setCfgDraft(dd=>({...dd,cfg:{...dd.cfg,rates:{...dd.cfg.rates,[p.id]:e.target.value}}}))}/>
+                {!LN_POS_SEED.some(x=>x.id===p.id) && <button className="press" style={{border:'none',background:'none',color:'#B0483C',fontSize:16}} onClick={()=>delPos(p.id)}>✕</button>}
+              </div>
+            ))}
+            <button className="press kanit text-[12.5px] w-full py-1.5 rounded-xl mb-3" style={{border:'1px dashed var(--line)',background:'var(--card)',color:'var(--primary)'}} onClick={addPos}>+ เพิ่มตำแหน่ง</button>
+            <div className="grid gap-2" style={{gridTemplateColumns:'1fr 1fr'}}>
+              {[['dilig','เบี้ยขยัน (฿)'],['diligMinDays','เบี้ยขยัน ≥ วัน'],['diligGrace','ผ่อนผันสาย (นาที)'],['divisor','ตัวหารวัน'],['shiftHrs','ชม./กะ'],['otMult','OT ×'],['otGrace','ผ่อนผัน OT (นาที)'],['partnerMinHrs','หุ้นส่วนขั้นต่ำ ชม./วัน']].map(f=>(
+                <div key={f[0]}>
+                  <div className="text-[11.5px] mb-1" style={{color:'var(--muted)'}}>{f[1]}</div>
+                  <input className="num" style={INP} inputMode="decimal" value={cfgDraft.cfg[f[0]]!=null? cfgDraft.cfg[f[0]]:''}
+                    onChange={e=>setCfgDraft(dd=>({...dd,cfg:{...dd.cfg,[f[0]]:e.target.value}}))}/>
+                </div>
+              ))}
+            </div>
+            <div className="flex gap-2 mt-3">
+              <button className="press kanit flex-1 py-2.5 rounded-xl" style={{border:'1px solid var(--line)',background:'var(--card)'}} onClick={()=>setCfgOpen(false)}>ยกเลิก</button>
+              <button className="press kanit flex-1 py-2.5 rounded-xl text-white" style={{background:'var(--primary)',border:'none',fontWeight:600}} disabled={busy} onClick={saveCfg}>บันทึก</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ---- ⏱ เวลางาน (ร้านซักผ้า) — เขียนลง fpScans/{YYYY-MM} รูปแบบเดียวกับระบบสแกนนิ้ว ---- */
+function LnAttendPanel({ shop, user }){
+  const [ym,setYm]=useState(()=>{ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); });
+  const [pay,setPay]=useState(null);
+  const [fp,setFp]=useState(null);
+  const [sel,setSel]=useState('');
+  const [edit,setEdit]=useState(null);
+  const [busy,setBusy]=useState(false);
+  const [msg,setMsg]=useState('');
+  const ro = user.role!=='admin';
+
+  useEffect(()=>{
+    let stop=false;
+    if(!db){ setPay(lnNorm({})); setFp({}); return; }
+    db.collection('owlCost').doc('laundryPay').get()
+      .then(s=>{ if(!stop) setPay(lnNorm(s.exists?(s.data()||{}):{})); })
+      .catch(()=>{ if(!stop) setPay(lnNorm({})); });
+    return ()=>{ stop=true; };
+  },[]);
+  useEffect(()=>{
+    let stop=false;
+    setFp(null);
+    if(!db){ setFp({}); return; }
+    db.collection('fpScans').doc(ym).get()
+      .then(s=>{ if(!stop) setFp(s.exists?(s.data()||{}):{}); })
+      .catch(()=>{ if(!stop) setFp({}); });
+    return ()=>{ stop=true; };
+  },[ym]);
+
+  const people=React.useMemo(()=>{
+    if(!pay) return [];
+    return (pay.staff||[]).filter(st=> st.active!==false && (st.shop||'teddy2')===shop.id);
+  },[pay,shop.id]);
+  useEffect(()=>{
+    if(people.length && !people.some(p=>p.id===sel)) setSel(people[0].id);
+  },[people,sel]);
+
+  if(pay===null || fp===null) return <div style={{padding:'40px 0',textAlign:'center',color:'var(--muted)'}}>กำลังโหลด…</div>;
+
+  const st=people.find(p=>p.id===sel);
+  const pin=st? String(st.fpId||'').trim() : '';
+  const nDays=ocPayDays(ym);
+  const fd=fp.d||{}, fs=fp.shop||{}, fl=fp.leave||{}, fh=fp.hol||{};
+  const gr=(lnCfgOf(pay,shop.id).otGrace!=null? Number(lnCfgOf(pay,shop.id).otGrace):15);
+
+  const dayInfo=(d)=>{
+    const rec=pin? ((fd[String(d)]||{})[pin]):null;
+    const list=rec? fpClean(rec.t):[];
+    const lv=pin? ((fl[String(d)]||{})[pin]):null;
+    const hol=pin? !!((fh[String(d)]||{})[pin]):false;
+    const ov=pin? ((fs[String(d)]||{})[pin]):null;
+    const eff=ov || (st&&st.shop) || shop.id;
+    let netMin=0; const pairs=[];
+    for(let k=0;k+1<list.length;k+=2){
+      const a=attHM(list[k]), b=attHM(list[k+1]);
+      if(a!=null&&b!=null){ let mm=b-a; if(mm<0)mm+=1440; netMin+=mm; pairs.push({i:list[k],o:list[k+1]}); }
+    }
+    const open=(list.length%2===1);
+    let ot=0;
+    if(netMin>0 && st && !hol){
+      const sIn=st.shiftIn? attHM(st.shiftIn):null, sOut=st.shiftOut? attHM(st.shiftOut):null;
+      const aIn=attHM(pairs[0].i), aOut=attHM(pairs[pairs.length-1].o);
+      if(sIn!=null&&sOut!=null&&aIn!=null&&aOut!=null){
+        let late=Math.max(0,aIn-sIn);
+        let over=aOut-sOut; if(over>720)over-=1440; if(over<-720)over+=1440;
+        late=Math.max(0,late-gr);
+        over= over>0? Math.max(0,over-gr):Math.min(0,over+gr);
+        ot=Math.round(over-late);
+      }
+    }
+    return { rec, list, pairs, netMin, open, lv, hol, ov, eff, ot, edited:!!(rec&&rec.m) };
+  };
+
+  const tot=(()=>{
+    let work=0,hol=0,otM=0,late=0,leave=0;
+    if(st&&pin){
+      const sIn=st.shiftIn? attHM(st.shiftIn):null;
+      for(let d=1;d<=nDays;d++){
+        const o=dayInfo(d);
+        if(o.eff!==shop.id) continue;
+        if(o.lv&&!(o.netMin>0)){ leave++; continue; }
+        if(!(o.netMin>0)) continue;
+        if(o.hol) hol++; else { work++; otM+=o.ot; if(sIn!=null){ const aIn=attHM(o.pairs[0].i); if(aIn!=null&&aIn-sIn>0) late++; } }
+      }
+    }
+    return {work,hol,otM,late,leave};
+  })();
+
+  const openEdit=(d)=>{
+    if(ro||!st) return;
+    if(!pin){ setMsg('พนักงานคนนี้ยังไม่ผูกรหัสสแกน — ไปตั้งที่หน้า "พนักงาน" ก่อน'); setTimeout(()=>setMsg(''),3000); return; }
+    const o=dayInfo(d);
+    const mode = (o.netMin>0||o.open)? (o.hol?'holiday':'work') : ((o.lv&&o.lv.t)||'none');
+    setEdit({ d, mode:mode==='none'?'work':mode, blank:mode==='none',
+      i:o.pairs.length? o.pairs[0].i : (o.list[0]||st.shiftIn||''),
+      o:o.pairs.length? o.pairs[o.pairs.length-1].o : (st.shiftOut||''),
+      note:(o.lv&&o.lv.n)||'', shopSel:o.eff });
+  };
+  const saveEdit=async(clear)=>{
+    if(!edit||!db||!st) return;
+    const d=String(edit.d);
+    setBusy(true); setMsg('');
+    try{
+      const DEL=firebase.firestore.FieldValue.delete();
+      const patch={ d:{}, leave:{}, hol:{}, shop:{} };
+      if(clear){
+        patch.d[d]={ [pin]:DEL }; patch.leave[d]={ [pin]:DEL }; patch.hol[d]={ [pin]:DEL }; patch.shop[d]={ [pin]:DEL };
+      } else if(edit.mode==='work'||edit.mode==='holiday'){
+        const a=attFmt(edit.i), b=attFmt(edit.o);
+        if(!a||!b){ setBusy(false); setMsg('ใส่เวลาเข้าและออกให้ครบ'); return; }
+        patch.d[d]={ [pin]:{ t:a+','+b, m:1 } };
+        patch.leave[d]={ [pin]:DEL };
+        patch.hol[d]={ [pin]: edit.mode==='holiday'? 1 : DEL };
+        patch.shop[d]={ [pin]: (edit.shopSel && edit.shopSel!==(st.shop||shop.id))? edit.shopSel : DEL };
+      } else {
+        patch.d[d]={ [pin]:DEL };
+        patch.hol[d]={ [pin]:DEL };
+        patch.shop[d]={ [pin]:DEL };
+        patch.leave[d]={ [pin]:{ t:edit.mode, n:String(edit.note||'').trim() } };
+      }
+      await db.collection('fpScans').doc(ym).set(patch,{merge:true});
+      setFp(prev=>{
+        const nx=JSON.parse(JSON.stringify(prev||{}));
+        const put=(root,val)=>{ nx[root]=nx[root]||{}; if(val===undefined){ if(nx[root][d]){ delete nx[root][d][pin]; if(!Object.keys(nx[root][d]).length) delete nx[root][d]; } } else { nx[root][d]=nx[root][d]||{}; nx[root][d][pin]=val; } };
+        if(clear){ put('d'); put('leave'); put('hol'); put('shop'); }
+        else if(edit.mode==='work'||edit.mode==='holiday'){
+          put('d',{ t:attFmt(edit.i)+','+attFmt(edit.o), m:1 });
+          put('leave');
+          if(edit.mode==='holiday') put('hol',1); else put('hol');
+          if(edit.shopSel && edit.shopSel!==(st.shop||shop.id)) put('shop',edit.shopSel); else put('shop');
+        } else {
+          put('d'); put('hol'); put('shop');
+          put('leave',{ t:edit.mode, n:String(edit.note||'').trim() });
+        }
+        return nx;
+      });
+      setEdit(null);
+      setMsg('บันทึกแล้ว'); setTimeout(()=>setMsg(''),1500);
+    }catch(e){ setMsg('บันทึกไม่สำเร็จ · '+((e&&e.message)||'')); }
+    setBusy(false);
+  };
+
+  const y=+ym.slice(0,4), mo=+ym.slice(5,7);
+  const INP={fontFamily:'inherit',fontSize:14,border:'1px solid var(--line)',borderRadius:9,padding:'8px 10px',background:'var(--card)',color:'var(--ink)',width:'100%'};
+  const MODES=[['work','💼 ทำงาน'],['holiday','⭐ วันหยุด×2'],['off','🏠 หยุด'],['sick','🤒 ลาป่วย'],['personal','📄 ลากิจ']];
+
+  return (
+    <div className="px-3 pt-3">
+      <div className="card p-3 mb-3">
+        <div className="flex items-center gap-2">
+          <button className="press" style={{border:'1px solid var(--line)',background:'var(--card)',borderRadius:10,padding:'4px 12px',fontSize:16}} onClick={()=>setYm(ocPayShift(ym,-1))}>‹</button>
+          <div className="kanit text-[15px]" style={{fontWeight:700,color:'var(--primary)',flex:1,textAlign:'center'}}>⏱ เวลางาน · {ocPayLabel(ym)}</div>
+          <button className="press" style={{border:'1px solid var(--line)',background:'var(--card)',borderRadius:10,padding:'4px 12px',fontSize:16}} onClick={()=>setYm(ocPayShift(ym,1))}>›</button>
+        </div>
+        <div className="flex gap-1.5 mt-2.5 overflow-x-auto hide-scroll">
+          {people.map(p=>(
+            <button key={p.id} className="press kanit text-[13px] px-3 py-1.5 rounded-full whitespace-nowrap"
+              style={ sel===p.id? {background:'var(--primary)',color:'#fff',border:'none'}:{background:'var(--soft)',color:'var(--primary)',border:'none'} }
+              onClick={()=>setSel(p.id)}>{lnPosOf(pay,p.pos).emoji} {p.name}</button>
+          ))}
+          {!people.length && <div className="text-[12.5px]" style={{color:'var(--muted)'}}>ยังไม่มีพนักงานสาขานี้ — เพิ่มที่หน้า "พนักงาน" ก่อน</div>}
+        </div>
+        {st && (
+          <div className="text-[12px] mt-2" style={{color:'var(--muted)'}}>
+            {st.shiftIn&&st.shiftOut? 'กะประจำ '+st.shiftIn+'–'+st.shiftOut+' · ':''}{pin? 'สแกน#'+pin:'⚠️ ยังไม่ผูกรหัสสแกน'} · {shop.id==='teddy2'? 'เวลาสแกนนิ้วขึ้นอัตโนมัติ · แตะวันเพื่อแก้':'กรอกมือ — แตะวันเพื่อลงเวลา'}
+          </div>
+        )}
+      </div>
+
+      {st && (
+        <div className="card p-3 mb-3">
+          <div className="flex flex-wrap gap-x-4 gap-y-1 text-[12.5px]" style={{color:'var(--muted)'}}>
+            <span>ทำงาน <b className="num" style={{color:'var(--ink)'}}>{tot.work}</b> วัน</span>
+            <span>หยุด×2 <b className="num" style={{color:'var(--ink)'}}>{tot.hol}</b> วัน</span>
+            <span>ลา <b className="num" style={{color:'var(--ink)'}}>{tot.leave}</b> วัน</span>
+            <span>OT รวม <b className="num" style={{color: tot.otM>=0?'#0E7A5F':'#B0483C'}}>{lnMinTxt(tot.otM)}</b>{Math.abs(tot.otM)>=60? ' ('+(tot.otM>0?'+':'−')+Math.floor(Math.abs(tot.otM)/60)+' ชม.)':''}</span>
+            <span>สาย <b className="num" style={{color: tot.late? '#B0483C':'var(--ink)'}}>{tot.late}</b> วัน</span>
+          </div>
+        </div>
+      )}
+      {msg && <div className="kanit text-[12.5px] mb-2" style={{color:'var(--primary)'}}>{msg}</div>}
+
+      {st && Array.from({length:nDays},(_,i)=>i+1).map(d=>{
+        const o=dayInfo(d);
+        const wd=new Date(y,mo-1,d).getDay();
+        const isToday=(today()===ym+'-'+String(d).padStart(2,'0'));
+        const otherShop=(o.eff!==shop.id);
+        let body;
+        if(o.netMin>0){
+          body=(
+            <React.Fragment>
+              <span className="num" style={{fontWeight:600}}>{o.pairs[0].i}–{o.pairs[o.pairs.length-1].o}</span>
+              <span style={{color:'var(--muted)'}}> · {(Math.round(o.netMin/60*10)/10).toFixed(1)} ชม.</span>
+              {!o.hol && <span style={{color:o.ot>0?'#0E7A5F':(o.ot<0?'#B0483C':'var(--muted)')}}> · {lnMinTxt(o.ot)}</span>}
+            </React.Fragment>
+          );
+        } else if(o.open){
+          body=<span style={{color:'#B0483C'}}>⚠️ {o.list[0]} เวลาไม่ครบคู่</span>;
+        } else if(o.lv){
+          const li=leaveInfo(o.lv.t);
+          body=<span style={{color:li.color}}>{li.emoji} {li.label}{o.lv.n? ' · '+o.lv.n:''}</span>;
+        } else {
+          body=<span style={{color:'var(--line)'}}>—</span>;
+        }
+        return (
+          <div key={d} className={'card press'} style={{padding:'9px 12px',marginBottom:6,opacity:otherShop?0.55:1,border:isToday?'1.5px solid var(--primary)':undefined}} onClick={()=>openEdit(d)}>
+            <div className="flex items-center gap-2 text-[13px]">
+              <div className="num" style={{width:52,color:(wd===0||wd===6)?'#B0483C':'var(--muted)'}}>{d} {LN_WD[wd]}</div>
+              <div style={{flex:1,minWidth:0}}>{body}</div>
+              {o.hol && <span className="text-[10.5px] px-1.5 py-0.5 rounded" style={{background:'#FFF2CC',color:'#8a6d1a'}}>×2</span>}
+              {o.edited && <span className="text-[10.5px] px-1.5 py-0.5 rounded" style={{background:'var(--soft)',color:'var(--muted)'}}>แก้มือ</span>}
+              {otherShop && <span className="text-[10.5px] px-1.5 py-0.5 rounded" style={{background:'var(--soft)',color:lnShopInfo(o.eff).color}}>{o.eff==='owlcha'? '🧋 Owl':lnShopInfo(o.eff).emoji+' '+lnShopInfo(o.eff).label}</span>}
+            </div>
+          </div>
+        );
+      })}
+
+      {edit && st && (
+        <div style={{position:'fixed',inset:0,background:'rgba(30,25,18,.45)',zIndex:60,display:'flex',alignItems:'flex-end',justifyContent:'center'}} onClick={()=>setEdit(null)}>
+          <div className="card" style={{width:'100%',maxWidth:480,borderRadius:'20px 20px 0 0',padding:16}} onClick={e=>e.stopPropagation()}>
+            <div className="kanit text-[15px] mb-2" style={{fontWeight:700}}>{st.name} · วันที่ {edit.d} {ocPayLabel(ym)}</div>
+            <div className="flex flex-wrap gap-1.5 mb-3">
+              {MODES.map(mm=>(
+                <button key={mm[0]} className="press kanit text-[12.5px] px-3 py-1.5 rounded-full"
+                  style={ edit.mode===mm[0]? {background:'var(--primary)',color:'#fff',border:'none'}:{background:'var(--soft)',color:'var(--primary)',border:'none'} }
+                  onClick={()=>setEdit({...edit,mode:mm[0]})}>{mm[1]}</button>
+              ))}
+            </div>
+            {(edit.mode==='work'||edit.mode==='holiday') ? (
+              <div className="grid gap-2.5" style={{gridTemplateColumns:'1fr 1fr'}}>
+                <div>
+                  <div className="text-[12px] mb-1" style={{color:'var(--muted)'}}>เวลาเข้า</div>
+                  <input className="num" style={INP} placeholder="09:00" value={edit.i} onChange={e=>setEdit({...edit,i:e.target.value})}/>
+                </div>
+                <div>
+                  <div className="text-[12px] mb-1" style={{color:'var(--muted)'}}>เวลาออก</div>
+                  <input className="num" style={INP} placeholder="20:00" value={edit.o} onChange={e=>setEdit({...edit,o:e.target.value})}/>
+                </div>
+                <div style={{gridColumn:'1/-1'}}>
+                  <div className="text-[12px] mb-1" style={{color:'var(--muted)'}}>ทำที่สาขา (วันนี้)</div>
+                  <div className="flex gap-1.5">
+                    {LN_SHOPS.map(s=>(
+                      <button key={s.id} className="press kanit text-[12px] flex-1 py-1.5 rounded-xl"
+                        style={ edit.shopSel===s.id? {background:s.color,color:'#fff',border:'none'}:{background:'var(--card)',border:'1px solid var(--line)',color:'var(--ink)'} }
+                        onClick={()=>setEdit({...edit,shopSel:s.id})}>{s.emoji} {s.label}</button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div>
+                <div className="text-[12px] mb-1" style={{color:'var(--muted)'}}>เหตุผล (ไม่ใส่ก็ได้)</div>
+                <input className="kanit" style={INP} value={edit.note} onChange={e=>setEdit({...edit,note:e.target.value})}/>
+              </div>
+            )}
+            <div className="flex gap-2 mt-3">
+              {!edit.blank && <button className="press kanit py-2.5 px-3 rounded-xl" style={{border:'1px solid var(--line)',background:'var(--card)',color:'#B0483C'}} disabled={busy} onClick={()=>saveEdit(true)}>ล้างวัน</button>}
+              <button className="press kanit flex-1 py-2.5 rounded-xl" style={{border:'1px solid var(--line)',background:'var(--card)'}} onClick={()=>setEdit(null)}>ยกเลิก</button>
+              <button className="press kanit flex-1 py-2.5 rounded-xl text-white" style={{background:'var(--primary)',border:'none',fontWeight:600}} disabled={busy} onClick={()=>saveEdit(false)}>บันทึก</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ---- 💰 เงินเดือน (ร้านซักผ้า) — คำนวณตรงจาก fpScans + ตั้งค่าใน owlCost/laundryPay ---- */
+function LnPayPanel({ shop, user, toast }){
+  const [ym,setYm]=useState(()=>{ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); });
+  const [pay,setPay]=useState(null);
+  const [fp,setFp]=useState(null);
+  const [open,setOpen]=useState(null);
+  const [advOpen,setAdvOpen]=useState(null);
+  const [advDraft,setAdvDraft]=useState({amt:'',note:''});
+  const [busy,setBusy]=useState(false);
+  const [msg,setMsg]=useState('');
+
+  useEffect(()=>{
+    let stop=false;
+    if(!db){ setPay(lnNorm({})); return; }
+    db.collection('owlCost').doc('laundryPay').get()
+      .then(s=>{ if(!stop) setPay(lnNorm(s.exists?(s.data()||{}):{})); })
+      .catch(()=>{ if(!stop) setPay(lnNorm({})); });
+    return ()=>{ stop=true; };
+  },[]);
+  useEffect(()=>{
+    let stop=false;
+    setFp(null);
+    if(!db){ setFp({}); return; }
+    db.collection('fpScans').doc(ym).get()
+      .then(s=>{ if(!stop) setFp(s.exists?(s.data()||{}):{}); })
+      .catch(()=>{ if(!stop) setFp({}); });
+    return ()=>{ stop=true; };
+  },[ym]);
+
+  if(pay===null || fp===null) return <div style={{padding:'40px 0',textAlign:'center',color:'var(--muted)'}}>กำลังโหลด…</div>;
+
+  const calc=lnPayCalc(pay,ym,shop.id,fp);
+  const cfg=calc.cfg;
+  const m=(pay.months||{})[ym]||{};
+
+  const saveMonth=async(field, stId, val)=>{
+    if(!db) return;
+    setBusy(true); setMsg('');
+    try{
+      const v = (val===undefined)? firebase.firestore.FieldValue.delete() : val;
+      await db.collection('owlCost').doc('laundryPay').set({ months:{ [ym]:{ [field]:{ [stId]: v } } } },{merge:true});
+      setPay(p=>{
+        const nx=lnNorm(JSON.parse(JSON.stringify(p)));
+        nx.months[ym]=nx.months[ym]||{};
+        nx.months[ym][field]=nx.months[ym][field]||{};
+        if(val===undefined) delete nx.months[ym][field][stId];
+        else nx.months[ym][field][stId]=val;
+        return nx;
+      });
+    }catch(e){ setMsg('บันทึกไม่สำเร็จ · '+((e&&e.message)||'')); }
+    setBusy(false);
+  };
+  const cycleDilig=(r)=>{
+    const cur=r.dgVal;
+    if(cur===undefined||cur===null) saveMonth('dilig',r.st.id,1);
+    else if(cur===1) saveMonth('dilig',r.st.id,0);
+    else saveMonth('dilig',r.st.id,undefined);
+  };
+  const addAdv=(r)=>{
+    const amt=parseFloat(advDraft.amt);
+    if(!amt){ setMsg('ใส่จำนวนเงินก่อน'); return; }
+    const list=[...(r.advList||[]), { d:new Date().getDate(), amt, note:String(advDraft.note||'').trim() }];
+    saveMonth('adv',r.st.id,list);
+    setAdvDraft({amt:'',note:''});
+  };
+  const delAdv=(r,idx)=>{
+    const list=(r.advList||[]).filter((_,i)=>i!==idx);
+    saveMonth('adv',r.st.id, list.length? list : undefined);
+  };
+
+  const INP={fontFamily:'inherit',fontSize:13.5,border:'1px solid var(--line)',borderRadius:9,padding:'7px 9px',background:'var(--card)',color:'var(--ink)'};
+  const cross=calc.rows.filter(r=>calc.crossInfo[r.st.id]);
+
+  return (
+    <div className="px-3 pt-3">
+      <div className="card p-3 mb-3">
+        <div className="flex items-center gap-2">
+          <button className="press" style={{border:'1px solid var(--line)',background:'var(--card)',borderRadius:10,padding:'4px 12px',fontSize:16}} onClick={()=>setYm(ocPayShift(ym,-1))}>‹</button>
+          <div className="kanit text-[15px]" style={{fontWeight:700,color:'var(--primary)',flex:1,textAlign:'center'}}>💰 เงินเดือน · {shop.name}<div className="text-[12px]" style={{fontWeight:400,color:'var(--muted)'}}>{ocPayLabel(ym)}</div></div>
+          <button className="press" style={{border:'1px solid var(--line)',background:'var(--card)',borderRadius:10,padding:'4px 12px',fontSize:16}} onClick={()=>setYm(ocPayShift(ym,1))}>›</button>
+        </div>
+        <div className="flex flex-wrap gap-x-4 gap-y-1 text-[12px] mt-2" style={{color:'var(--muted)'}}>
+          <span>รวมจ่าย <b className="num" style={{color:'var(--ink)'}}>{ocFmt(calc.total,0)} ฿</b> · {calc.rows.length} คน</span>
+          <span>OT ×{cfg.otMult} · ผ่อนผัน {cfg.otGrace} น. · เบี้ยขยัน {ocFmt(cfg.dilig,0)} (≥{cfg.diligMinDays} วัน+ไม่สาย)</span>
+        </div>
+        <div className="text-[11px] mt-1" style={{color:'var(--muted)'}}>แก้เรท/ตั้งค่าที่หน้า "พนักงาน" · เวลาเข้าออกดึงจากแท็บเวลางานอัตโนมัติ</div>
+      </div>
+
+      {msg && <div className="kanit text-[12.5px] mb-2" style={{color:'#B0483C'}}>{msg}</div>}
+
+      {calc.rows.map(r=>{
+        const isOpen=(open===r.st.id);
+        return (
+          <div key={r.st.id} className="card mb-2" style={{padding:'11px 13px'}}>
+            <div className="press" onClick={()=>setOpen(isOpen?null:r.st.id)}>
+              <div className="flex items-center gap-2">
+                <div style={{flex:1,minWidth:0}}>
+                  <div className="kanit text-[14px]" style={{fontWeight:600}}>
+                    {r.pos.emoji} {r.st.name}
+                    {!r.home && <span className="text-[10.5px] px-1.5 py-0.5 rounded ml-1" style={{background:'var(--soft)',color:lnShopInfo(r.st.shop).color}}>มาจาก {lnShopInfo(r.st.shop).label}</span>}
+                  </div>
+                  <div className="text-[11.5px]" style={{color:'var(--muted)'}}>
+                    {r.pos.name} · เข้า {r.days} วัน{r.holDays? ' +หยุด×2 '+r.holDays:''}{r.lateDays? ' · สาย '+r.lateDays+'ว':''}{r.shortDays? ' · ตัด '+r.shortDays+'ว (<'+r.minHrs+'ชม.)':''}{r.openDays? ' · ⚠️เวลาไม่ครบ '+r.openDays+'ว':''}
+                    {r.rate<=0? ' · ⚠️ ยังไม่ตั้งเรท':''}
+                  </div>
+                </div>
+                <div style={{textAlign:'right'}}>
+                  <div className="num kanit" style={{fontWeight:700,fontSize:16}}>{ocFmt(r.toPay,0)}</div>
+                  {r.advT>0 && <div className="text-[10.5px]" style={{color:'#B0483C'}}>เบิกแล้ว −{ocFmt(r.advT,0)}</div>}
+                </div>
+                <div style={{color:'var(--muted)'}}>{isOpen?'▴':'▾'}</div>
+              </div>
+            </div>
+
+            {isOpen && (
+              <div className="mt-2 pt-2" style={{borderTop:'1px dashed var(--line)'}}>
+                <div className="flex flex-wrap gap-x-4 gap-y-1 text-[12.5px]">
+                  <span style={{color:'var(--muted)'}}>ฐาน ({r.days}ว) <b className="num" style={{color:'var(--ink)'}}>{ocFmt(r.base,0)}</b></span>
+                  <span style={{color:'var(--muted)'}}>OT {r.otH} ชม. <b className="num" style={{color:'var(--ink)'}}>{ocFmt(r.otB,0)}</b></span>
+                  {r.holPay>0 && <span style={{color:'var(--muted)'}}>หยุด×2 <b className="num" style={{color:'var(--ink)'}}>{ocFmt(r.holPay,0)}</b></span>}
+                  <span style={{color:'var(--muted)'}}>เบี้ยขยัน <b className="num" style={{color:'var(--ink)'}}>{ocFmt(r.dl,0)}</b></span>
+                  {r.bn!==0 && <span style={{color:'var(--muted)'}}>โบนัส/หัก <b className="num" style={{color:'var(--ink)'}}>{ocFmt(r.bn,0)}</b></span>}
+                  {r.missB>0 && <span style={{color:'#B0483C'}}>หักขาด {r.missH} ชม. −{ocFmt(r.missB,0)}</span>}
+                  <span style={{color:'var(--muted)'}}>สุทธิ <b className="num" style={{color:'var(--ink)'}}>{ocFmt(r.net,0)}</b></span>
+                </div>
+                <div className="text-[11px] mt-1" style={{color:'var(--muted)'}}>
+                  OT รวม {r.otMin} นาที → {r.otAuto} ชม.{r.otRestMin? ' (เศษ '+r.otRestMin+' น. ตัดทิ้ง)':''}{r.otManH? ' · เพิ่มมือ '+r.otManH+' ชม.':''} · เบี้ยขยัน{r.diligForced? (r.dgVal===1?' (บังคับให้)':' (บังคับตัด)') : (r.diligAuto?' ✓ ผ่านอัตโนมัติ':' ✗ ไม่ผ่าน ('+(r.lateDays? 'สาย '+r.lateDays+' วัน':'เข้า '+r.workedDays+'/'+r.diligMinDays+' วัน')+')')}
+                </div>
+
+                <div className="flex flex-wrap gap-1.5 mt-2 items-center">
+                  <button className="press kanit text-[12px] px-2.5 py-1 rounded-lg" style={{border:'1px solid var(--line)',background:'var(--card)'}} disabled={busy} onClick={()=>cycleDilig(r)}>
+                    เบี้ยขยัน: {r.dgVal===1?'บังคับให้':(r.dgVal===0?'บังคับตัด':'อัตโนมัติ')}
+                  </button>
+                  <label className="text-[12px]" style={{color:'var(--muted)'}}>OT เพิ่มมือ (ชม.)</label>
+                  <input className="num" style={{...INP,width:58,textAlign:'right'}} inputMode="decimal" defaultValue={r.otManH||''} placeholder="0"
+                    onBlur={e=>{ const v=parseFloat(e.target.value); saveMonth('ot',r.st.id, v? v:undefined); }}/>
+                  <label className="text-[12px]" style={{color:'var(--muted)'}}>โบนัส/หัก (฿)</label>
+                  <input className="num" style={{...INP,width:70,textAlign:'right'}} inputMode="numeric" defaultValue={r.bn||''} placeholder="0"
+                    onBlur={e=>{ const v=parseFloat(e.target.value); saveMonth('bonus',r.st.id, v? v:undefined); }}/>
+                  <button className="press kanit text-[12px] px-2.5 py-1 rounded-lg" style={{border:'none',background:advOpen===r.st.id?'var(--primary)':'var(--soft)',color:advOpen===r.st.id?'#fff':'inherit'}} onClick={()=>setAdvOpen(advOpen===r.st.id?null:r.st.id)}>💸 เบิก/หัก{r.advT>0?' −'+ocFmt(r.advT,0):''}</button>
+                  <button className="press kanit text-[12px] px-2.5 py-1 rounded-lg" style={{border:'none',background:'var(--soft)'}} onClick={()=>lnPaySlipImage(pay,ym,shop.id,r.st.id,shop.brand? (shop.brand+' · '+shop.name):shop.name)}>🖼 สลิป</button>
+                </div>
+
+                {advOpen===r.st.id && (
+                  <div className="mt-2 p-2 rounded-xl" style={{background:'var(--soft)'}}>
+                    {(r.advList||[]).map((e,i)=>(
+                      <div key={i} className="flex items-center gap-2 text-[12.5px] mb-1">
+                        <span style={{flex:1}}>{e.d? 'วันที่ '+e.d+' · ':''}{e.note||'เบิก'}</span>
+                        <b className="num" style={{color:'#B0483C'}}>−{ocFmt(e.amt,0)}</b>
+                        <button className="press" style={{border:'none',background:'none',color:'#B0483C'}} onClick={()=>delAdv(r,i)}>✕</button>
+                      </div>
+                    ))}
+                    <div className="flex gap-1.5 mt-1">
+                      <input className="num" style={{...INP,width:80}} inputMode="numeric" placeholder="จำนวน" value={advDraft.amt} onChange={e=>setAdvDraft({...advDraft,amt:e.target.value})}/>
+                      <input className="kanit" style={{...INP,flex:1}} placeholder="เหตุผล เช่น เบิกล่วงหน้า" value={advDraft.note} onChange={e=>setAdvDraft({...advDraft,note:e.target.value})}/>
+                      <button className="press kanit text-[12.5px] px-3 rounded-lg text-white" style={{background:'var(--primary)',border:'none'}} disabled={busy} onClick={()=>addAdv(r)}>เพิ่ม</button>
+                    </div>
+                  </div>
+                )}
+
+                <div className="mt-2 overflow-x-auto">
+                  <table className="num" style={{width:'100%',fontSize:12,borderCollapse:'collapse'}}>
+                    <thead><tr style={{color:'var(--muted)',textAlign:'right'}}>
+                      <th style={{textAlign:'left',padding:'3px 4px'}}>วัน</th><th style={{padding:'3px 4px'}}>เข้า</th><th style={{padding:'3px 4px'}}>ออก</th><th style={{padding:'3px 4px'}}>ชม.</th><th style={{padding:'3px 4px'}}>OT</th><th style={{textAlign:'left',padding:'3px 4px'}}>หมายเหตุ</th>
+                    </tr></thead>
+                    <tbody>
+                      {r.daily.map((o,i)=>(
+                        <tr key={i} style={{textAlign:'right',borderTop:'1px solid var(--line)'}}>
+                          <td style={{textAlign:'left',padding:'3px 4px'}}>{o.d}</td>
+                          {o.leave
+                            ? <td colSpan={5} style={{textAlign:'left',padding:'3px 4px',color:'var(--muted)'}}>{leaveInfo(o.leave.t).emoji} {leaveInfo(o.leave.t).label}{o.leave.n? ' · '+o.leave.n:''}</td>
+                            : <React.Fragment>
+                                <td style={{padding:'3px 4px'}}>{o.tIn||'–'}</td>
+                                <td style={{padding:'3px 4px'}}>{o.tOut||'–'}</td>
+                                <td style={{padding:'3px 4px'}}>{o.hrs!=null? (Math.round(o.hrs*10)/10).toFixed(1):'–'}</td>
+                                <td style={{padding:'3px 4px',color:(o.ot||0)>0?'#0E7A5F':((o.ot||0)<0?'#B0483C':'var(--muted)')}}>{o.hol?'—':lnMinTxt(o.ot||0)}</td>
+                                <td style={{textAlign:'left',padding:'3px 4px',color:'var(--muted)'}}>{[o.hol?'หยุด×2':'',o.short?'ไม่ถึงขั้นต่ำ':'',o.open?'⚠️ไม่ครบคู่':'',o.edited?'แก้มือ':''].filter(Boolean).join(' · ')}</td>
+                              </React.Fragment>}
+                        </tr>
+                      ))}
+                      {!r.daily.length && <tr><td colSpan={6} style={{textAlign:'center',padding:'8px',color:'var(--muted)'}}>ไม่มีข้อมูลเวลาเดือนนี้</td></tr>}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })}
+      {!calc.rows.length && <div className="text-[13px] py-8 text-center" style={{color:'var(--muted)'}}>ยังไม่มีพนักงานสาขานี้ — เพิ่มที่หน้า "พนักงาน" ก่อน</div>}
+
+      {cross.length>0 && (
+        <div className="card p-3 mb-3">
+          <div className="kanit text-[13.5px] mb-1.5" style={{fontWeight:600}}>🔁 ทำงานข้ามร้านเดือนนี้</div>
+          {cross.map(r=>(
+            <div key={r.st.id} className="text-[12.5px] mb-0.5" style={{color:'var(--muted)'}}>
+              {r.st.name}: {shop.name} {r.workedDays} วัน{Object.keys(calc.crossInfo[r.st.id]).map(k=>' · '+(k==='owlcha'?'🧋 Owl Cha':lnShopInfo(k).label)+' '+calc.crossInfo[r.st.id][k]+' วัน').join('')}
+            </div>
+          ))}
+          <div className="text-[11px] mt-1" style={{color:'var(--muted)'}}>แต่ละร้านจ่ายเฉพาะวันที่ทำร้านตัวเอง · วันที่ไป Owl Cha คิดในระบบเงินเดือน Owl</div>
+        </div>
+      )}
+      <div style={{height:20}}/>
+    </div>
+  );
+}
+
+
 function Main({shop,user,canSwitch,onSwitch,logout}){
   const [tab,setTab]=useState('home');
   const readOnly = user.role==='partner';
@@ -5176,13 +6142,14 @@ function Main({shop,user,canSwitch,onSwitch,logout}){
     {k:'capital',label:'ทุน',icon:I.wallet},
     {k:'txns',label:'รายการ',icon:I.table},
     ...(shop.id==='owlcha' ? [{k:'orders',label:'ออเดอร์',icon:I.cup},{k:'stamp',label:'แต้ม',icon:I.stamp},{k:'print',label:'พิมพ์',icon:I.printer},{k:'cost',label:'ต้นทุน',icon:I.calc},{k:'attend',label:'เวลางาน',icon:I.clock},{k:'staff',label:'พนักงาน',icon:I.users}] : []),
+    ...(shop.type==='laundry' ? [{k:'lnattend',label:'เวลางาน',icon:I.clock},{k:'lnstaff',label:'พนักงาน',icon:I.users},{k:'lnpay',label:'เงินเดือน',icon:I.calc}] : []),
     {k:'settings',label:'ตั้งค่า',icon:I.gear},
   ];
   const customPerms = (user.perms && Object.keys(user.perms).some(k=>user.perms[k])) ? user.perms : null;
   const tabs = ALL_NAV.filter(x=>{
     if(x.k==='settings') return true;
     if(customPerms) return !!customPerms[x.k];
-    if((x.k==='txns'||x.k==='cost') && user.role!=='admin') return false;
+    if((x.k==='txns'||x.k==='cost'||x.k==='lnattend'||x.k==='lnstaff'||x.k==='lnpay') && user.role!=='admin') return false;
     if(user.role==='staff' && (x.k==='capital'||x.k==='analyze'||x.k==='referral')) return false;
     if(user.role==='front') return false;
     return true;
@@ -5216,6 +6183,9 @@ function Main({shop,user,canSwitch,onSwitch,logout}){
         {tab==='cost' && <CostPanel toast={toast}/>}
         {tab==='attend' && <AttendPanel user={user}/>}
         {tab==='staff' && <StaffPanel user={user} toast={toast}/>}
+        {tab==='lnattend' && <LnAttendPanel shop={shop} user={user}/>}
+        {tab==='lnstaff' && <LnStaffPanel shop={shop} user={user} toast={toast}/>}
+        {tab==='lnpay' && <LnPayPanel shop={shop} user={user} toast={toast}/>}
         </TabErrorBoundary>
         {tab==='settings' && <Settings shop={shop} user={user} logout={logout} toast={toast}/>}
       </div>
