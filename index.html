@@ -3047,7 +3047,13 @@ async function ocPayPersonImage(pay,ym,stId){
     g.fillStyle='#FFFFFF'; g.fillRect(0,y,W,62);
     g.fillStyle='#3B2F24'; g.font=F(600,16); g.textAlign='left'; g.fillText('ค่าจ้างเดือนนี้',32,y+25);
     g.textAlign='right'; g.fillText(num(r.net)+' ฿',868,y+25);
-    g.fillStyle='#B0483C'; g.font=F(400,15); g.textAlign='left'; g.fillText('เบิกไปแล้วระหว่างเดือน',32,y+50);
+    /* ป้ายตามชนิดรายการจริง — บางรายการเป็นค่าปรับ ไม่ใช่เงินเบิก */
+    const advNotes=(r.advList||[]).map(e=>String(e.note||''));
+    const hasAdv=advNotes.some(t=>/เบิก|ยืม|ล่วงหน้า/.test(t));
+    const hasFine=advNotes.some(t=>t && !/เบิก|ยืม|ล่วงหน้า/.test(t));
+    const advLabel = (hasAdv&&hasFine)? 'หักเบิก / ค่าปรับระหว่างเดือน'
+                    : (hasAdv? 'เบิกไปแล้วระหว่างเดือน' : 'หักระหว่างเดือน');
+    g.fillStyle='#B0483C'; g.font=F(400,15); g.textAlign='left'; g.fillText(advLabel,32,y+50);
     g.textAlign='right'; g.fillText('−'+num(r.advT)+' ฿',868,y+50);
     y+=62;
   }
