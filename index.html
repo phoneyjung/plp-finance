@@ -2648,7 +2648,7 @@ function CostPanel({toast}){
    ================================================================ */
 const OC_PAY_MONTHS=['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
 const OC_PAY_SEED={
-  cfg:{ base1:11200, base2:11500, base3:12000, dilig:500, diligGrace:0, divisor:26, avgPrice:36, otMult:2, shiftHrs:10,
+  cfg:{ base1:11200, base2:11500, base3:12000, dilig:500, diligGrace:0, diligMinDays:26, divisor:26, avgPrice:36, otMult:2, shiftHrs:10,
         tiers:[{min:250,pool:150},{min:350,pool:300},{min:450,pool:450},{min:550,pool:600},{min:700,pool:800}] },
   staff:[ {id:'p1',name:'แซ็ค',phase:1,custom:0},{id:'p2',name:'เบส',phase:1,custom:0},{id:'p3',name:'อี๊ฟ',phase:1,custom:0},{id:'p4',name:'พ่อ',phase:1,custom:0} ],
   months:{}
@@ -2734,8 +2734,11 @@ function ocPayCalc(pay,ym){
     const otMan=Number(ot[st.id])||0;
     let otH=Math.round((otAuto+otMan)*100)/100;
     let otB=Math.round(otH*baseUsed/(cfg.divisor||26)/(cfg.shiftHrs||10)*(cfg.otMult||2));
-    /* เบี้ยขยัน: สายแม้วันเดียว = ตัดทั้งก้อน · กดปุ่มเพื่อบังคับให้/ไม่ให้ได้ */
-    const diligAuto = (lateDays===0);
+    /* เบี้ยขยัน: ต้องทำงานครบขั้นต่ำ + ไม่สายเลยแม้แต่วันเดียว */
+    const diligMinDays = (cfg.diligMinDays!=null? Number(cfg.diligMinDays) : 26);
+    const workedDays = days + holDays;
+    const diligDaysOk = (workedDays >= diligMinDays);
+    const diligAuto = (lateDays===0 && diligDaysOk);
     let dl;
     if(dg[st.id]===0) dl=0;                       /* กดปิดเอง */
     else if(dg[st.id]===1) dl=(cfg.dilig||0);     /* กดเปิดเอง (ยกเว้นให้) */
@@ -2747,7 +2750,7 @@ function ocPayCalc(pay,ym){
     const bn=Number(bonus[st.id])||0;
     const net = base+com+otB+dl+bn+holPay-missB;
     const diligForced = (dg[st.id]===0 || dg[st.id]===1);
-    return { st, isMaid, days, holDays, holPay, baseUsed, base, com, otAuto, otMan, otH, otB, dl, bn, missH, missB, advT, advList, quota, offDays, offExcess, extraDays, extraRate, net, toPay: net-advT, lateDays, lateMin, diligAuto, diligForced };
+    return { st, isMaid, days, holDays, holPay, baseUsed, base, com, otAuto, otMan, otH, otB, dl, bn, missH, missB, advT, advList, quota, offDays, offExcess, extraDays, extraRate, net, toPay: net-advT, lateDays, lateMin, diligAuto, diligForced, workedDays, diligMinDays, diligDaysOk };
   });
   const total=rows.reduce((s,r)=>s+r.net,0);
   const rev=cupsT*(cfg.avgPrice||0);
@@ -2782,8 +2785,9 @@ function ocPayBuildWorkbook(pay,ym){
   r1.push([cell('ยอดขั้นต่ำ (แก้ว/วัน)',sHead),cell('กองกลาง ฿/วัน',sHead)]);
   (cfg.tiers||[]).forEach(t=>r1.push([cell(t.min,sNum,'#,##0'),cell(t.pool,sYel,'#,##0')]));
   r1.push([]);
-  r1.push([cell('เบี้ยขยัน (฿/เดือน ไม่สายเลยทั้งเดือน)',sTxt),cell(cfg.dilig,sYel,'#,##0')]);
+  r1.push([cell('เบี้ยขยัน (฿/เดือน · ครบวัน + ไม่สายเลย)',sTxt),cell(cfg.dilig,sYel,'#,##0')]);
   r1.push([cell('ผ่อนผันสาย (นาที/วัน)',sTxt),cell(cfg.diligGrace||0,sYel,'#,##0')]);
+  r1.push([cell('เบี้ยขยัน — ทำงานขั้นต่ำ (วัน)',sTxt),cell(cfg.diligMinDays!=null?cfg.diligMinDays:26,sYel,'#,##0')]);
   r1.push([cell('ตัวหารวันทำงาน/เดือน',sTxt),cell(cfg.divisor,sYel,'#,##0')]);
   r1.push([cell('ราคาขายเฉลี่ย/แก้ว (฿)',sTxt),cell(cfg.avgPrice,sYel,'#,##0')]);
   r1.push([cell('OT: คิดกี่เท่าของค่าแรง/ชม.',sTxt),cell(cfg.otMult,sYel,'#,##0.0')]);
@@ -4979,9 +4983,10 @@ function OCTabPay({ toast }){
               {!r.isMaid && <span className="flex items-center gap-1">OT{r.otAuto>0? <span className="num"> {ocFmt(r.otAuto,1)}+</span>:null} <OCPayIn value={(mo.ot||{})[r.st.id]} onChange={v=>setOt(r.st.id,v)} w="44px" ph="เพิ่ม"/> <span>= <b className="num">{ocFmt(r.otH,1)}ชม. · {ocFmt(r.otB,0)}฿</b></span></span>}
               {!r.isMaid && (
                 <button className="press kanit" style={chipS(r.dl>0)} onClick={()=>togDilig(r.st.id)}
-                  title={r.lateDays>0? ('สาย '+r.lateDays+' วัน รวม '+r.lateMin+' นาที') : 'ไม่สายเลยทั้งเดือน'}>
+                  title={'ทำงาน '+r.workedDays+'/'+r.diligMinDays+' วัน'+(r.lateDays>0? (' · สาย '+r.lateDays+' วัน รวม '+r.lateMin+' นาที') : ' · ไม่สายเลย')}>
                   เบี้ยขยัน {r.dl>0? ocFmt(r.dl,0) : '✗'}
                   {r.lateDays>0 && <span style={{opacity:.8,fontSize:11}}> · สาย {r.lateDays}ว</span>}
+                  {!r.diligDaysOk && <span style={{opacity:.8,fontSize:11}}> · {r.workedDays}/{r.diligMinDays}ว</span>}
                   {r.diligForced && <span style={{opacity:.7,fontSize:11}}> ✋</span>}
                 </button>
               )}
@@ -5043,6 +5048,7 @@ function OCTabPay({ toast }){
             <div className="flex items-center gap-x-2 gap-y-1.5 flex-wrap text-[12px]" style={{color:'var(--muted)'}}>
               <span>เบี้ยขยัน</span><OCPayIn value={cfg.dilig} onChange={v=>setCfg('dilig',v)} w="56px"/>
               <span>ผ่อนผันสาย (นาที)</span><OCPayIn value={cfg.diligGrace!=null?cfg.diligGrace:0} onChange={v=>setCfg('diligGrace',v)} w="46px"/>
+              <span>ทำงานขั้นต่ำ (วัน)</span><OCPayIn value={cfg.diligMinDays!=null?cfg.diligMinDays:26} onChange={v=>setCfg('diligMinDays',v)} w="46px"/>
               <span>ตัวหารวัน</span><OCPayIn value={cfg.divisor} onChange={v=>setCfg('divisor',v)} w="44px"/>
               <span>ราคาเฉลี่ย</span><OCPayIn value={cfg.avgPrice} onChange={v=>setCfg('avgPrice',v)} w="48px"/>
               <span>OT ×</span><OCPayIn value={cfg.otMult} onChange={v=>setCfg('otMult',v)} w="40px"/>
