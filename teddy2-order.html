@@ -228,14 +228,14 @@ label.fl span{font-weight:600}
     <pre class="msg" id="msg"></pre>
     <div class="brow">
       <button class="btn gray" onclick="closeSheet()">แก้ไข</button>
-      <button class="btn" id="copyBtn">คัดลอก + เปิดไลน์</button>
+      <button class="btn" id="copyBtn">ส่งเข้าไลน์ร้าน</button>
     </div>
-    <div class="hint">คัดลอกแล้ววางในแชทไลน์ของร้านได้เลย</div>
+    <div class="hint">จะเปิดแชทร้านพร้อมข้อความนี้ · กดส่งในไลน์อีกครั้งได้เลย</div>
   </div>
 </div>
 
 <script>
-var SHOP = { name:'Teddy Wash & Dry สาขา 2 (ม.ศิลปากร)', line:'https://lin.ee/tLp9JME' };
+var SHOP = { name:'Teddy Wash & Dry สาขา 2 (ม.ศิลปากร)', oa:'@736vkujr' };
 var WASH = [
   { kg:12, hint:'ผ้า 1 คน/สัปดาห์', p:{cold:50,warm:60,hot:70} },
   { kg:17, hint:'ผ้านวม/กองใหญ่',   p:{cold:60,warm:70,hot:80} }
@@ -489,15 +489,19 @@ el('ovl').addEventListener('click',closeSheet);
 
 el('copyBtn').addEventListener('click',function(){
   var t=el('msg').textContent;
-  function go(){ window.location.href = SHOP.line; }
-  if(navigator.clipboard && navigator.clipboard.writeText){
-    navigator.clipboard.writeText(t).then(go,go);
-  }else{
-    var ta=document.createElement('textarea'); ta.value=t;
-    document.body.appendChild(ta); ta.select();
-    try{ document.execCommand('copy'); }catch(e){}
-    ta.remove(); go();
-  }
+  /* คัดลอกไว้ก่อนเป็นตัวสำรอง เผื่อข้อความยาวเกินหรือเปิดแชทไม่ได้ */
+  try{
+    if(navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t);
+    else{
+      var ta=document.createElement('textarea'); ta.value=t;
+      document.body.appendChild(ta); ta.select();
+      try{ document.execCommand('copy'); }catch(e){}
+      ta.remove();
+    }
+  }catch(e){}
+  /* เปิดแชทร้าน พร้อมข้อความอยู่ในช่องพิมพ์แล้ว */
+  var oa=encodeURIComponent(SHOP.oa);
+  window.location.href='https://line.me/R/oaMessage/'+oa+'/?'+encodeURIComponent(t);
 });
 
 el('geoBtn').addEventListener('click',askGeo);
