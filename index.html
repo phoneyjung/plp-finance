@@ -5287,7 +5287,7 @@ function lnPayCalc(pay, ym, shopId, fp){
     if(!home && days+holDays+shortDays===0) return;
     if(st.active===false && days+holDays===0 && !advList.length && !(Number(bonus[st.id])||0) && !(Number(otMan[st.id])||0)) return;
     const workedDays0=days+holDays;
-    let base, offExcess=0, extraDays=0, dayRate=0;
+    let base, offExcess=0, extraDays=0, dayRate=0, extraPay=0;
     if(modeMonth){
       const Q=Math.max(0,Number(pc.offQuota)||0);
       const req=Math.max(1,nDays-Q);
@@ -5295,7 +5295,8 @@ function lnPayCalc(pay, ym, shopId, fp){
       const diff=workedDays0-req;
       offExcess=Math.max(0,-diff);
       extraDays=Math.max(0,diff);
-      base=Math.max(0,Math.round(rate - offExcess*dayRate + extraDays*(Number(pc.extraRate)||0)));
+      extraPay=Math.round(extraDays*(Number(pc.extraRate)||0));
+      base=Math.max(0,Math.round(rate - offExcess*dayRate));
     } else {
       base=Math.round(rate/(cfg.divisor||26)*days);
     }
@@ -5319,13 +5320,13 @@ function lnPayCalc(pay, ym, shopId, fp){
     else dl= (pc.diligOn && diligAuto)? (pc.dilig||0) : 0;
     const bn=Number(bonus[st.id])||0;
     const advT=advList.reduce((s,e)=>s+(Number(e.amt)||0),0);
-    const net=base+jobB+otB+dl+bn+holPay-missB;
+    const net=base+extraPay+jobB+otB+dl+bn+holPay-missB;
     rows.push({ st, pos:lnPosOf(pay,st.pos), partner, rate, hourRate, days, holDays, holPay, base,
       otMin, otRestMin, otAuto, otManH, otH, otB, missMin, missH, missRestMin, missB,
       lateDays, lateMin, shortDays, minHrs, openDays, dl, diligAuto,
       diligForced:(dg[st.id]===0||dg[st.id]===1), dgVal:dg[st.id], workedDays, diligMinDays,
       otOn:!!pc.ot, otMult:(pc.otMult||2), diligOn:!!pc.diligOn, deduct:!!pc.deduct, shiftHrs,
-      modeMonth, offQuota:(Number(pc.offQuota)||0), extraRate:(Number(pc.extraRate)||0), offExcess, extraDays, dayRate,
+      modeMonth, offQuota:(Number(pc.offQuota)||0), extraRate:(Number(pc.extraRate)||0), offExcess, extraDays, dayRate, extraPay,
       jobOn:!!pc.jobOn, jobN, jobB, jobRate:(Number(pc.jobRate)||0), bnNote:String(bnNote[st.id]||''),
       bn, advList, advT, net, toPay:net-advT, daily, home });
   });
@@ -5354,10 +5355,11 @@ async function lnPaySlipImage(pay,ym,shopId,stId,shopName){
   g.fillText('สลิปเงินเดือน · '+r.st.name,30,42);
   g.font=FN(400,16); g.fillStyle='#CFE2F5';
   g.fillText(shopName+' · '+ocPayLabel(ym)+' · '+((r.pos.emoji||'')+' '+r.pos.name),30,72);
-  g.fillText('ทำงาน '+r.workedDays+' วัน'+(r.modeMonth?(' (โควตาหยุด '+r.offQuota+(r.extraDays?(' · ทำแทน +'+r.extraDays+'ว ×'+r.extraRate):'')+(r.offExcess?(' · หยุดเกิน '+r.offExcess+'ว −'+Math.round(r.dayRate)+'/ว'):'')+')'):(r.holDays?(' (วันหยุด×2 '+r.holDays+' วัน)'):''))+(r.lateDays?(' · สาย '+r.lateDays+' วัน'):'')+(r.shortDays?(' · ตัด '+r.shortDays+' วัน (<'+r.minHrs+'ชม.)'):''),30,100);
+  g.fillText('ทำงาน '+r.workedDays+' วัน'+(r.modeMonth?(' (โควตาหยุด '+r.offQuota+(r.extraDays?(' · ทำแทน +'+r.extraDays+'ว ×'+r.extraRate):'')+(r.offExcess?(' · หยุดเกิน '+r.offExcess+'ว −'+Math.round(r.dayRate)+'/ว'):'')+')'):(r.holDays?(' (วันหยุด×2 '+r.holDays+' วัน)'):''))+(r.shortDays?(' · ตัด '+r.shortDays+' วัน (<'+r.minHrs+'ชม.)'):''),30,100);
   const chips=[[r.modeMonth?'เหมาเดือน':'ฐาน ('+r.days+'ว)',r.base]];
+  if(r.extraDays) chips.push(['ทำแทนวันหยุด +'+r.extraDays+'ว',r.extraPay]);
   if(r.jobOn) chips.push(['พับ '+r.jobN+' งาน',r.jobB]);
-  if(r.otOn) chips.push(['OT '+(r.otH||0)+' ชม.',r.otB]);
+  if(r.otB) chips.push(['OT '+(r.otH||0)+' ชม.',r.otB]);
   if(r.holPay) chips.push(['หยุด×2',r.holPay]);
   chips.push(['เบี้ยขยัน',r.dl]);
   chips.push([r.bnNote? ('พิเศษ·'+r.bnNote.slice(0,8)) : 'โบนัส/หัก',r.bn]);
@@ -5369,7 +5371,7 @@ async function lnPaySlipImage(pay,ym,shopId,stId,shopName){
     g.font=FN(700,18); g.fillStyle= c[1]<0? '#B0483C':'#1E2A38';
     g.fillText((c[1]<0?'−':'')+num(Math.abs(c[1])),x,headH+58);
   });
-  const cols=[['วัน',66,'right'],['เข้า',210,'center'],['ออก',330,'center'],['ชม.',430,'right'],['OT',520,'right'],['หมายเหตุ',830,'right']];
+  const cols=[['วัน',80,'right'],['เข้า',320,'center'],['ออก',540,'center'],['หมายเหตุ',830,'right']];
   const ty0=headH+sumH;
   g.fillStyle='#E3ECF6'; g.fillRect(0,ty0,W,colH);
   g.font=FN(600,14.5); g.fillStyle='#113D6C';
@@ -5385,20 +5387,14 @@ async function lnPaySlipImage(pay,ym,shopId,stId,shopName){
       g.fillText(li.emoji+' '+li.label+(o.leave.n?(' · '+o.leave.n):''),150,y+24);
     } else {
       g.textAlign='center'; g.fillText(o.tIn||'–',cols[1][1],y+24); g.fillText(o.tOut||'–',cols[2][1],y+24);
-      g.textAlign='right'; g.fillText(o.hrs!=null? (Math.round(o.hrs*10)/10).toFixed(1):'–',cols[3][1],y+24);
-      g.fillStyle= (o.ot||0)>0? '#0E7A5F' : ((o.ot||0)<0? '#B0483C':'#9AA1AB');
-      g.fillText(o.hol?'—':lnMinTxt(o.ot||0),cols[4][1],y+24);
-      g.fillStyle='#8A8072';
-      const nts=[]; if(o.hol)nts.push('วันหยุด×2'); if(o.short)nts.push('ไม่ถึงขั้นต่ำ'); if(o.open)nts.push('เวลาไม่ครบคู่'); if(o.edited)nts.push('แก้มือ');
-      g.fillText(nts.join(' · '),cols[5][1],y+24);
+      g.textAlign='right'; g.fillStyle='#8A8072';
+      const nts=[]; if(o.hol)nts.push(r.modeMonth?'ทำงานวันหยุด':'วันหยุด×2'); if(o.short)nts.push('ไม่ถึงขั้นต่ำ'); if(o.open)nts.push('เวลาไม่ครบคู่');
+      g.fillText(nts.join(' · '),cols[3][1],y+24);
     }
     y+=rowH;
   });
   if(!daysRows.length){ g.font=FN(400,14); g.fillStyle='#9AA1AB'; g.textAlign='center'; g.fillText('ไม่มีข้อมูลเวลาในเดือนนี้',W/2,y+24); y+=rowH; }
-  y+=10;
-  g.font=FN(400,13.5); g.fillStyle='#6B6357'; g.textAlign='left';
-  g.fillText('รวม OT '+r.otMin+' นาที → คิด '+r.otAuto+' ชม.'+(r.otRestMin?(' (เศษ '+r.otRestMin+' นาทีตัดทิ้ง)'):'')+(r.otManH?(' · เพิ่มมือ '+r.otManH+' ชม.'):'')+' × '+(r.otMult||2),30,y+8);
-  y+=28;
+  y+=12;
   if(advRows){
     g.font=FN(600,14.5); g.fillStyle='#B0483C'; g.fillText('เบิก/หักระหว่างเดือน',30,y+6);
     y+=26;
@@ -6158,6 +6154,7 @@ function LnPayPanel({ shop, user, toast }){
               <div className="mt-2 pt-2" style={{borderTop:'1px dashed var(--line)'}}>
                 <div className="flex flex-wrap gap-x-4 gap-y-1 text-[12.5px]">
                   <span style={{color:'var(--muted)'}}>{r.modeMonth? 'เหมาเดือน':'ฐาน ('+r.days+'ว)'} <b className="num" style={{color:'var(--ink)'}}>{ocFmt(r.base,0)}</b></span>
+                  {r.extraDays>0 && <span style={{color:'var(--muted)'}}>ทำแทนวันหยุด +{r.extraDays}ว <b className="num" style={{color:'#0E7A5F'}}>{ocFmt(r.extraPay,0)}</b></span>}
                   {r.jobOn && <span style={{color:'var(--muted)'}}>พับ {r.jobN} งาน <b className="num" style={{color:'var(--ink)'}}>{ocFmt(r.jobB,0)}</b></span>}
                   {r.otOn? <span style={{color:'var(--muted)'}}>OT ×{r.otMult} · {r.otH} ชม. <b className="num" style={{color:'var(--ink)'}}>{ocFmt(r.otB,0)}</b></span> : <span style={{color:'var(--muted)'}}>ไม่มี OT</span>}
                   {r.holPay>0 && <span style={{color:'var(--muted)'}}>หยุด×2 <b className="num" style={{color:'var(--ink)'}}>{ocFmt(r.holPay,0)}</b></span>}
