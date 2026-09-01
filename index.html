@@ -5177,8 +5177,10 @@ const lnShopInfo=(id)=> LN_SHOPS.find(x=>x.id===id) || LN_SHOPS[2];
 const LN_CFG_SEED=()=>({ pos:{}, diligMinDays:26, diligGrace:0, divisor:26, shiftHrs:11, otGrace:15 });
 /* ค่าตั้งต้นรายตำแหน่ง — หุ้นส่วน: ใช้กติกาขั้นต่ำ/วัน + ไม่หักชั่วโมงขาด */
 const LN_PC_DEF=(posId)=>( posId==='partner'
-  ? { base:0, diligOn:1, dilig:500, ot:1, otMult:2, shiftHrs:11, deduct:0, minRule:1, minHrs:5 }
-  : { base:0, diligOn:1, dilig:500, ot:1, otMult:2, shiftHrs:11, deduct:1, minRule:0, minHrs:5 });
+  ? { base:0, payMode:'day',   offQuota:4, extraRate:400, jobOn:0, jobRate:20, diligOn:1, dilig:500, ot:1, otMult:2, shiftHrs:11, deduct:0, minRule:1, minHrs:5 }
+  : posId==='maid'
+  ? { base:0, payMode:'month', offQuota:4, extraRate:400, jobOn:0, jobRate:20, diligOn:1, dilig:500, ot:1, otMult:2, shiftHrs:11, deduct:1, minRule:0, minHrs:5 }
+  : { base:0, payMode:'day',   offQuota:4, extraRate:400, jobOn:0, jobRate:20, diligOn:1, dilig:500, ot:1, otMult:2, shiftHrs:11, deduct:1, minRule:0, minHrs:5 });
 /* อ่าน option ของตำแหน่งในสาขานั้น (รองรับข้อมูลเก่าแบบ rates) */
 const lnPosCfg=(cfg,posId)=>{
   const raw=((cfg&&cfg.pos)||{})[posId]||{};
@@ -5187,7 +5189,7 @@ const lnPosCfg=(cfg,posId)=>{
     const legacy=((cfg&&cfg.rates)||{})[posId];
     if(legacy!=null) out.base=Number(legacy)||0;
   }
-  ['base','dilig','otMult','shiftHrs','minHrs'].forEach(k=>{ out[k]=Number(out[k]); if(isNaN(out[k])) out[k]=LN_PC_DEF(posId)[k]; });
+  ['base','dilig','otMult','shiftHrs','minHrs','offQuota','extraRate','jobRate'].forEach(k=>{ out[k]=Number(out[k]); if(isNaN(out[k])) out[k]=LN_PC_DEF(posId)[k]; });
   return out;
 };
 const LN_POS_SEED=[
@@ -5215,7 +5217,7 @@ const lnMinTxt=(m)=> !m ? '–' : ((m>0?'+':'−') + Math.abs(m) + ' น.');
 function lnPayCalc(pay, ym, shopId, fp){
   const cfg=lnCfgOf(pay,shopId);
   const m=((pay&&pay.months)||{})[ym]||{};
-  const adv=m.adv||{}, bonus=m.bonus||{}, dg=m.dilig||{}, otMan=m.ot||{};
+  const adv=m.adv||{}, bonus=m.bonus||{}, dg=m.dilig||{}, otMan=m.ot||{}, jobN0=m.job||{}, bnNote=m.bnNote||{};
   const nDays=ocPayDays(ym);
   const F=fp||{};
   const fd=F.d||{}, fs=F.shop||{}, fl=F.leave||{}, fh=F.hol||{};
@@ -5223,6 +5225,7 @@ function lnPayCalc(pay, ym, shopId, fp){
   ((pay&&pay.staff)||[]).forEach(st=>{
     const pin=String(st.fpId||'').trim();
     const pc=lnPosCfg(cfg,st.pos);
+    const modeMonth=(pc.payMode==='month');
     const partner=!!pc.minRule;
     const minHrs= partner? ((st.minHrs!==''&&st.minHrs!=null)? Number(st.minHrs):(Number(pc.minHrs)||5)) : 0;
     const rate=lnRateOf(st,cfg);
@@ -5258,7 +5261,7 @@ function lnPayCalc(pay, ym, shopId, fp){
       const aIn=attHM(tIn), aOut=attHM(tOut);
       let dOt=0;
       if(hol){
-        holDays++; holPay+=hrs*hourRate*2;
+        holDays++; if(!modeMonth) holPay+=hrs*hourRate*2;
       } else {
         days++;
         if(sIn!=null&&sOut!=null&&aIn!=null&&aOut!=null){
@@ -5283,7 +5286,21 @@ function lnPayCalc(pay, ym, shopId, fp){
     const advList=adv[st.id]||[];
     if(!home && days+holDays+shortDays===0) return;
     if(st.active===false && days+holDays===0 && !advList.length && !(Number(bonus[st.id])||0) && !(Number(otMan[st.id])||0)) return;
-    const base=Math.round(rate/(cfg.divisor||26)*days);
+    const workedDays0=days+holDays;
+    let base, offExcess=0, extraDays=0, dayRate=0;
+    if(modeMonth){
+      const Q=Math.max(0,Number(pc.offQuota)||0);
+      const req=Math.max(1,nDays-Q);
+      dayRate=rate/req;
+      const diff=workedDays0-req;
+      offExcess=Math.max(0,-diff);
+      extraDays=Math.max(0,diff);
+      base=Math.max(0,Math.round(rate - offExcess*dayRate + extraDays*(Number(pc.extraRate)||0)));
+    } else {
+      base=Math.round(rate/(cfg.divisor||26)*days);
+    }
+    const jobN= pc.jobOn? (Number(jobN0[st.id])||0) : 0;
+    const jobB= pc.jobOn? Math.round(jobN*(Number(pc.jobRate)||0)) : 0;
     const otAuto= pc.ot? Math.floor(otMin/60) : 0;
     const otRestMin= pc.ot? (otMin%60) : 0;
     const otManH= pc.ot? (Number(otMan[st.id])||0) : 0;
@@ -5293,8 +5310,8 @@ function lnPayCalc(pay, ym, shopId, fp){
     const missRestMin= pc.deduct? (missMin%60) : 0;
     const missB=Math.round(missH*hourRate);
     holPay=Math.round(holPay);
-    const workedDays=days+holDays;
-    const diligMinDays=(cfg.diligMinDays!=null? Number(cfg.diligMinDays):26);
+    const workedDays=workedDays0;
+    const diligMinDays= modeMonth? Math.max(1,nDays-(Number(pc.offQuota)||0)) : (cfg.diligMinDays!=null? Number(cfg.diligMinDays):26);
     const diligAuto=(lateDays===0 && workedDays>=diligMinDays);
     let dl;
     if(dg[st.id]===0) dl=0;
@@ -5302,12 +5319,14 @@ function lnPayCalc(pay, ym, shopId, fp){
     else dl= (pc.diligOn && diligAuto)? (pc.dilig||0) : 0;
     const bn=Number(bonus[st.id])||0;
     const advT=advList.reduce((s,e)=>s+(Number(e.amt)||0),0);
-    const net=base+otB+dl+bn+holPay-missB;
+    const net=base+jobB+otB+dl+bn+holPay-missB;
     rows.push({ st, pos:lnPosOf(pay,st.pos), partner, rate, hourRate, days, holDays, holPay, base,
       otMin, otRestMin, otAuto, otManH, otH, otB, missMin, missH, missRestMin, missB,
       lateDays, lateMin, shortDays, minHrs, openDays, dl, diligAuto,
       diligForced:(dg[st.id]===0||dg[st.id]===1), dgVal:dg[st.id], workedDays, diligMinDays,
       otOn:!!pc.ot, otMult:(pc.otMult||2), diligOn:!!pc.diligOn, deduct:!!pc.deduct, shiftHrs,
+      modeMonth, offQuota:(Number(pc.offQuota)||0), extraRate:(Number(pc.extraRate)||0), offExcess, extraDays, dayRate,
+      jobOn:!!pc.jobOn, jobN, jobB, jobRate:(Number(pc.jobRate)||0), bnNote:String(bnNote[st.id]||''),
       bn, advList, advT, net, toPay:net-advT, daily, home });
   });
   rows.sort((a,b)=> (a.home===b.home?0:(a.home?-1:1)) || String(a.st.name).localeCompare(b.st.name,'th'));
@@ -5335,10 +5354,17 @@ async function lnPaySlipImage(pay,ym,shopId,stId,shopName){
   g.fillText('สลิปเงินเดือน · '+r.st.name,30,42);
   g.font=FN(400,16); g.fillStyle='#CFE2F5';
   g.fillText(shopName+' · '+ocPayLabel(ym)+' · '+((r.pos.emoji||'')+' '+r.pos.name),30,72);
-  g.fillText('ทำงาน '+r.workedDays+' วัน'+(r.holDays?(' (วันหยุด×2 '+r.holDays+' วัน)'):'')+(r.lateDays?(' · สาย '+r.lateDays+' วัน'):'')+(r.shortDays?(' · ตัด '+r.shortDays+' วัน (<'+r.minHrs+'ชม.)'):''),30,100);
-  const chips=[['ฐาน ('+r.days+'ว)',r.base],['OT '+(r.otH||0)+' ชม.',r.otB],['หยุด×2',r.holPay],['เบี้ยขยัน',r.dl],['โบนัส/หัก',r.bn],['หักขาด '+(r.missH||0)+' ชม.',-(r.missB||0)]];
+  g.fillText('ทำงาน '+r.workedDays+' วัน'+(r.modeMonth?(' (โควตาหยุด '+r.offQuota+(r.extraDays?(' · ทำแทน +'+r.extraDays+'ว ×'+r.extraRate):'')+(r.offExcess?(' · หยุดเกิน '+r.offExcess+'ว −'+Math.round(r.dayRate)+'/ว'):'')+')'):(r.holDays?(' (วันหยุด×2 '+r.holDays+' วัน)'):''))+(r.lateDays?(' · สาย '+r.lateDays+' วัน'):'')+(r.shortDays?(' · ตัด '+r.shortDays+' วัน (<'+r.minHrs+'ชม.)'):''),30,100);
+  const chips=[[r.modeMonth?'เหมาเดือน':'ฐาน ('+r.days+'ว)',r.base]];
+  if(r.jobOn) chips.push(['พับ '+r.jobN+' งาน',r.jobB]);
+  if(r.otOn) chips.push(['OT '+(r.otH||0)+' ชม.',r.otB]);
+  if(r.holPay) chips.push(['หยุด×2',r.holPay]);
+  chips.push(['เบี้ยขยัน',r.dl]);
+  chips.push([r.bnNote? ('พิเศษ·'+r.bnNote.slice(0,8)) : 'โบนัส/หัก',r.bn]);
+  if(r.missB) chips.push(['หักขาด '+(r.missH||0)+' ชม.',-(r.missB||0)]);
+  const chipW=Math.min(150,Math.floor((W-60)/chips.length));
   chips.forEach((c,k)=>{
-    const x=30+k*136;
+    const x=30+k*chipW;
     g.font=FN(400,13); g.fillStyle='#8A8072'; g.textAlign='left'; g.fillText(c[0],x,headH+32);
     g.font=FN(700,18); g.fillStyle= c[1]<0? '#B0483C':'#1E2A38';
     g.fillText((c[1]<0?'−':'')+num(Math.abs(c[1])),x,headH+58);
@@ -5481,8 +5507,9 @@ function LnStaffPanel({ shop, user, toast }){
     ['diligMinDays','diligGrace','divisor','shiftHrs','otGrace'].forEach(k=>{ c[k]=parseFloat(c[k]); if(isNaN(c[k])) c[k]=LN_CFG_SEED()[k]; });
     Object.keys(c.pos||{}).forEach(pid=>{
       const d=LN_PC_DEF(pid), e=c.pos[pid]||{};
-      ['base','dilig','otMult','shiftHrs','minHrs'].forEach(k=>{ e[k]=parseFloat(e[k]); if(isNaN(e[k])) e[k]=d[k]; });
-      ['diligOn','ot','deduct','minRule'].forEach(k=>{ e[k]=e[k]?1:0; });
+      ['base','dilig','otMult','shiftHrs','minHrs','offQuota','extraRate','jobRate'].forEach(k=>{ e[k]=parseFloat(e[k]); if(isNaN(e[k])) e[k]=d[k]; });
+      ['diligOn','ot','deduct','minRule','jobOn'].forEach(k=>{ e[k]=e[k]?1:0; });
+      e.payMode=(e.payMode==='month')?'month':'day';
       c.pos[pid]=e;
     });
     delete c.rates;
@@ -5537,9 +5564,11 @@ function LnStaffPanel({ shop, user, toast }){
             return (
               <div key={p.id} className="text-[12.5px] mb-1" style={{color:'var(--muted)'}}>
                 {p.emoji} {p.name} <b className="num" style={{color:'var(--ink)'}}>{ocFmt(pc.base,0)}</b>
+                {pc.payMode==='month'? ' · เหมาเดือน (หยุดได้ '+pc.offQuota+' วัน · ทำแทน '+ocFmt(pc.extraRate,0)+'/วัน)' : ' · คิดรายวัน'}
                 {' · กะ '+pc.shiftHrs+' ชม.'}
                 {pc.ot? ' · OT ×'+pc.otMult : ' · ไม่มี OT'}
                 {pc.diligOn? ' · เบี้ยขยัน '+ocFmt(pc.dilig,0) : ' · ไม่มีเบี้ยขยัน'}
+                {pc.jobOn? ' · ค่าพับ '+ocFmt(pc.jobRate,0)+'/งาน' : ''}
                 {pc.deduct? '' : ' · ไม่หักชม.ขาด'}
                 {pc.minRule? ' · ขั้นต่ำ '+pc.minHrs+' ชม./วัน' : ''}
               </div>
@@ -5686,11 +5715,28 @@ function LnStaffPanel({ shop, user, toast }){
                     {!LN_POS_SEED.some(x=>x.id===p.id) && <button className="press" style={{border:'none',background:'none',color:'#B0483C',fontSize:16}} onClick={()=>delPos(p.id)}>✕</button>}
                   </div>
                   <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                    <button className="press kanit text-[12px] px-2.5 py-1 rounded-full"
+                      style={ e.payMode!=='month'? {background:'var(--primary)',color:'#fff',border:'none'}:{background:'var(--card)',border:'1px solid var(--line)',color:'var(--muted)'} }
+                      onClick={()=>setPC(p.id,'payMode','day')}>คิดรายวัน</button>
+                    <button className="press kanit text-[12px] px-2.5 py-1 rounded-full"
+                      style={ e.payMode==='month'? {background:'var(--primary)',color:'#fff',border:'none'}:{background:'var(--card)',border:'1px solid var(--line)',color:'var(--muted)'} }
+                      onClick={()=>setPC(p.id,'payMode','month')}>เหมาเดือน</button>
+                    {e.payMode==='month' && <React.Fragment>
+                      <span className="text-[11.5px]" style={{color:'var(--muted)'}}>หยุดได้</span>
+                      <input className="num" style={{...NUMW,width:40}} inputMode="numeric" value={e.offQuota!=null? e.offQuota:''} onChange={ev=>setPC(p.id,'offQuota',ev.target.value)}/>
+                      <span className="text-[11.5px]" style={{color:'var(--muted)'}}>วัน · ทำแทน</span>
+                      <input className="num" style={{...NUMW,width:52}} inputMode="numeric" value={e.extraRate!=null? e.extraRate:''} onChange={ev=>setPC(p.id,'extraRate',ev.target.value)}/>
+                      <span className="text-[11.5px]" style={{color:'var(--muted)'}}>฿/วัน</span>
+                    </React.Fragment>}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
                     {TG('ot','OT')}
                     {!!e.ot && <React.Fragment><span className="text-[11.5px]" style={{color:'var(--muted)'}}>×</span><input className="num" style={{...NUMW,width:44}} inputMode="decimal" value={e.otMult!=null? e.otMult:''} onChange={ev=>setPC(p.id,'otMult',ev.target.value)}/></React.Fragment>}
                     {TG('diligOn','เบี้ยขยัน')}
                     {!!e.diligOn && <input className="num" style={{...NUMW,width:56}} inputMode="numeric" value={e.dilig!=null? e.dilig:''} onChange={ev=>setPC(p.id,'dilig',ev.target.value)}/>}
                     {TG('deduct','หักชม.ขาด')}
+                    {TG('jobOn','ค่าพับ')}
+                    {!!e.jobOn && <React.Fragment><input className="num" style={{...NUMW,width:44}} inputMode="numeric" value={e.jobRate!=null? e.jobRate:''} onChange={ev=>setPC(p.id,'jobRate',ev.target.value)}/><span className="text-[11.5px]" style={{color:'var(--muted)'}}>฿/งาน</span></React.Fragment>}
                   </div>
                   <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
                     {TG('minRule','ขั้นต่ำ/วัน')}
@@ -6111,14 +6157,20 @@ function LnPayPanel({ shop, user, toast }){
             {isOpen && (
               <div className="mt-2 pt-2" style={{borderTop:'1px dashed var(--line)'}}>
                 <div className="flex flex-wrap gap-x-4 gap-y-1 text-[12.5px]">
-                  <span style={{color:'var(--muted)'}}>ฐาน ({r.days}ว) <b className="num" style={{color:'var(--ink)'}}>{ocFmt(r.base,0)}</b></span>
+                  <span style={{color:'var(--muted)'}}>{r.modeMonth? 'เหมาเดือน':'ฐาน ('+r.days+'ว)'} <b className="num" style={{color:'var(--ink)'}}>{ocFmt(r.base,0)}</b></span>
+                  {r.jobOn && <span style={{color:'var(--muted)'}}>พับ {r.jobN} งาน <b className="num" style={{color:'var(--ink)'}}>{ocFmt(r.jobB,0)}</b></span>}
                   {r.otOn? <span style={{color:'var(--muted)'}}>OT ×{r.otMult} · {r.otH} ชม. <b className="num" style={{color:'var(--ink)'}}>{ocFmt(r.otB,0)}</b></span> : <span style={{color:'var(--muted)'}}>ไม่มี OT</span>}
                   {r.holPay>0 && <span style={{color:'var(--muted)'}}>หยุด×2 <b className="num" style={{color:'var(--ink)'}}>{ocFmt(r.holPay,0)}</b></span>}
                   <span style={{color:'var(--muted)'}}>เบี้ยขยัน <b className="num" style={{color:'var(--ink)'}}>{ocFmt(r.dl,0)}</b></span>
-                  {r.bn!==0 && <span style={{color:'var(--muted)'}}>โบนัส/หัก <b className="num" style={{color:'var(--ink)'}}>{ocFmt(r.bn,0)}</b></span>}
+                  {r.bn!==0 && <span style={{color:'var(--muted)'}}>เงินพิเศษ{r.bnNote? ' ('+r.bnNote+')':''} <b className="num" style={{color:'var(--ink)'}}>{ocFmt(r.bn,0)}</b></span>}
                   {r.missB>0 && <span style={{color:'#B0483C'}}>หักขาด {r.missH} ชม. −{ocFmt(r.missB,0)}</span>}
                   <span style={{color:'var(--muted)'}}>สุทธิ <b className="num" style={{color:'var(--ink)'}}>{ocFmt(r.net,0)}</b></span>
                 </div>
+                {r.modeMonth && (
+                  <div className="text-[11px] mt-1" style={{color:'var(--muted)'}}>
+                    เหมาเดือน · ต้องเข้า {r.diligMinDays} วัน (หยุดได้ {r.offQuota}) · เข้าจริง {r.workedDays} วัน{r.extraDays? ' → ทำแทนวันหยุด +'+r.extraDays+' วัน ×'+ocFmt(r.extraRate,0) : ''}{r.offExcess? ' → หยุดเกินโควตา '+r.offExcess+' วัน −'+ocFmt(Math.round(r.dayRate),0)+'/วัน' : ''}
+                  </div>
+                )}
                 <div className="text-[11px] mt-1" style={{color:'var(--muted)'}}>
                   OT รวม {r.otMin} นาที → {r.otAuto} ชม.{r.otRestMin? ' (เศษ '+r.otRestMin+' น. ตัดทิ้ง)':''}{r.otManH? ' · เพิ่มมือ '+r.otManH+' ชม.':''} · เบี้ยขยัน{r.diligForced? (r.dgVal===1?' (บังคับให้)':' (บังคับตัด)') : (r.diligAuto?' ✓ ผ่านอัตโนมัติ':' ✗ ไม่ผ่าน ('+(r.lateDays? 'สาย '+r.lateDays+' วัน':'เข้า '+r.workedDays+'/'+r.diligMinDays+' วัน')+')')}
                 </div>
@@ -6130,9 +6182,16 @@ function LnPayPanel({ shop, user, toast }){
                   <label className="text-[12px]" style={{color:'var(--muted)'}}>OT เพิ่มมือ (ชม.)</label>
                   <input className="num" style={{...INP,width:58,textAlign:'right'}} inputMode="decimal" defaultValue={r.otManH||''} placeholder="0"
                     onBlur={e=>{ const v=parseFloat(e.target.value); saveMonth('ot',r.st.id, v? v:undefined); }}/>
-                  <label className="text-[12px]" style={{color:'var(--muted)'}}>โบนัส/หัก (฿)</label>
+                  {r.jobOn && <React.Fragment>
+                    <label className="text-[12px]" style={{color:'var(--muted)'}}>งานพับ (งาน)</label>
+                    <input className="num" style={{...INP,width:58,textAlign:'right'}} inputMode="numeric" defaultValue={r.jobN||''} placeholder="0"
+                      onBlur={e=>{ const v=parseFloat(e.target.value); saveMonth('job',r.st.id, v? v:undefined); }}/>
+                  </React.Fragment>}
+                  <label className="text-[12px]" style={{color:'var(--muted)'}}>เงินพิเศษ/หัก (฿)</label>
                   <input className="num" style={{...INP,width:70,textAlign:'right'}} inputMode="numeric" defaultValue={r.bn||''} placeholder="0"
                     onBlur={e=>{ const v=parseFloat(e.target.value); saveMonth('bonus',r.st.id, v? v:undefined); }}/>
+                  <input className="kanit" style={{...INP,width:110}} placeholder="ระบุเหตุผล" defaultValue={r.bnNote||''}
+                    onBlur={e=>{ const v=String(e.target.value||'').trim(); saveMonth('bnNote',r.st.id, v? v:undefined); }}/>
                   <button className="press kanit text-[12px] px-2.5 py-1 rounded-lg" style={{border:'none',background:advOpen===r.st.id?'var(--primary)':'var(--soft)',color:advOpen===r.st.id?'#fff':'inherit'}} onClick={()=>setAdvOpen(advOpen===r.st.id?null:r.st.id)}>💸 เบิก/หัก{r.advT>0?' −'+ocFmt(r.advT,0):''}</button>
                   <button className="press kanit text-[12px] px-2.5 py-1 rounded-lg" style={{border:'none',background:'var(--soft)'}} onClick={()=>lnPaySlipImage(pay,ym,shop.id,r.st.id,shop.brand? (shop.brand+' · '+shop.name):shop.name)}>🖼 สลิป</button>
                 </div>
