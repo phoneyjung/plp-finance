@@ -2648,7 +2648,7 @@ function CostPanel({toast}){
    ================================================================ */
 const OC_PAY_MONTHS=['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
 const OC_PAY_SEED={
-  cfg:{ base1:11200, base2:11500, base3:12000, dilig:500, divisor:26, avgPrice:36, otMult:2, shiftHrs:10,
+  cfg:{ base1:11200, base2:11500, base3:12000, dilig:500, diligGrace:0, divisor:26, avgPrice:36, otMult:2, shiftHrs:10,
         tiers:[{min:250,pool:150},{min:350,pool:300},{min:450,pool:450},{min:550,pool:600},{min:700,pool:800}] },
   staff:[ {id:'p1',name:'แซ็ค',phase:1,custom:0},{id:'p2',name:'เบส',phase:1,custom:0},{id:'p3',name:'อี๊ฟ',phase:1,custom:0},{id:'p4',name:'พ่อ',phase:1,custom:0} ],
   months:{}
@@ -2710,6 +2710,10 @@ function ocPayCalc(pay,ym){
       base=Math.round(baseUsed/(cfg.divisor||26)*days);
     }
     let otAuto=0, missH=0;
+    /* นับวันที่เข้าสาย เทียบกะประจำในโปรไฟล์ (ผ่อนผันตาม cfg.diligGrace) */
+    let lateDays=0, lateMin=0;
+    const shiftInMin = (st.shiftIn? ocPayMin(st.shiftIn) : null);
+    const dGrace = (cfg.diligGrace!=null? Number(cfg.diligGrace) : 0);
     for(let d=1;d<=nDays;d++){
       if(perDay[d].ids.indexOf(st.id)<0) continue;
       if(((hol[d]||[]).indexOf(st.id))>=0) continue;
@@ -2720,20 +2724,30 @@ function ocPayCalc(pay,ym){
           let hrs=ocPayNetHrs(tt);
           missH+=Math.floor(Math.max(0,(cfg.shiftHrs||10)-hrs));
           otAuto+=Math.floor(Math.max(0,hrs-(cfg.shiftHrs||10)));
+          if(shiftInMin!=null){
+            const late=mi-shiftInMin;
+            if(late>dGrace){ lateDays++; lateMin+=late; }
+          }
         }
       }
     }
     const otMan=Number(ot[st.id])||0;
     let otH=Math.round((otAuto+otMan)*100)/100;
     let otB=Math.round(otH*baseUsed/(cfg.divisor||26)/(cfg.shiftHrs||10)*(cfg.otMult||2));
-    let dl=(dg[st.id]===0)? 0 : (cfg.dilig||0);
+    /* เบี้ยขยัน: สายแม้วันเดียว = ตัดทั้งก้อน · กดปุ่มเพื่อบังคับให้/ไม่ให้ได้ */
+    const diligAuto = (lateDays===0);
+    let dl;
+    if(dg[st.id]===0) dl=0;                       /* กดปิดเอง */
+    else if(dg[st.id]===1) dl=(cfg.dilig||0);     /* กดเปิดเอง (ยกเว้นให้) */
+    else dl = diligAuto? (cfg.dilig||0) : 0;      /* อัตโนมัติตามการมาสาย */
     if(isMaid){ otAuto=0; otH=0; otB=0; dl=0; }
     const missB=Math.round(missH*hourRate);
     const advList=(adv[st.id]||[]);
     const advT=advList.reduce((s,e)=>s+(Number(e.amt)||0),0);
     const bn=Number(bonus[st.id])||0;
     const net = base+com+otB+dl+bn+holPay-missB;
-    return { st, isMaid, days, holDays, holPay, baseUsed, base, com, otAuto, otMan, otH, otB, dl, bn, missH, missB, advT, advList, quota, offDays, offExcess, extraDays, extraRate, net, toPay: net-advT };
+    const diligForced = (dg[st.id]===0 || dg[st.id]===1);
+    return { st, isMaid, days, holDays, holPay, baseUsed, base, com, otAuto, otMan, otH, otB, dl, bn, missH, missB, advT, advList, quota, offDays, offExcess, extraDays, extraRate, net, toPay: net-advT, lateDays, lateMin, diligAuto, diligForced };
   });
   const total=rows.reduce((s,r)=>s+r.net,0);
   const rev=cupsT*(cfg.avgPrice||0);
@@ -2768,7 +2782,8 @@ function ocPayBuildWorkbook(pay,ym){
   r1.push([cell('ยอดขั้นต่ำ (แก้ว/วัน)',sHead),cell('กองกลาง ฿/วัน',sHead)]);
   (cfg.tiers||[]).forEach(t=>r1.push([cell(t.min,sNum,'#,##0'),cell(t.pool,sYel,'#,##0')]));
   r1.push([]);
-  r1.push([cell('เบี้ยขยัน (฿/เดือน ไม่ขาด-ไม่สาย)',sTxt),cell(cfg.dilig,sYel,'#,##0')]);
+  r1.push([cell('เบี้ยขยัน (฿/เดือน ไม่สายเลยทั้งเดือน)',sTxt),cell(cfg.dilig,sYel,'#,##0')]);
+  r1.push([cell('ผ่อนผันสาย (นาที/วัน)',sTxt),cell(cfg.diligGrace||0,sYel,'#,##0')]);
   r1.push([cell('ตัวหารวันทำงาน/เดือน',sTxt),cell(cfg.divisor,sYel,'#,##0')]);
   r1.push([cell('ราคาขายเฉลี่ย/แก้ว (฿)',sTxt),cell(cfg.avgPrice,sYel,'#,##0')]);
   r1.push([cell('OT: คิดกี่เท่าของค่าแรง/ชม.',sTxt),cell(cfg.otMult,sYel,'#,##0.0')]);
@@ -4785,7 +4800,13 @@ function OCTabPay({ toast }){
   const updAdv=(id,i,k,v)=>setMon(m=>{ const a=m.adv||(m.adv={}); if(a[id]&&a[id][i]) a[id][i][k]=v; });
   const delAdv=(id,i)=>setMon(m=>{ const a=m.adv||(m.adv={}); if(a[id]) a[id].splice(i,1); });
   const setBonus=(id,v)=>setMon(m=>{ const b=m.bonus||(m.bonus={}); if(v===''||v==null) delete b[id]; else b[id]=parseFloat(v)||0; });
-  const togDilig=(id)=>setMon(m=>{ const g=m.dilig||(m.dilig={}); g[id]=(g[id]===0)?1:0; });
+  /* วน 3 สถานะ: อัตโนมัติ → บังคับให้ → บังคับตัด → อัตโนมัติ */
+  const togDilig=(id)=>setMon(m=>{
+    const g=m.dilig||(m.dilig={});
+    if(g[id]===undefined) g[id]=1;
+    else if(g[id]===1) g[id]=0;
+    else delete g[id];
+  });
   const setTime=(d,id,k,v)=>setMon(m=>{ const t=m.times||(m.times={}); const dd=t[d]||(t[d]={}); const e=dd[id]||(dd[id]={}); if(v) e[k]=v; else delete e[k]; });
   const clearTime=(d,id)=>setMon(m=>{ const t=m.times||(m.times={}); if(t[d]) delete t[d][id]; });
   const togHol=(d,id)=>setMon(m=>{ const hh=m.hol||(m.hol={}); const arr=hh[d]||(hh[d]=[]); const i=arr.indexOf(id); if(i>=0) arr.splice(i,1); else arr.push(id); });
@@ -4956,7 +4977,14 @@ function OCTabPay({ toast }){
               {r.missB>0 && <span style={{color:'var(--neg)'}}>หักขาด {r.missH}ชม. <b className="num">−{ocFmt(r.missB,0)}</b></span>}
               {!r.isMaid && <span>คอม <b className="num">{ocFmt(r.com,0)}</b></span>}
               {!r.isMaid && <span className="flex items-center gap-1">OT{r.otAuto>0? <span className="num"> {ocFmt(r.otAuto,1)}+</span>:null} <OCPayIn value={(mo.ot||{})[r.st.id]} onChange={v=>setOt(r.st.id,v)} w="44px" ph="เพิ่ม"/> <span>= <b className="num">{ocFmt(r.otH,1)}ชม. · {ocFmt(r.otB,0)}฿</b></span></span>}
-              {!r.isMaid && <button className="press kanit" style={chipS(r.dl>0)} onClick={()=>togDilig(r.st.id)}>เบี้ยขยัน {r.dl>0? ocFmt(r.dl,0) : '✗'}</button>}
+              {!r.isMaid && (
+                <button className="press kanit" style={chipS(r.dl>0)} onClick={()=>togDilig(r.st.id)}
+                  title={r.lateDays>0? ('สาย '+r.lateDays+' วัน รวม '+r.lateMin+' นาที') : 'ไม่สายเลยทั้งเดือน'}>
+                  เบี้ยขยัน {r.dl>0? ocFmt(r.dl,0) : '✗'}
+                  {r.lateDays>0 && <span style={{opacity:.8,fontSize:11}}> · สาย {r.lateDays}ว</span>}
+                  {r.diligForced && <span style={{opacity:.7,fontSize:11}}> ✋</span>}
+                </button>
+              )}
               <span className="flex items-center gap-1">โบนัส/หัก <OCPayIn value={(mo.bonus||{})[r.st.id]} onChange={v=>setBonus(r.st.id,v)} w="56px" ph="0"/></span>
               {r.advT>0 && <span style={{color:'var(--neg)'}}>เบิก/หัก <b className="num">−{ocFmt(r.advT,0)}</b></span>}
             </div>
@@ -5014,6 +5042,7 @@ function OCTabPay({ toast }){
             <div className="kanit text-[13px] mb-1">⚙️ อื่นๆ</div>
             <div className="flex items-center gap-x-2 gap-y-1.5 flex-wrap text-[12px]" style={{color:'var(--muted)'}}>
               <span>เบี้ยขยัน</span><OCPayIn value={cfg.dilig} onChange={v=>setCfg('dilig',v)} w="56px"/>
+              <span>ผ่อนผันสาย (นาที)</span><OCPayIn value={cfg.diligGrace!=null?cfg.diligGrace:0} onChange={v=>setCfg('diligGrace',v)} w="46px"/>
               <span>ตัวหารวัน</span><OCPayIn value={cfg.divisor} onChange={v=>setCfg('divisor',v)} w="44px"/>
               <span>ราคาเฉลี่ย</span><OCPayIn value={cfg.avgPrice} onChange={v=>setCfg('avgPrice',v)} w="48px"/>
               <span>OT ×</span><OCPayIn value={cfg.otMult} onChange={v=>setCfg('otMult',v)} w="40px"/>
