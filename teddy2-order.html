@@ -9,6 +9,9 @@
 <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-auth-compat.js"></script>
 <style>
 :root{
   --cream:#FBF6EC; --card:#fff; --blue:#5BB8E8; --blue-d:#2E8FC4;
@@ -235,6 +238,45 @@ label.fl span{font-weight:600}
 </div>
 
 <script>
+var BRAND='teddy2', PFX='T2';
+var DB=null;
+(function(){
+  try{
+    firebase.initializeApp({
+      apiKey: "AIzaSyDGTH_hCsA7SyrmCCOcnCBPm_wcKvplSW8",
+    authDomain: "plp-laundromat.firebaseapp.com",
+    projectId: "plp-laundromat",
+    storageBucket: "plp-laundromat.firebasestorage.app",
+    messagingSenderId: "1012941920819",
+    appId: "1:1012941920819:web:bb0c7c300d0111b83a6146"
+    });
+    DB=firebase.firestore();
+    firebase.auth().signInAnonymously().catch(function(){});
+  }catch(e){ DB=null; }
+})();
+
+/* รหัสงาน: T2-260901-003  (แบรนด์-วันที่-คิวของวัน) */
+function todayKey(){
+  var d=new Date(Date.now()+7*3600*1000);
+  return d.toISOString().slice(2,10).replace(/-/g,'');
+}
+function nextCode(){
+  var day=todayKey();
+  if(!DB) return Promise.resolve(PFX+'-'+day+'-'+String(Math.floor(Math.random()*900)+100));
+  var ref=DB.collection('webOrderCounters').doc(BRAND+'-'+day);
+  return DB.runTransaction(function(tx){
+    return tx.get(ref).then(function(d){
+      var n=(d.exists? (d.data().n||0) : 0)+1;
+      tx.set(ref,{ n:n, brand:BRAND, day:day },{merge:true});
+      return n;
+    });
+  }).then(function(n){
+    return PFX+'-'+day+'-'+String(n).padStart(3,'0');
+  }).catch(function(){
+    return PFX+'-'+day+'-'+String(Math.floor(Math.random()*900)+100);
+  });
+}
+
 var SHOP = { name:'Teddy Wash & Dry สาขา 2 (ม.ศิลปากร)', oa:'@736vkujr' };
 var WASH = [
   { kg:12, hint:'ผ้า 1 คน/สัปดาห์', p:{cold:50,warm:60,hot:70} },
@@ -487,9 +529,60 @@ el('send').addEventListener('click',function(){
 function closeSheet(){ el('ovl').className='ovl'; }
 el('ovl').addEventListener('click',closeSheet);
 
+/* แปลงตะกร้า → รูปแบบเดียวกับแอปร้าน */
+function toAppItems(){
+  var wi=[], di=[];
+  WASH.forEach(function(m,i){ var q=st.wash[i]||0; if(q) wi.push({ size:m.kg, qty:q, temp:(st.wt[i]||'cold') }); });
+  DRY.forEach(function(m,i){ var q=st.dry[i]||0; if(q) di.push({ size:m.kg, qty:q, temp:(st.dt[i]||'warm') }); });
+  return { washItems:wi, dryItems:di };
+}
+function saveOrder(code,text){
+  if(!DB) return Promise.resolve();
+  var c=calc(), it=toAppItems();
+  return DB.collection('webOrders').add({
+    code: code,
+    brand: BRAND,
+    status: 'new',
+    customerName: el('name').value.trim(),
+    customerPhone: el('tel').value.trim(),
+    address: el('addr').value.trim(),
+    lat: GEO? GEO.lat : null,
+    lng: GEO? GEO.lng : null,
+    mapUrl: GEO? geoUrl() : '',
+    mode: c.mode,
+    deliveryZone: (c.needShip && ZONE)? ZONE.name : null,
+    deliveryFee: c.ship||0,
+    washItems: it.washItems,
+    dryItems: it.dryItems,
+    wantFold: !!c.fold,
+    wantSeparate: !!c.sep,
+    pickupTime: el('pick').value,
+    note: el('memo').value.trim(),
+    washTotal: c.w, dryTotal: c.dr, grandTotal: c.tot,
+    text: text,
+    fromLine: true,
+    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    createdLocal: new Date().toISOString()
+  });
+}
+
 el('copyBtn').addEventListener('click',function(){
-  var t=el('msg').textContent;
-  /* คัดลอกไว้ก่อนเป็นตัวสำรอง เผื่อข้อความยาวเกินหรือเปิดแชทไม่ได้ */
+  var btn=this;
+  btn.disabled=true; btn.textContent='กำลังส่ง…';
+  nextCode().then(function(code){
+    var t='🎫 รหัสงาน '+code+'\n'+el('msg').textContent;
+    return saveOrder(code,t).catch(function(){}).then(function(){ return t; });
+  }).then(function(t){
+    btn.disabled=false; btn.textContent='ส่งเข้าไลน์ร้าน';
+    goLine(t);
+  }).catch(function(){
+    btn.disabled=false; btn.textContent='ส่งเข้าไลน์ร้าน';
+    goLine(el('msg').textContent);
+  });
+});
+
+function goLine(t){
+  /* คัดลอกไว้ก่อนเป็นตัวสำรอง */
   try{
     if(navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t);
     else{
@@ -502,7 +595,7 @@ el('copyBtn').addEventListener('click',function(){
   /* เปิดแชทร้าน พร้อมข้อความอยู่ในช่องพิมพ์แล้ว */
   var oa=encodeURIComponent(SHOP.oa);
   window.location.href='https://line.me/R/oaMessage/'+oa+'/?'+encodeURIComponent(t);
-});
+}
 
 el('geoBtn').addEventListener('click',askGeo);
 ['fold','sep'].forEach(function(id){ el(id).addEventListener('change',calc); });
