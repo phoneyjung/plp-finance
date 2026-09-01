@@ -2747,7 +2747,7 @@ function ocPayCalc(pay,ym){
           const gr=(cfg.otGrace!=null? Number(cfg.otGrace) : 15);
           /* หักช่วงผ่อนผันออกก่อน — เช่น ผ่อนผัน 15 น. ออกช้า 16 น. = OT 1 นาที */
           if(diffM>gr) otMin+=(diffM-gr);
-          else if(diffM<-gr) missMin+=(-diffM-gr);
+          else if(diffM<-gr && !isPartner) missMin+=(-diffM-gr);   /* หุ้นส่วนไม่หักชั่วโมงขาด */
           if(shiftInMin!=null){
             const late=mi-shiftInMin;
             if(late>dGrace){ lateDays++; lateMin+=late; }
@@ -2773,6 +2773,7 @@ function ocPayCalc(pay,ym){
     else if(dg[st.id]===1) dl=(cfg.dilig||0);     /* กดเปิดเอง (ยกเว้นให้) */
     else dl = diligAuto? (cfg.dilig||0) : 0;      /* อัตโนมัติตามการมาสาย */
     if(isMaid){ otMin=0; otH=0; otB=0; dl=0; }
+    if(isPartner){ missMin=0; missH=0; }   /* หุ้นส่วน: ตัดทั้งวันถ้าไม่ถึงขั้นต่ำ · ไม่หักรายชั่วโมง */
     const missB=Math.round(missH*hourRate);
     const advList=(adv[st.id]||[]);
     const advT=advList.reduce((s,e)=>s+(Number(e.amt)||0),0);
@@ -2940,6 +2941,8 @@ function ocPayAbsent(pay,ym,stId){
 function ocPayPersonDays(pay,ym,stId){
   const m=pay.months[ym]||{}; const cups=m.cups||{}, times=m.times||{}, hol=m.hol||{};
   const cfg=pay.cfg; const calc=ocPayCalc(pay,ym); const out=[];
+  const stObj=(pay.staff||[]).find(x=>x.id===stId);
+  const isPtn=!!(stObj && stObj.kind==='partner');
   for(let d=1;d<=calc.nDays;d++){
     const pd=calc.perDay[d]; if(!pd || pd.ids.indexOf(stId)<0){ out.push({ d, off:true }); continue; }
     const isHol=((hol[d]||[]).indexOf(stId))>=0;
@@ -2951,7 +2954,7 @@ function ocPayPersonDays(pay,ym,stId){
     if(!isHol && hrs!=null){
       const diffM=Math.round((hrs-(cfg.shiftHrs||10))*60);
       if(diffM>gr) otM=diffM-gr;
-      else if(diffM<-gr) missM=(-diffM)-gr;
+      else if(diffM<-gr && !isPtn) missM=(-diffM)-gr;
     }
     out.push({ d, cups:Number(cups[d])||0, com: pd.comIds.indexOf(stId)>=0? pd.each:0, tin:tt.i||'', tout:tt.o||'', brk:Number(tt.b)||0, hrs, otM, missM, isHol });
   }
@@ -3054,8 +3057,12 @@ async function ocPayPersonImage(pay,ym,stId){
   g.fillStyle='#9A8F7E'; g.font=F(400,12.5); g.textAlign='left';
   g.fillText('* OT: หักผ่อนผัน '+(pay.cfg.otGrace!=null?pay.cfg.otGrace:15)+' นาทีแรกออกก่อน (ออกช้า '+((pay.cfg.otGrace!=null?Number(pay.cfg.otGrace):15)+1)+' นาที = OT 1 นาที) · รวมทั้งเดือนแล้วแปลงเป็นชั่วโมง เศษตัดทิ้ง',32,y+80);
   g.fillText('* จ่าย OT '+(pay.cfg.otMult||2)+' เท่าของค่าจ้างต่อชั่วโมง · หากพบข้อมูลไม่ตรง แจ้งหัวหน้าได้ทันที',32,y+100);
+  if(r.isPartner){
+    g.fillStyle='#8A6410';
+    g.fillText('* หุ้นส่วน: วันที่ทำไม่ถึง '+(r.myMinHrs||5)+' ชม. จะไม่นับเป็นวันทำงาน (ไม่ได้ค่าแรงและคอมวันนั้น) · ไม่มีการหักชั่วโมงขาด',32,y+118);
+  }
   g.fillStyle='#B7A88F'; g.font=F(400,13); g.textAlign='left';
-  g.fillText('OWL CHA · สาขา ม.ศิลปากร · สร้างจากแอป PLP Finance',32,y+128);
+  g.fillText('OWL CHA · สาขา ม.ศิลปากร · สร้างจากแอป PLP Finance',32,y+(r.isPartner?150:128));
   const a=document.createElement('a');
   a.download='payslip-'+ym+'-E'+String(idx).padStart(2,'0')+'.png';
   a.href=cv.toDataURL('image/png');
