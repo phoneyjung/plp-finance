@@ -15,7 +15,7 @@
   --sh:0 6px 20px rgba(20,58,96,.08); --sh2:0 10px 30px rgba(20,58,96,.14);
 }
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-body{font-family:'Kanit',sans-serif;background:var(--cream);color:var(--ink);padding-bottom:150px}
+body{font-family:'Kanit',sans-serif;background:var(--cream);color:var(--ink);padding-bottom:28px}
 .wrap{max-width:560px;margin:0 auto;padding:0 14px}
 header{background:linear-gradient(180deg,#EAF5FC,var(--cream));padding:18px 0 10px;text-align:center}
 header img{width:64px;height:64px;border-radius:50%;border:3px solid #fff;box-shadow:var(--sh)}
@@ -50,10 +50,9 @@ input.f,textarea.f,select.f{width:100%;font-family:'Kanit';font-size:15px;border
   border-radius:13px;padding:11px 12px;background:var(--card);color:var(--ink);outline:none}
 input.f:focus,textarea.f:focus{border-color:var(--blue)}
 textarea.f{min-height:74px;resize:vertical}
-.sumbar{position:fixed;left:0;right:0;bottom:0;z-index:40;background:rgba(255,255,255,.97);
-  border-top:1px solid var(--line);box-shadow:0 -6px 22px rgba(20,58,96,.10);
-  padding:11px 14px calc(11px + env(safe-area-inset-bottom))}
-.sumbar .in{max-width:560px;margin:0 auto}
+.sumbar{background:var(--card);border-radius:20px;box-shadow:var(--sh);padding:15px;margin-bottom:12px}
+.sumbar .in{max-width:100%}
+.sumbar h2{margin-bottom:9px}
 .sline{display:flex;justify-content:space-between;font-size:13px;color:var(--muted);margin-bottom:3px}
 .sline b{color:var(--ink);font-weight:600}
 .stot{display:flex;justify-content:space-between;align-items:baseline;margin:4px 0 8px}
@@ -199,22 +198,23 @@ label.fl span{font-weight:600}
     <div class="err" id="err">กรอกชื่อ เบอร์โทร และที่อยู่ให้ครบก่อนนะคะ</div>
   </div>
 
-  <div class="note" style="margin-bottom:8px">
-    ราคานี้เป็นการประเมินเบื้องต้น · จำนวนเครื่องจริงขึ้นอยู่กับปริมาณผ้า<br>
-    แม่บ้านจะยืนยันยอดอีกครั้งทางไลน์ก่อนเริ่มซัก
-  </div>
-</div>
-
-<div class="sumbar">
-  <div class="in">
+  <div class="sumbar">
+    <h2>💵 สรุปยอด</h2>
+    <div class="in">
     <div class="sline"><span id="sumWash">ค่าซัก</span><b id="pWash">0฿</b></div>
     <div class="sline"><span id="sumDry">ค่าอบ</span><b id="pDry">0฿</b></div>
     <div class="sline" id="rowFold" style="display:none"><span>ฝากพับผ้า</span><b class="free">ฟรี</b></div>
     <div class="sline"><span>ค่าส่ง</span><b id="pShip">0฿</b></div>
     <div class="stot"><span>รวมทั้งหมด</span><b id="pTot">0฿</b></div>
-    <div class="needs" id="needs"><b>ยังกรอกไม่ครบ</b><ul id="needList"></ul></div>
-    <button class="btn" id="send" disabled>ส่งรายการให้ร้าน</button>
-    <div class="hint">กดแล้วจะได้ข้อความสรุป ส่งต่อในไลน์ได้ทันที</div>
+      <div class="needs" id="needs"><b>ยังกรอกไม่ครบ</b><ul id="needList"></ul></div>
+      <button class="btn" id="send">ส่งรายการให้ร้าน</button>
+      <div class="hint">กดแล้วจะได้ข้อความสรุป ส่งต่อในไลน์ได้ทันที</div>
+    </div>
+  </div>
+
+  <div class="note" style="margin-bottom:8px">
+    ราคานี้เป็นการประเมินเบื้องต้น · จำนวนเครื่องจริงขึ้นอยู่กับปริมาณผ้า<br>
+    แม่บ้านจะยืนยันยอดอีกครั้งทางไลน์ก่อนเริ่มซัก
   </div>
 </div>
 
@@ -296,6 +296,7 @@ function setT(k,i,t){ st[k][i]=t; (k==='wt'?renderWash:renderDry)(); calc(); }
 
 var MODE='both';
 var GEO=null;
+var TRIED=false, NEED=[];
 
 function geoLabel(){
   var b=el('geoBtn'), o=el('geoOk');
@@ -347,7 +348,7 @@ function calc(){
   if(sep && dn>0 && dn<2) wr.push('ถ้าจะอบด้วย ต้องใช้เครื่องอบอย่างน้อย 2 เครื่อง (ตอนนี้ '+dn+')');
   if(fold && dn===0) wr.push('ฝากพับผ้า ต้องเลือกเครื่องอบด้วย เพราะต้องอบให้แห้งก่อนพับ');
   el('sepWarn').innerHTML = wr.length? ('⚠️ '+wr.join('<br>⚠️ ')) : '';
-  el('sepWarn').className = wr.length? 'warn on':'warn';
+  el('sepWarn').className = (TRIED && wr.length)? 'warn on':'warn';
 
   if((wn+dn)===0) need.push('เลือกเครื่องซักหรือเครื่องอบอย่างน้อย 1 เครื่อง');
   wr.forEach(function(t){ need.push(t); });
@@ -357,8 +358,9 @@ function calc(){
   if(needShip && ship==null)   need.push('กดเช็คค่าส่ง แล้วใส่ราคาที่ได้');
 
   el('needList').innerHTML = need.map(function(t){ return '<li>'+t+'</li>'; }).join('');
-  el('needs').className = need.length? 'needs on':'needs';
-  el('send').disabled = need.length>0;
+  /* โชว์รายการที่ขาด เฉพาะหลังกดส่งแล้วยังไม่ครบ */
+  el('needs').className = (TRIED && need.length)? 'needs on':'needs';
+  NEED = need;
 
   el('shipBox').style.display = needShip? '':'none';
   el('geoBox').style.display = needShip? '':'none';
@@ -425,6 +427,11 @@ function build(){
 }
 
 el('send').addEventListener('click',function(){
+  TRIED=true; calc();
+  if(NEED.length){
+    el('needs').scrollIntoView({behavior:'smooth',block:'center'});
+    return;
+  }
   el('msg').textContent = build();
   el('ovl').className='ovl on';
 });
