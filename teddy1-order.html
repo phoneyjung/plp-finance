@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<title>Teddy Wash &amp; Dry · สาขา 1 · สั่งเดลิเวอรี่</title>
+<link rel="icon" href="logo-teddy.jpg">
+<link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --cream:#FBF6EC; --card:#fff; --blue:#5BB8E8; --blue-d:#2E8FC4;
+  --navy:#143A60; --gold:#C68B4A; --muted:#8A95A0; --ink:#243240;
+  --line:#ECE5D6; --soft:#F6F1E6; --green:#2A8A52; --neg:#CE4A5A;
+  --sh:0 6px 20px rgba(20,58,96,.08); --sh2:0 10px 30px rgba(20,58,96,.14);
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{font-family:'Kanit',sans-serif;background:var(--cream);color:var(--ink);padding-bottom:150px}
+.wrap{max-width:560px;margin:0 auto;padding:0 14px}
+header{background:linear-gradient(180deg,#EAF5FC,var(--cream));padding:18px 0 10px;text-align:center}
+header img{width:64px;height:64px;border-radius:50%;border:3px solid #fff;box-shadow:var(--sh)}
+h1{font-size:20px;font-weight:800;color:var(--navy);margin-top:6px}
+.sub{font-size:12.5px;color:var(--muted);font-weight:300;margin-top:2px}
+.card{background:var(--card);border-radius:20px;box-shadow:var(--sh);padding:15px;margin-bottom:12px}
+h2{font-size:15.5px;font-weight:700;color:var(--navy);margin-bottom:3px}
+h2 small{display:block;font-size:11.5px;font-weight:300;color:var(--muted);margin-top:2px}
+.mrow{display:flex;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid var(--line)}
+.mrow:last-child{border-bottom:none}
+.mname{flex:1;min-width:0}
+.mname b{font-size:14.5px;font-weight:600;display:block}
+.mname i{font-style:normal;font-size:11.5px;color:var(--muted);font-weight:300}
+.qty{display:flex;align-items:center;gap:9px;flex:none}
+.qb{width:32px;height:32px;border-radius:11px;border:1.5px solid var(--line);background:var(--card);
+  font-size:18px;font-weight:600;color:var(--blue-d);cursor:pointer;line-height:1;font-family:'Kanit'}
+.qb:active{transform:scale(.92)}
+.qb[disabled]{opacity:.3}
+.qn{min-width:24px;text-align:center;font-size:16px;font-weight:700}
+.temps{display:flex;gap:6px;margin:8px 0 2px;padding-left:2px}
+.tb{flex:1;border:1.5px solid var(--line);background:var(--card);border-radius:12px;padding:7px 2px;
+  font-family:'Kanit';font-size:12.5px;font-weight:500;cursor:pointer;text-align:center;color:var(--ink)}
+.tb b{display:block;font-size:13px;font-weight:700}
+.tb i{font-style:normal;font-size:10.5px;color:var(--muted);font-weight:300}
+.tb.on{color:#fff;border-color:transparent}
+.tb.on i{color:rgba(255,255,255,.85)}
+.tb.on.cold{background:#5BA7D6} .tb.on.warm{background:#E0A33C} .tb.on.hot{background:#D6655
+5}
+.tb.on.cool{background:#7FB7DA} .tb.on.dwarm{background:#E0A33C} .tb.on.dhot{background:#D66555}
+label.fl{display:block;font-size:12px;color:var(--muted);margin:10px 0 4px;font-weight:400}
+input.f,textarea.f,select.f{width:100%;font-family:'Kanit';font-size:15px;border:1.5px solid var(--line);
+  border-radius:13px;padding:11px 12px;background:var(--card);color:var(--ink);outline:none}
+input.f:focus,textarea.f:focus{border-color:var(--blue)}
+textarea.f{min-height:74px;resize:vertical}
+.sumbar{position:fixed;left:0;right:0;bottom:0;z-index:40;background:rgba(255,255,255,.97);
+  border-top:1px solid var(--line);box-shadow:0 -6px 22px rgba(20,58,96,.10);
+  padding:11px 14px calc(11px + env(safe-area-inset-bottom))}
+.sumbar .in{max-width:560px;margin:0 auto}
+.sline{display:flex;justify-content:space-between;font-size:13px;color:var(--muted);margin-bottom:3px}
+.sline b{color:var(--ink);font-weight:600}
+.stot{display:flex;justify-content:space-between;align-items:baseline;margin:4px 0 8px}
+.stot span{font-size:13.5px;color:var(--muted)}
+.stot b{font-size:26px;font-weight:800;color:var(--blue-d)}
+.btn{display:block;width:100%;text-align:center;border:none;border-radius:15px;padding:13px;
+  font-family:'Kanit';font-size:16px;font-weight:700;color:#fff;cursor:pointer;
+  background:linear-gradient(135deg,#06C755,#04A648)}
+.btn:active{transform:scale(.985)}
+.btn[disabled]{background:#C9D2DA;cursor:default}
+.hint{font-size:11px;color:var(--muted);text-align:center;margin-top:6px;font-weight:300}
+.free{color:var(--green);font-weight:700}
+.strike{text-decoration:line-through;opacity:.45;margin-right:6px;font-weight:400}
+.note{background:var(--soft);border-radius:13px;padding:10px 12px;font-size:12.5px;
+  color:var(--muted);line-height:1.65;margin-top:10px}
+.ovl{position:fixed;inset:0;background:rgba(20,26,34,.6);z-index:60;display:none;
+  align-items:flex-end;justify-content:center}
+.ovl.on{display:flex}
+.sheet{background:var(--card);width:100%;max-width:560px;border-radius:22px 22px 0 0;padding:16px;
+  max-height:88vh;overflow:auto;padding-bottom:calc(20px + env(safe-area-inset-bottom))}
+.sheet h3{font-size:17px;font-weight:700;color:var(--navy);margin-bottom:8px}
+pre.msg{background:var(--soft);border-radius:14px;padding:13px;font-family:'Kanit';font-size:13.5px;
+  line-height:1.75;white-space:pre-wrap;word-break:break-word;color:var(--ink);margin-bottom:12px}
+.brow{display:flex;gap:8px}
+.brow .btn{flex:1}
+.btn.gray{background:var(--soft);color:var(--ink)}
+.err{color:var(--neg);font-size:12px;margin-top:4px;display:none}
+.err.on{display:block}
+.chkbtn{display:flex;align-items:center;gap:11px;text-decoration:none;
+  background:linear-gradient(135deg,#EAF5FC,#DCEDF9);border:2px solid #A9D6F0;
+  border-radius:15px;padding:12px 13px;margin-bottom:4px}
+.chkbtn .ic{font-size:22px;flex:none}
+.chkbtn .tx{flex:1}
+.chkbtn .tx b{display:block;font-size:14px;font-weight:700;color:var(--navy)}
+.chkbtn .tx i{font-style:normal;font-size:11.5px;color:#5A7E9B;font-weight:300}
+.chkbtn .ar{font-size:19px;color:var(--blue-d);flex:none}
+.chkbtn:active{transform:scale(.985)}
+.warn{display:none;background:#FDF0DC;border-radius:12px;padding:10px 12px;margin-top:9px;
+  font-size:12.5px;line-height:1.6;color:#8A6410}
+.warn.on{display:block}
+.opts{display:flex;flex-direction:column;gap:8px;margin-bottom:12px}
+.ob{display:block;width:100%;text-align:left;font-family:'Kanit';cursor:pointer;
+  border:1.5px solid var(--line);background:var(--card);border-radius:14px;padding:11px 13px;color:var(--ink)}
+.ob b{display:block;font-size:14.5px;font-weight:600}
+.ob i{font-style:normal;font-size:11.5px;color:var(--muted);font-weight:300}
+.ob.on{border-color:var(--blue-d);background:#EFF8FD}
+.ob.on b{color:var(--blue-d)}
+.gbtn{display:flex;align-items:center;gap:10px;width:100%;text-align:left;font-family:'Kanit';
+  cursor:pointer;border:2px dashed #A9D6F0;background:#F3FAFE;border-radius:14px;padding:11px 13px;
+  color:var(--ink);margin-top:9px}
+.gbtn .ic{font-size:20px;flex:none}
+.gbtn .tx b{display:block;font-size:14px;font-weight:700;color:var(--navy)}
+.gbtn .tx i{font-style:normal;font-size:11.5px;color:#5A7E9B;font-weight:300}
+.gbtn:active{transform:scale(.985)}
+.gbtn.done{border-style:solid;border-color:#34C26A;background:#EDF9F1}
+.gbtn.done .tx b{color:#1C6B3C}
+.geook{display:none;font-size:12px;color:#2A8A52;margin-top:6px;padding-left:4px}
+.geook.on{display:block}
+.geook a{color:var(--blue-d);font-weight:600}
+.needs{background:#FDECEE;border-radius:13px;padding:10px 12px;margin-bottom:9px;display:none}
+.needs.on{display:block}
+.needs b{font-size:12.5px;color:#8E2B39;display:block;margin-bottom:3px}
+.needs ul{margin:0;padding-left:18px}
+.needs li{font-size:12px;color:#A65563;line-height:1.7}
+label.fl span{font-weight:600}
+</style>
+</head>
+<body>
+
+<header>
+  <img src="logo-teddy.jpg" alt="" onerror="this.style.display='none'">
+  <h1>Teddy Wash &amp; Dry · สาขา 1</h1>
+  <div class="sub">รับ-ส่งผ้าถึงที่ · กรอกแล้วส่งให้ร้านได้เลย</div>
+</header>
+
+<div class="wrap">
+
+  <div class="card">
+    <h2>🫧 เครื่องซัก<small>เลือกขนาดและจำนวนเครื่องที่ต้องการ</small></h2>
+    <div id="washList"></div>
+  </div>
+
+  <div class="card">
+    <h2>🔥 เครื่องอบ<small>ไม่อบก็ได้ ถ้าจะเอาไปตากเอง</small></h2>
+    <div id="dryList"></div>
+  </div>
+
+  <div class="card">
+    <h2>🧺 บริการเสริม</h2>
+    <div class="mrow">
+      <div class="mname"><b>ฝากพับผ้า</b><i>ฟรี · ต้องอบให้แห้งก่อนถึงพับได้</i></div>
+      <label style="display:flex;align-items:center;gap:7px;font-size:13.5px">
+        <input type="checkbox" id="fold" style="width:19px;height:19px;accent-color:var(--blue-d)"> ต้องการ
+      </label>
+    </div>
+    <div class="mrow">
+      <div class="mname"><b>แยกผ้าสี / ผ้าขาว</b><i>ต้องใช้เครื่องซักอย่างน้อย 2 เครื่อง</i></div>
+      <label style="display:flex;align-items:center;gap:7px;font-size:13.5px">
+        <input type="checkbox" id="sep" style="width:19px;height:19px;accent-color:var(--blue-d)"> ต้องการ
+      </label>
+    </div>
+    <div class="warn" id="sepWarn"></div>
+  </div>
+
+  <div class="card">
+    <h2>🛵 ค่าจัดส่ง</h2>
+    <div class="opts" id="mode">
+      <button class="ob on" data-m="both"><b>🛵 ให้ร้านไปรับ–ส่งคืน</b><i>กดแล้วเปิดแผนที่เช็คค่าส่งให้เลย</i></button>
+      <button class="ob" data-m="self"><b>🚶 มาส่ง–มารับเอง</b><i>ไม่เสียค่าส่ง</i></button>
+    </div>
+    <div id="shipBox">
+      <label class="fl">ค่าส่งที่เช็คได้ (บาท) <span style="color:var(--neg)">*</span></label>
+      <input class="f" id="ship" inputmode="numeric" placeholder="ใส่ราคาจากหน้าแผนที่">
+      <div class="note" style="margin-top:8px">ยังไม่รู้ราคา?
+        <a href="https://phoneyjung.github.io/washanddry-delivery/" target="_blank" rel="noopener"
+           style="color:var(--blue-d);font-weight:600">เปิดแผนที่เช็คอีกครั้ง →</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>📍 ข้อมูลจัดส่ง</h2>
+    <label class="fl">ชื่อผู้รับ <span style="color:var(--neg)">*</span></label>
+    <input class="f" id="name" placeholder="ชื่อเล่นก็ได้">
+    <label class="fl">เบอร์โทร <span style="color:var(--neg)">*</span></label>
+    <input class="f" id="tel" inputmode="tel" placeholder="08x-xxx-xxxx">
+    <label class="fl" id="addrLb">ที่อยู่ / หอพัก / ห้อง <span style="color:var(--neg)">*</span></label>
+    <textarea class="f" id="addr" placeholder="เช่น หอพักสุขใจ ห้อง 302 ซอย..."></textarea>
+    <div id="geoBox">
+      <button class="gbtn" id="geoBtn"><span class="ic">📍</span><span class="tx"><b>แนบพิกัดที่อยู่</b><i>ช่วยให้คนส่งหาเจอง่ายขึ้นมาก</i></span></button>
+      <div class="geook" id="geoOk"></div>
+    </div>
+    <label class="fl">เวลาที่สะดวกให้ไปรับผ้า</label>
+    <select class="f" id="pick">
+      <option>เร็วที่สุด</option>
+      <option>ช่วงเช้า 10:00–13:00</option>
+      <option>ช่วงบ่าย 13:00–16:00</option>
+      <option>ช่วงเย็น 16:00–21:00</option>
+      <option>นัดเวลาอื่น (แจ้งในไลน์)</option>
+    </select>
+    <label class="fl">หมายเหตุถึงร้าน (ถ้ามี)</label>
+    <textarea class="f" id="memo" placeholder="เช่น มีผ้าห่มผืนใหญ่ 1 ผืน · ระวังเสื้อสีตก"></textarea>
+    <div class="err" id="err">กรอกชื่อ เบอร์โทร และที่อยู่ให้ครบก่อนนะคะ</div>
+  </div>
+
+  <div class="note" style="margin-bottom:8px">
+    ราคานี้เป็นการประเมินเบื้องต้น · จำนวนเครื่องจริงขึ้นอยู่กับปริมาณผ้า<br>
+    แม่บ้านจะยืนยันยอดอีกครั้งทางไลน์ก่อนเริ่มซัก
+  </div>
+</div>
+
+<div class="sumbar">
+  <div class="in">
+    <div class="sline"><span id="sumWash">ค่าซัก</span><b id="pWash">0฿</b></div>
+    <div class="sline"><span id="sumDry">ค่าอบ</span><b id="pDry">0฿</b></div>
+    <div class="sline" id="rowFold" style="display:none"><span>ฝากพับผ้า</span><b class="free">ฟรี</b></div>
+    <div class="sline"><span>ค่าส่ง</span><b id="pShip">0฿</b></div>
+    <div class="stot"><span>รวมทั้งหมด</span><b id="pTot">0฿</b></div>
+    <div class="needs" id="needs"><b>ยังกรอกไม่ครบ</b><ul id="needList"></ul></div>
+    <button class="btn" id="send" disabled>ส่งรายการให้ร้าน</button>
+    <div class="hint">กดแล้วจะได้ข้อความสรุป ส่งต่อในไลน์ได้ทันที</div>
+  </div>
+</div>
+
+<div class="ovl" id="ovl">
+  <div class="sheet" onclick="event.stopPropagation()">
+    <h3>📋 สรุปรายการของคุณ</h3>
+    <pre class="msg" id="msg"></pre>
+    <div class="brow">
+      <button class="btn gray" onclick="closeSheet()">แก้ไข</button>
+      <button class="btn" id="copyBtn">คัดลอก + เปิดไลน์</button>
+    </div>
+    <div class="hint">คัดลอกแล้ววางในแชทไลน์ของร้านได้เลย</div>
+  </div>
+</div>
+
+<script>
+var SHOP = { name:'Teddy Wash & Dry สาขา 1', line:'https://lin.ee/REPLACE_ME_T1' };
+var WASH = [
+  { kg:10, hint:'ผ้า 1 คน/สัปดาห์', p:{cold:40,warm:50,hot:60} },
+  { kg:13, hint:'ผ้า 1–2 คน',       p:{cold:50,warm:60,hot:70} },
+  { kg:17, hint:'ผ้านวม/กองใหญ่',   p:{cold:60,warm:70,hot:80} }
+];
+var DRY  = [
+  { kg:15, hint:'ทุกขนาดผ้า', price:50 }
+];
+var TEMPW = [['cold','เย็น','ผ้าสีทั่วไป'],['warm','อุ่น','ผ้าขาว'],['hot','ร้อน','ผ้าปู ฆ่าไรฝุ่น']];
+var TEMPD = [['cool','เย็น','ผ้ายืด บอบบาง'],['warm','อุ่น','ผ้าทั่วไป'],['hot','ร้อน','ผ้าหนา']];
+var st = { wash:{}, dry:{}, wt:{}, dt:{} };
+
+function el(id){ return document.getElementById(id); }
+function money(n){ return n.toLocaleString('th-TH')+'฿'; }
+
+function renderWash(){
+  var h='';
+  WASH.forEach(function(m,i){
+    var q=st.wash[i]||0, t=st.wt[i]||'cold';
+    h+='<div class="mrow"><div class="mname"><b>'+m.kg+' กก.</b><i>'+m.hint+' · '+m.p.cold+'–'+m.p.hot+'฿</i></div>'
+      +'<div class="qty"><button class="qb" '+(q<=0?'disabled':'')+' onclick="chg(\'wash\','+i+',-1)">−</button>'
+      +'<span class="qn">'+q+'</span><button class="qb" onclick="chg(\'wash\','+i+',1)">+</button></div></div>';
+    if(q>0){
+      h+='<div class="temps">';
+      TEMPW.forEach(function(tt){
+        h+='<button class="tb '+tt[0]+(t===tt[0]?' on':'')+'" onclick="setT(\'wt\','+i+',\''+tt[0]+'\')">'
+          +'<b>'+tt[1]+'</b><i>'+m.p[tt[0]]+'฿</i></button>';
+      });
+      h+='</div>';
+    }
+  });
+  el('washList').innerHTML=h;
+}
+function renderDry(){
+  var h='';
+  DRY.forEach(function(m,i){
+    var q=st.dry[i]||0, t=st.dt[i]||'warm';
+    h+='<div class="mrow"><div class="mname"><b>'+m.kg+' กก.</b><i>'+m.hint+' · '+m.price+'฿/รอบ</i></div>'
+      +'<div class="qty"><button class="qb" '+(q<=0?'disabled':'')+' onclick="chg(\'dry\','+i+',-1)">−</button>'
+      +'<span class="qn">'+q+'</span><button class="qb" onclick="chg(\'dry\','+i+',1)">+</button></div></div>';
+    if(q>0){
+      h+='<div class="temps">';
+      TEMPD.forEach(function(tt){
+        var cls = tt[0]==='cool'?'cool':(tt[0]==='warm'?'dwarm':'dhot');
+        h+='<button class="tb '+cls+(t===tt[0]?' on':'')+'" onclick="setT(\'dt\','+i+',\''+tt[0]+'\')">'
+          +'<b>'+tt[1]+'</b><i>'+tt[2]+'</i></button>';
+      });
+      h+='</div>';
+    }
+  });
+  el('dryList').innerHTML=h;
+}
+function chg(k,i,d){
+  var v=(st[k][i]||0)+d;
+  if(v<0) v=0; if(v>9) v=9;
+  st[k][i]=v;
+  if(k==='wash'){ if(!st.wt[i]) st.wt[i]='cold'; renderWash(); }
+  else { if(!st.dt[i]) st.dt[i]='warm'; renderDry(); }
+  calc();
+}
+function setT(k,i,t){ st[k][i]=t; (k==='wt'?renderWash:renderDry)(); calc(); }
+
+var MODE='both';
+var GEO=null;
+
+function geoLabel(){
+  var b=el('geoBtn'), o=el('geoOk');
+  if(GEO){
+    b.className='gbtn done';
+    b.innerHTML='<span class="ic">✅</span><span class="tx"><b>แนบพิกัดแล้ว</b><i>แตะเพื่ออัปเดตพิกัดใหม่</i></span>';
+    o.className='geook on';
+    o.innerHTML='พิกัด '+GEO.lat.toFixed(5)+', '+GEO.lng.toFixed(5)+' · <a href="'+geoUrl()+'" target="_blank" rel="noopener">ดูบนแผนที่</a>';
+  }else{
+    b.className='gbtn';
+    b.innerHTML='<span class="ic">📍</span><span class="tx"><b>แนบพิกัดที่อยู่</b><i>ช่วยให้คนส่งหาเจอง่ายขึ้นมาก</i></span>';
+    o.className='geook'; o.innerHTML='';
+  }
+}
+function geoUrl(){ return GEO? ('https://maps.google.com/?q='+GEO.lat+','+GEO.lng) : ''; }
+function askGeo(){
+  var b=el('geoBtn');
+  if(!navigator.geolocation){
+    el('geoOk').className='geook on';
+    el('geoOk').style.color='var(--neg)';
+    el('geoOk').textContent='เครื่องนี้ไม่รองรับการหาพิกัด — พิมพ์ที่อยู่ให้ละเอียดแทนได้ค่ะ';
+    return;
+  }
+  b.innerHTML='<span class="ic">⏳</span><span class="tx"><b>กำลังหาพิกัด…</b><i>อนุญาตให้เข้าถึงตำแหน่งด้วยนะคะ</i></span>';
+  navigator.geolocation.getCurrentPosition(function(p){
+    GEO={ lat:p.coords.latitude, lng:p.coords.longitude };
+    geoLabel(); calc();
+  },function(){
+    GEO=null; geoLabel();
+    el('geoOk').className='geook on';
+    el('geoOk').style.color='var(--neg)';
+    el('geoOk').textContent='ไม่ได้รับอนุญาตให้ใช้ตำแหน่ง — พิมพ์ที่อยู่ให้ละเอียดแทนได้ค่ะ';
+  },{ enableHighAccuracy:true, timeout:12000, maximumAge:0 });
+}
+function calc(){
+  var w=0,wn=0,dr=0,dn=0;
+  WASH.forEach(function(m,i){ var q=st.wash[i]||0; if(q){ w+=m.p[st.wt[i]||'cold']*q; wn+=q; } });
+  DRY.forEach(function(m,i){ var q=st.dry[i]||0; if(q){ dr+=m.price*q; dn+=q; } });
+  var needShip = (MODE!=='self');
+  var ship = parseInt(el('ship').value,10);
+  if(isNaN(ship)||ship<0) ship=null;
+  if(!needShip) ship=0;
+  var fold = el('fold').checked, sep = el('sep').checked;
+
+  /* ── เงื่อนไขบังคับ ── */
+  var need=[];
+  var wr=[];
+  if(sep && wn<2) wr.push('แยกผ้าสี/ผ้าขาว ต้องใช้เครื่องซักอย่างน้อย 2 เครื่อง (ตอนนี้ '+wn+')');
+  if(sep && dn>0 && dn<2) wr.push('ถ้าจะอบด้วย ต้องใช้เครื่องอบอย่างน้อย 2 เครื่อง (ตอนนี้ '+dn+')');
+  if(fold && dn===0) wr.push('ฝากพับผ้า ต้องเลือกเครื่องอบด้วย เพราะต้องอบให้แห้งก่อนพับ');
+  el('sepWarn').innerHTML = wr.length? ('⚠️ '+wr.join('<br>⚠️ ')) : '';
+  el('sepWarn').className = wr.length? 'warn on':'warn';
+
+  if((wn+dn)===0) need.push('เลือกเครื่องซักหรือเครื่องอบอย่างน้อย 1 เครื่อง');
+  wr.forEach(function(t){ need.push(t); });
+  if(!el('name').value.trim()) need.push('กรอกชื่อผู้รับ');
+  if(!el('tel').value.trim())  need.push('กรอกเบอร์โทร');
+  if(needShip && !el('addr').value.trim()) need.push('กรอกที่อยู่สำหรับจัดส่ง');
+  if(needShip && ship==null)   need.push('กดเช็คค่าส่ง แล้วใส่ราคาที่ได้');
+
+  el('needList').innerHTML = need.map(function(t){ return '<li>'+t+'</li>'; }).join('');
+  el('needs').className = need.length? 'needs on':'needs';
+  el('send').disabled = need.length>0;
+
+  el('shipBox').style.display = needShip? '':'none';
+  el('geoBox').style.display = needShip? '':'none';
+  el('addrLb').innerHTML = needShip
+      ? 'ที่อยู่ / หอพัก / ห้อง <span style="color:var(--neg)">*</span>'
+      : 'ที่อยู่ (ไม่บังคับ)';
+  el('sumWash').textContent = 'ค่าซัก'+(wn?' ('+wn+' เครื่อง)':'');
+  el('sumDry').textContent  = 'ค่าอบ'+(dn?' ('+dn+' เครื่อง)':'');
+  el('pWash').textContent = money(w);
+  el('pDry').textContent  = money(dr);
+  el('rowFold').style.display = fold? 'flex':'none';
+  el('pShip').innerHTML = !needShip
+      ? '<span class="free">ไม่มี (รับ-ส่งเอง)</span>'
+      : (ship==null ? '<span style="color:var(--muted);font-weight:400">ยังไม่ได้ใส่</span>' : money(ship));
+  var tot = w+dr+(ship||0);
+  el('pTot').textContent = money(tot);
+  return { w:w, wn:wn, dr:dr, dn:dn, ship:ship, fold:fold, sep:sep, tot:tot, mode:MODE, needShip:needShip };
+}
+
+function build(){
+  var c=calc();
+  var L=[];
+  L.push('🧸 '+SHOP.name+' — สั่งเดลิเวอรี่');
+  L.push('');
+  if(c.wn){
+    L.push('🫧 เครื่องซัก');
+    WASH.forEach(function(m,i){
+      var q=st.wash[i]||0; if(!q) return;
+      var t=st.wt[i]||'cold';
+      var tn={cold:'น้ำเย็น',warm:'น้ำอุ่น',hot:'น้ำร้อน'}[t];
+      L.push('   • '+m.kg+' กก. × '+q+' เครื่อง · '+tn+' = '+(m.p[t]*q)+'฿');
+    });
+  }
+  if(c.dn){
+    L.push('🔥 เครื่องอบ');
+    DRY.forEach(function(m,i){
+      var q=st.dry[i]||0; if(!q) return;
+      var t=st.dt[i]||'warm';
+      var tn={cool:'ลมเย็น',warm:'ไฟอุ่น',hot:'ไฟร้อน'}[t];
+      L.push('   • '+m.kg+' กก. × '+q+' เครื่อง · '+tn+' = '+(m.price*q)+'฿');
+    });
+  }
+  if(c.sep){ L.push(''); L.push('🧺 แยกผ้าสี / ผ้าขาว (ซักแยกเครื่อง)'); }
+  L.push('');
+  L.push('💵 ค่าซัก '+c.w+'฿ · ค่าอบ '+c.dr+'฿');
+  if(c.fold) L.push('🧺 ฝากพับผ้า — ฟรี ไม่มีค่าบริการ');
+  var MN={ both:'ให้ร้านไปรับ–ส่งคืน', self:'มาส่ง–มารับเอง' };
+  L.push('🛵 '+MN[c.mode]+(c.needShip? (' · ค่าส่ง '+c.ship+'฿') : ' · ไม่มีค่าส่ง'));
+  L.push('รวมประมาณ '+c.tot+'฿');
+  L.push('');
+  L.push('📍 ข้อมูลลูกค้า');
+  L.push('   ชื่อ: '+el('name').value.trim());
+  L.push('   เบอร์: '+el('tel').value.trim());
+  var ad=el('addr').value.trim().replace(/\n/g,' ');
+  if(ad) L.push('   ที่อยู่: '+ad);
+  if(c.needShip){
+    if(GEO) L.push('   พิกัด: '+geoUrl());
+    else    L.push('   พิกัด: — (ไม่ได้แนบ กรุณาโทรถามทางค่ะ)');
+  }
+  L.push('   เวลาที่สะดวก: '+el('pick').value);
+  var mm=el('memo').value.trim();
+  if(mm) L.push('   หมายเหตุ: '+mm);
+  return L.join('\n');
+}
+
+el('send').addEventListener('click',function(){
+  el('msg').textContent = build();
+  el('ovl').className='ovl on';
+});
+function closeSheet(){ el('ovl').className='ovl'; }
+el('ovl').addEventListener('click',closeSheet);
+
+el('copyBtn').addEventListener('click',function(){
+  var t=el('msg').textContent;
+  function go(){ window.location.href = SHOP.line; }
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(t).then(go,go);
+  }else{
+    var ta=document.createElement('textarea'); ta.value=t;
+    document.body.appendChild(ta); ta.select();
+    try{ document.execCommand('copy'); }catch(e){}
+    ta.remove(); go();
+  }
+});
+
+el('ship').addEventListener('input',calc);
+el('geoBtn').addEventListener('click',askGeo);
+['fold','sep'].forEach(function(id){ el(id).addEventListener('change',calc); });
+['name','tel','addr'].forEach(function(id){ el(id).addEventListener('input',calc); });
+var SHIP_URL='https://phoneyjung.github.io/washanddry-delivery/';
+[].slice.call(el('mode').children).forEach(function(b){
+  b.addEventListener('click',function(){
+    var m=b.getAttribute('data-m');
+    MODE=m;
+    [].slice.call(el('mode').children).forEach(function(x){ x.className='ob'+(x===b?' on':''); });
+    calc();
+    /* เลือกให้ร้านไปรับ-ส่ง = เปิดหน้าคำนวณค่าส่งให้เลย */
+    if(m==='both'){ window.open(SHIP_URL,'_blank','noopener'); }
+  });
+});
+
+renderWash(); renderDry(); calc();
+</script>
+</body>
+</html>
