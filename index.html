@@ -2648,7 +2648,7 @@ function CostPanel({toast}){
    ================================================================ */
 const OC_PAY_MONTHS=['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
 const OC_PAY_SEED={
-  cfg:{ base1:11200, base2:11500, base3:12000, dilig:500, diligGrace:0, diligMinDays:26, divisor:26, avgPrice:36, otMult:2, shiftHrs:10,
+  cfg:{ base1:11200, base2:11500, base3:12000, dilig:500, diligGrace:0, diligMinDays:26, partnerMinHrs:5, divisor:26, avgPrice:36, otMult:2, shiftHrs:10,
         tiers:[{min:250,pool:150},{min:350,pool:300},{min:450,pool:450},{min:550,pool:600},{min:700,pool:800}] },
   staff:[ {id:'p1',name:'แซ็ค',phase:1,custom:0},{id:'p2',name:'เบส',phase:1,custom:0},{id:'p3',name:'อี๊ฟ',phase:1,custom:0},{id:'p4',name:'พ่อ',phase:1,custom:0} ],
   months:{}
@@ -2663,10 +2663,27 @@ function ocPayCalc(pay,ym){
   const cfg=pay.cfg, m=pay.months[ym]||{};
   const cups=m.cups||{}, att=m.att||{}, ot=m.ot||{}, bonus=m.bonus||{}, dg=m.dilig||{}, times=m.times||{}, hol=m.hol||{}, adv=m.adv||{};
   const nDays=ocPayDays(ym);
+  /* หุ้นส่วน: ทำไม่ถึงชั่วโมงขั้นต่ำในวันนั้น = ไม่นับวันนั้น (ไม่ได้ทั้งค่าแรงและคอม) */
+  const minHrsOf=(st)=>{
+    if(!st || st.kind!=='partner') return 0;
+    return (st.minHrs!=null && st.minHrs!=='')? Number(st.minHrs) : (cfg.partnerMinHrs!=null? Number(cfg.partnerMinHrs) : 5);
+  };
+  const shortDay={};   /* shortDay[d][id] = true ถ้าทำไม่ถึงขั้นต่ำ */
+  for(let d=1;d<=nDays;d++){
+    shortDay[d]={};
+    (att[d]||[]).forEach(id=>{
+      const st=pay.staff.find(x=>x.id===id);
+      const mh=minHrsOf(st);
+      if(!mh) return;
+      const tt=(times[d]||{})[id];
+      const hrs=(tt&&tt.i&&tt.o)? ocPayNetHrs(tt) : null;
+      if(hrs==null || hrs < mh) shortDay[d][id]=true;
+    });
+  }
   const perDay={}; let cupsT=0;
   for(let d=1;d<=nDays;d++){
     const c=Number(cups[d])||0; cupsT+=c;
-    const ids=(att[d]||[]).filter(id=>pay.staff.some(s=>s.id===id));
+    const ids=(att[d]||[]).filter(id=>pay.staff.some(s=>s.id===id) && !shortDay[d][id]);
     const comIds=ids.filter(id=>{ const s=pay.staff.find(x=>x.id===id); return s && s.kind!=='maid'; });
     const pool=c>0? ocPayPool(c,cfg.tiers) : 0;
     perDay[d]={ pool, head:comIds.length, each: comIds.length? pool/comIds.length : 0, ids, comIds };
@@ -2680,6 +2697,10 @@ function ocPayCalc(pay,ym){
   const activeStaff=pay.staff.filter(st=> st.active!==false || usedIds[st.id]);
   const rows=activeStaff.map(st=>{
     const isMaid = st.kind==='maid';
+    const isPartner = st.kind==='partner';
+    const myMinHrs = minHrsOf(st);
+    let shortDays=0;
+    if(myMinHrs>0){ for(let d=1;d<=nDays;d++){ if(shortDay[d][st.id]) shortDays++; } }
     const baseUsed0=ocPayBaseOf(st,cfg);
     const hourRate=baseUsed0/(cfg.divisor||26)/(cfg.shiftHrs||10);
     let days=0, com=0, holDays=0, holPay=0;
@@ -2750,7 +2771,7 @@ function ocPayCalc(pay,ym){
     const bn=Number(bonus[st.id])||0;
     const net = base+com+otB+dl+bn+holPay-missB;
     const diligForced = (dg[st.id]===0 || dg[st.id]===1);
-    return { st, isMaid, days, holDays, holPay, baseUsed, base, com, otAuto, otMan, otH, otB, dl, bn, missH, missB, advT, advList, quota, offDays, offExcess, extraDays, extraRate, net, toPay: net-advT, lateDays, lateMin, diligAuto, diligForced, workedDays, diligMinDays, diligDaysOk };
+    return { st, isMaid, days, holDays, holPay, baseUsed, base, com, otAuto, otMan, otH, otB, dl, bn, missH, missB, advT, advList, quota, offDays, offExcess, extraDays, extraRate, net, toPay: net-advT, lateDays, lateMin, diligAuto, diligForced, workedDays, diligMinDays, diligDaysOk, isPartner, myMinHrs, shortDays };
   });
   const total=rows.reduce((s,r)=>s+r.net,0);
   const rev=cupsT*(cfg.avgPrice||0);
@@ -3026,12 +3047,15 @@ async function ocPaySlipOne(pay, ym, row, calc){
       hrs=ocPayNetHrs(tt);
       if(st.shiftIn){ const a=ocPayMin(tt.i), b=ocPayMin(st.shiftIn); if(a!=null&&b!=null) late=a-b; }
     }
-    days.push({ d, dt:new Date(Y,M-1,d), i:tt&&tt.i?tt.i:'', o:tt&&tt.o?tt.o:'', hrs, late, isHol });
+    const minH=(st.kind==='partner')? ((st.minHrs!=null&&st.minHrs!=='')? Number(st.minHrs) : (cfg.partnerMinHrs!=null? Number(cfg.partnerMinHrs):5)) : 0;
+    const isShort = minH>0 && (hrs==null || hrs<minH);
+    days.push({ d, dt:new Date(Y,M-1,d), i:tt&&tt.i?tt.i:'', o:tt&&tt.o?tt.o:'', hrs, late, isHol, isShort, minH });
   }
 
   const W=880, HEAD=214, ROW=34, PAD=30;
   const pay1=[
-    ['ฐานเงินเดือน', row.base, 'ทำงาน '+row.days+' วัน'+(row.holDays?(' + วันหยุด '+row.holDays+' วัน'):'')],
+    ['ฐานเงินเดือน', row.base, 'ทำงาน '+row.days+' วัน'+(row.holDays?(' + วันหยุด '+row.holDays+' วัน'):'')
+      +(row.shortDays>0? (' · ตัด '+row.shortDays+' วัน (ทำไม่ถึง '+row.myMinHrs+' ชม.)') : '')],
     ['คอมมิชชั่น', row.com, 'ส่วนแบ่งยอดขายรายวัน'],
     ['ค่าล่วงเวลา (OT)', row.otB, row.otH>0? (row.otH+' ชม. × '+(cfg.otMult||2)+' เท่า') : 'ไม่มี OT'],
     ['ทำงานวันหยุด ×2', row.holPay, row.holDays>0? (row.holDays+' วัน') : 'ไม่มี'],
@@ -3041,9 +3065,16 @@ async function ocPaySlipOne(pay, ym, row, calc){
   if(row.bn) pay1.push([row.bn>0?'โบนัสพิเศษ':'หักอื่นๆ', row.bn, 'ปรับโดยเจ้าของ']);
   const cut=[];
   if(row.missB>0) cut.push(['หักชั่วโมงขาด', -row.missB, 'ขาด '+row.missH+' ชม.']);
-  if(row.advT>0)  cut.push(['หักเงินเบิกล่วงหน้า', -row.advT, (row.advList||[]).length+' รายการ']);
+  /* แจกแจงรายการเบิก/หัก ทีละบรรทัด พร้อมเหตุผล */
+  (row.advList||[]).forEach(function(e){
+    const amt=Number(e.amt)||0;
+    if(!amt) return;
+    const why=(e.note||'').trim() || 'ไม่ได้ระบุเหตุผล';
+    const dd=(e.d!=null && e.d!=='')? ('วันที่ '+e.d+' · ') : '';
+    cut.push([why.length>26? why.slice(0,26)+'…' : why, -amt, dd+'หักจากยอดจ่าย']);
+  });
 
-  const H = HEAD + (pay1.length+cut.length)*44 + 96 + 44 + days.length*ROW + 132;
+  const H = HEAD + (pay1.length+cut.length)*44 + 96 + 44 + days.length*ROW + 132 + (cut.length>2? 26:0);
   const cv=document.createElement('canvas'); cv.width=W*2; cv.height=H*2;
   const g=cv.getContext('2d'); g.scale(2,2);
   const F=(w,s)=>w+' '+s+'px Kanit, "Noto Sans Thai", sans-serif';
@@ -3077,7 +3108,14 @@ async function ocPaySlipOne(pay, ym, row, calc){
     y+=44;
   };
   pay1.forEach(r=>line(r[0], r[1], r[2], r[1]>0? '#3E7D3E' : '#B7ADA0'));
-  cut.forEach(r=>line(r[0], r[1], r[2], '#B0483C'));
+  if(cut.length){
+    y+=6;
+    g.font=F(600,15); g.fillStyle='#B0483C'; g.textAlign='left';
+    g.fillText('รายการหัก', PAD+4, y+12);
+    g.strokeStyle='#F0D8D8'; g.beginPath(); g.moveTo(PAD+94,y+7); g.lineTo(W-PAD,y+7); g.stroke();
+    y+=20;
+    cut.forEach(r=>line(r[0], r[1], r[2], '#B0483C'));
+  }
 
   /* รวมสุทธิ */
   g.fillStyle='#F1E1B4'; g.fillRect(PAD-6, y, W-PAD*2+12, 62);
@@ -3110,7 +3148,8 @@ async function ocPaySlipOne(pay, ym, row, calc){
     g.fillStyle= (r.hrs!=null&&r.hrs>=10)? '#3E7D3E':'#3B2F24';
     g.fillText(r.hrs!=null? (Math.round(r.hrs*10)/10)+' ชม.' : '—', W-PAD-150, y+22);
     g.font=F(500,13);
-    if(r.isHol){ g.fillStyle='#C0566A'; g.fillText('วันหยุด ×2', W-PAD, y+22); }
+    if(r.isShort){ g.fillStyle='#B0483C'; g.fillText('ไม่ถึง '+r.minH+' ชม. · ไม่นับ', W-PAD, y+22); }
+    else if(r.isHol){ g.fillStyle='#C0566A'; g.fillText('วันหยุด ×2', W-PAD, y+22); }
     else if(r.late!=null && r.late>(cfg.diligGrace||0)){ g.fillStyle='#C0566A'; g.fillText('สาย '+r.late+' นาที', W-PAD, y+22); }
     else if(r.late!=null && r.late<0){ g.fillStyle='#9A9082'; g.fillText('มาก่อน '+(-r.late)+' นาที', W-PAD, y+22); }
     else { g.fillStyle='#C7C0B4'; g.fillText('—', W-PAD, y+22); }
@@ -3121,6 +3160,10 @@ async function ocPaySlipOne(pay, ym, row, calc){
   g.textAlign='left'; g.font=F(400,13.5); g.fillStyle='#A79C8C';
   g.fillText('* เบี้ยขยัน '+num(cfg.dilig||0)+' ฿ ได้เมื่อทำงานครบ '+(cfg.diligMinDays!=null?cfg.diligMinDays:26)+' วัน และไม่สายเลยทั้งเดือน', PAD, y+16);
   g.fillText('* OT คิด '+(cfg.otMult||2)+' เท่าของค่าจ้างต่อชั่วโมง · หากพบข้อมูลไม่ตรง แจ้งหัวหน้าได้ทันที', PAD, y+38);
+  if(st.kind==='partner'){
+    g.fillStyle='#B0483C';
+    g.fillText('* หุ้นส่วน: วันที่ทำงานไม่ถึง '+((st.minHrs!=null&&st.minHrs!=='')? st.minHrs : (cfg.partnerMinHrs!=null?cfg.partnerMinHrs:5))+' ชม. จะไม่นับเป็นวันทำงาน (ไม่ได้ทั้งค่าแรงและคอม)', PAD, y+60);
+  }
   g.fillStyle='#BFB4A2'; g.font=F(500,13);
   g.fillText('OWL CHA · สาขา ม.ศิลปากร · PLP Finance', PAD, y+64);
 
@@ -4556,11 +4599,12 @@ function StaffPanel({ user, toast }){
       id:edit.id, name:nm,
       phase:parseInt(edit.phase,10)||1,
       custom:parseFloat(edit.custom)||0,
-      kind:edit.kind==='maid'?'maid':'staff',
+      kind: (edit.kind==='maid'? 'maid' : (edit.kind==='partner'? 'partner':'staff')),
       fpId:String(edit.fpId||'').trim(),
       shop: (edit.shop==='teddy2'?'teddy2':'owlcha'),
       shiftIn: attFmt(edit.shiftIn||''),
       shiftOut: attFmt(edit.shiftOut||''),
+      minHrs: (edit.kind==='partner' && edit.minHrs!==''&&edit.minHrs!=null)? (parseFloat(edit.minHrs)||0) : '',
       active: edit.active!==false,
       start:edit.start||'', end:edit.end||'',
       phone:String(edit.phone||'').trim(),
@@ -4641,12 +4685,12 @@ function StaffPanel({ user, toast }){
           <div className="flex items-start gap-2">
             <div className="flex-1 min-w-0">
               <div className="kanit text-[15px]" style={{fontWeight:600}}>
-                {st.kind==='maid'? '🧹 ':''}{st.name}
+                {st.kind==='maid'? '🧹 ':(st.kind==='partner'? '🤝 ':'')}{st.name}
                 {!isOn(st) && <span className="text-[11px]" style={{color:'var(--neg)',marginLeft:6}}>ลาออก</span>}
               </div>
               <div className="text-[12px] mt-0.5" style={{color:'var(--muted)'}}>
                 <span style={{color:shopInfo(st.shop).color,fontWeight:600}}>{shopInfo(st.shop).emoji} {shopInfo(st.shop).label}</span>
-                {' · '}{st.kind==='maid'? 'แม่บ้าน' : PHASE[st.phase||1]}
+                {' · '}{st.kind==='maid'? 'แม่บ้าน' : (st.kind==='partner'? '🤝 หุ้นส่วน' : PHASE[st.phase||1])}
                 {st.custom>0 && ' · ฐานเอง '+ocFmt(st.custom,0)+'฿'}
                 {st.fpId? ' · สแกน#'+st.fpId : ' · ยังไม่ผูกรหัสสแกน'}
               </div>
@@ -4692,8 +4736,9 @@ function StaffPanel({ user, toast }){
             <div className="flex gap-2 mb-2.5">
               <div style={{flex:1}}>
                 <div className="text-[11.5px] mb-1" style={{color:'var(--muted)'}}>ประเภท</div>
-                <select className="kanit" style={INP} value={edit.kind==='maid'?'maid':'staff'} onChange={e=>setEdit({...edit,kind:e.target.value})}>
+                <select className="kanit" style={INP} value={edit.kind||'staff'} onChange={e=>setEdit({...edit,kind:e.target.value})}>
                   <option value="staff">พนักงานหน้าร้าน</option>
+                  <option value="partner">🤝 หุ้นส่วน</option>
                   <option value="maid">🧹 แม่บ้าน</option>
                 </select>
               </div>
@@ -4721,6 +4766,14 @@ function StaffPanel({ user, toast }){
                 <input className="num" style={INP} inputMode="numeric" placeholder="0" value={edit.custom||''} onChange={e=>setEdit({...edit,custom:e.target.value})}/>
               </div>
             </div>
+
+            {edit.kind==='partner' && (
+              <div className="mb-2.5">
+                <div className="text-[11.5px] mb-1" style={{color:'var(--muted)'}}>ชั่วโมงขั้นต่ำต่อวัน (ทำไม่ถึง = ไม่ได้ค่าแรงวันนั้น)</div>
+                <input className="num" style={INP} inputMode="decimal" placeholder="5"
+                  value={edit.minHrs!=null? edit.minHrs : ''} onChange={e=>setEdit({...edit,minHrs:e.target.value})}/>
+              </div>
+            )}
 
             {edit.kind==='maid' && (
               <div className="flex gap-2 mb-2.5">
@@ -5115,7 +5168,7 @@ function OCTabPay({ toast }){
         {calc.rows.map(r=>(
           <div key={r.st.id} className="py-2" style={{borderBottom:'1px solid var(--soft)'}}>
             <div className="flex items-center justify-between">
-              <div className="kanit text-[14px] flex items-center gap-1.5 flex-wrap">{r.isMaid?'🧹 ':''}{r.st.name} <span className="text-[11px]" style={{fontWeight:400,color:'var(--muted)'}}>{r.isMaid?'แม่บ้าน':'เฟส '+r.st.phase} · เข้า {r.days} วัน{r.holDays>0?' +หยุด'+r.holDays:''}</span> <button className="press" style={{border:'none',background:'var(--soft)',borderRadius:8,padding:'2px 9px',fontSize:12}} onClick={(e)=>{e.stopPropagation(); ocPayPersonImage(pay,ym,r.st.id);}}>🖼 สลิป</button> <button className="press" style={{border:'none',background: advOpen===r.st.id?'var(--primary)':'var(--soft)', color: advOpen===r.st.id?'#fff':'inherit', borderRadius:8,padding:'2px 9px',fontSize:12}} onClick={(e)=>{e.stopPropagation(); setAdvOpen(advOpen===r.st.id?null:r.st.id);}}>💸 เบิก/หัก{r.advT>0?' −'+ocFmt(r.advT,0):''}</button></div>
+              <div className="kanit text-[14px] flex items-center gap-1.5 flex-wrap">{r.isMaid?'🧹 ':''}{r.st.name} <span className="text-[11px]" style={{fontWeight:400,color:'var(--muted)'}}>{r.isMaid?'แม่บ้าน':(r.isPartner?'🤝 หุ้นส่วน':'เฟส '+r.st.phase)} · เข้า {r.days} วัน{r.holDays>0?' +หยุด'+r.holDays:''}{r.shortDays>0? ' · ตัด '+r.shortDays+'ว (<'+r.myMinHrs+'ชม.)':''}</span> <button className="press" style={{border:'none',background:'var(--soft)',borderRadius:8,padding:'2px 9px',fontSize:12}} onClick={(e)=>{e.stopPropagation(); ocPayPersonImage(pay,ym,r.st.id);}}>🖼 สลิป</button> <button className="press" style={{border:'none',background: advOpen===r.st.id?'var(--primary)':'var(--soft)', color: advOpen===r.st.id?'#fff':'inherit', borderRadius:8,padding:'2px 9px',fontSize:12}} onClick={(e)=>{e.stopPropagation(); setAdvOpen(advOpen===r.st.id?null:r.st.id);}}>💸 เบิก/หัก{r.advT>0?' −'+ocFmt(r.advT,0):''}</button></div>
               <div className="text-right">
                 <div className="kanit num text-[16px]" style={{fontWeight:700,color:'var(--primary)'}}>{ocFmt(r.net,0)} ฿</div>
                 {r.advT>0 && <div className="num text-[11px]" style={{color:'var(--neg)'}}>คงเหลือจ่าย {ocFmt(r.toPay,0)}</div>}
@@ -5197,6 +5250,7 @@ function OCTabPay({ toast }){
               <span>เบี้ยขยัน</span><OCPayIn value={cfg.dilig} onChange={v=>setCfg('dilig',v)} w="56px"/>
               <span>ผ่อนผันสาย (นาที)</span><OCPayIn value={cfg.diligGrace!=null?cfg.diligGrace:0} onChange={v=>setCfg('diligGrace',v)} w="46px"/>
               <span>ทำงานขั้นต่ำ (วัน)</span><OCPayIn value={cfg.diligMinDays!=null?cfg.diligMinDays:26} onChange={v=>setCfg('diligMinDays',v)} w="46px"/>
+              <span>หุ้นส่วน — ชม.ขั้นต่ำ/วัน</span><OCPayIn value={cfg.partnerMinHrs!=null?cfg.partnerMinHrs:5} onChange={v=>setCfg('partnerMinHrs',v)} w="46px"/>
               <span>ตัวหารวัน</span><OCPayIn value={cfg.divisor} onChange={v=>setCfg('divisor',v)} w="44px"/>
               <span>ราคาเฉลี่ย</span><OCPayIn value={cfg.avgPrice} onChange={v=>setCfg('avgPrice',v)} w="48px"/>
               <span>OT ×</span><OCPayIn value={cfg.otMult} onChange={v=>setCfg('otMult',v)} w="40px"/>
