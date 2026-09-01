@@ -2745,8 +2745,9 @@ function ocPayCalc(pay,ym){
           let hrs=ocPayNetHrs(tt);
           const diffM=Math.round((hrs-(cfg.shiftHrs||10))*60);
           const gr=(cfg.otGrace!=null? Number(cfg.otGrace) : 15);
-          if(diffM>=gr) otMin+=diffM;              /* เกินเกณฑ์ = นับเป็น OT ทั้งจำนวน */
-          else if(diffM<=-gr) missMin+=(-diffM);   /* ขาดเกินเกณฑ์ = นับขาด */
+          /* หักช่วงผ่อนผันออกก่อน — เช่น ผ่อนผัน 15 น. ออกช้า 16 น. = OT 1 นาที */
+          if(diffM>gr) otMin+=(diffM-gr);
+          else if(diffM<-gr) missMin+=(-diffM-gr);
           if(shiftInMin!=null){
             const late=mi-shiftInMin;
             if(late>dGrace){ lateDays++; lateMin+=late; }
@@ -2949,8 +2950,8 @@ function ocPayPersonDays(pay,ym,stId){
     let otM=0, missM=0;
     if(!isHol && hrs!=null){
       const diffM=Math.round((hrs-(cfg.shiftHrs||10))*60);
-      if(diffM>=gr) otM=diffM;
-      else if(diffM<=-gr) missM=-diffM;
+      if(diffM>gr) otM=diffM-gr;
+      else if(diffM<-gr) missM=(-diffM)-gr;
     }
     out.push({ d, cups:Number(cups[d])||0, com: pd.comIds.indexOf(stId)>=0? pd.each:0, tin:tt.i||'', tout:tt.o||'', brk:Number(tt.b)||0, hrs, otM, missM, isHol });
   }
@@ -3051,7 +3052,7 @@ async function ocPayPersonImage(pay,ym,stId){
   g.fillStyle='#5B4636'; g.font=F(700,20); g.textAlign='left'; g.fillText(r.advT>0?'คงเหลือรับสิ้นเดือน':'รวมสุทธิ',32,y+39);
   g.font=F(800,26); g.textAlign='right'; g.fillText(num(r.advT>0? r.toPay : r.net)+' ฿',868,y+40);
   g.fillStyle='#9A8F7E'; g.font=F(400,12.5); g.textAlign='left';
-  g.fillText('* OT: นับเวลาที่ทำเกินกะเป็นนาที เกิน '+(pay.cfg.otGrace!=null?pay.cfg.otGrace:15)+' นาทีขึ้นไปจึงนับ · รวมทั้งเดือนแล้วแปลงเป็นชั่วโมง (เศษไม่ถึงชั่วโมงตัดทิ้ง)',32,y+80);
+  g.fillText('* OT: หักผ่อนผัน '+(pay.cfg.otGrace!=null?pay.cfg.otGrace:15)+' นาทีแรกออกก่อน (ออกช้า '+((pay.cfg.otGrace!=null?Number(pay.cfg.otGrace):15)+1)+' นาที = OT 1 นาที) · รวมทั้งเดือนแล้วแปลงเป็นชั่วโมง เศษตัดทิ้ง',32,y+80);
   g.fillText('* จ่าย OT '+(pay.cfg.otMult||2)+' เท่าของค่าจ้างต่อชั่วโมง · หากพบข้อมูลไม่ตรง แจ้งหัวหน้าได้ทันที',32,y+100);
   g.fillStyle='#B7A88F'; g.font=F(400,13); g.textAlign='left';
   g.fillText('OWL CHA · สาขา ม.ศิลปากร · สร้างจากแอป PLP Finance',32,y+128);
@@ -3301,15 +3302,15 @@ function AttendPanel({ user }){
         let over = aOut - sOut;                /* ออกช้า = บวก · ออกก่อน = ลบ */
         if(over > 720) over -= 1440;           /* กันเคสข้ามเที่ยงคืน */
         if(over < -720) over += 1440;
-        /* ช่วงผ่อนผัน — ไม่ถึงเกณฑ์ = ไม่นับ ทั้งสองทาง */
-        if(late < GRACE_MIN) late = 0;
-        if(Math.abs(over) < GRACE_MIN) over = 0;
+        /* หักช่วงผ่อนผันออกก่อน — ออกช้า 16 น. (ผ่อนผัน 15) = OT 1 นาที */
+        late = Math.max(0, late - GRACE_MIN);
+        over = over > 0 ? Math.max(0, over - GRACE_MIN) : Math.min(0, over + GRACE_MIN);
         return Math.round(over - late);
       }
     }
     /* ไม่ได้ตั้งกะประจำ → เทียบจากชั่วโมงรวม */
     const df=Math.round(((pr&&pr.netMin)||0) - shiftHrsOf(pin)*60);
-    return Math.abs(df) < GRACE_MIN ? 0 : df;
+    return df > GRACE_MIN ? df-GRACE_MIN : (df < -GRACE_MIN ? df+GRACE_MIN : 0);
   };
   const otMinOf=(pin, netMin)=> Math.round((netMin||0) - shiftHrsOf(pin)*60);
   const minTxt=(m)=> !m ? '–' : ((m>0?'+':'') + m + ' น.');
@@ -4221,11 +4222,11 @@ function AttendPanel({ user }){
             if(sI!=null&&sO!=null&&aI!=null&&aO!=null){
               let lt=Math.max(0,aI-sI); let ov=aO-sO;
               if(ov>720) ov-=1440; if(ov<-720) ov+=1440;
-              if(lt<GRACE_MIN) lt=0;
-              if(Math.abs(ov)<GRACE_MIN) ov=0;
+              lt=Math.max(0, lt-GRACE_MIN);
+              ov = ov>0 ? Math.max(0, ov-GRACE_MIN) : Math.min(0, ov+GRACE_MIN);
               om=Math.round(ov-lt);
             }
-          } else { const df=Math.round(netM - shiftHrsOf(statEdit.pin)*60); om = Math.abs(df)<GRACE_MIN? 0 : df; }
+          } else { const df=Math.round(netM - shiftHrsOf(statEdit.pin)*60); om = df>GRACE_MIN? df-GRACE_MIN : (df<-GRACE_MIN? df+GRACE_MIN : 0); }
         }
         const INP2={fontFamily:'inherit',fontSize:15,border:'1px solid var(--line)',borderRadius:9,padding:'9px 10px',background:'var(--card)',color:'var(--ink)',width:'100%',textAlign:'center'};
         return (
@@ -4281,7 +4282,7 @@ function AttendPanel({ user }){
                     </b>
                   </div>
                   <div className="text-[11.5px] mt-1" style={{color:'var(--muted)'}}>
-                    ผ่อนผัน {GRACE_MIN} นาที — เข้าสายหรือออกช้าไม่ถึง {GRACE_MIN} นาที ไม่นับทั้งสองทาง
+                    ผ่อนผัน {GRACE_MIN} นาที — หักออกก่อนเสมอ · ออกช้า {GRACE_MIN+1} นาที = OT 1 นาที
                   </div>
                 </div>
               </div>
@@ -4411,7 +4412,7 @@ function AttendPanel({ user }){
 
       <div className="text-[11.5px] text-center pb-4 pt-1" style={{color:'var(--muted)'}}>
         แตะแถวเพื่อแก้ไขเวลา · แตะป้ายร้านเพื่อสลับร้านเฉพาะวันนั้น<br/>
-        OT ผ่อนผัน {GRACE_MIN} นาที — เข้าสาย/ออกช้าไม่ถึง {GRACE_MIN} นาที ไม่นับทั้งสองทาง<br/>
+        OT ผ่อนผัน {GRACE_MIN} นาที — หักออกก่อนเสมอ · ออกช้า {GRACE_MIN+1} นาที = OT 1 นาที<br/>
         ระบบตัดสแกนซ้ำที่ห่างกันไม่ถึง {FP_DEDUP_MIN} นาทีให้อัตโนมัติ
       </div>
     </div>
