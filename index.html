@@ -3004,6 +3004,149 @@ async function ocPayPersonImage(pay,ym,stId){
   a.href=cv.toDataURL('image/png');
   document.body.appendChild(a); a.click(); a.remove();
 }
+/* ================================================================
+   🧾 สลิปเงินเดือนรายคน (PNG) — บอกที่มาของเงินทุกก้อน + เวลาเข้า-ออก
+   ================================================================ */
+async function ocPaySlipOne(pay, ym, row, calc){
+  const cfg=pay.cfg, m=pay.months[ym]||{}, times=m.times||{}, att=m.att||{}, hol=m.hol||{};
+  const st=row.st, nDays=ocPayDays(ym);
+  const MON=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  const DOW=['อา','จ','อ','พ','พฤ','ศ','ส'];
+  const [Y,M]=ym.split('-').map(Number);
+
+  /* เก็บรายวัน */
+  const days=[];
+  for(let d=1; d<=nDays; d++){
+    const inShift=((att[d]||[]).indexOf(st.id))>=0;
+    const tt=(times[d]||{})[st.id];
+    const isHol=((hol[d]||[]).indexOf(st.id))>=0;
+    if(!inShift && !tt) continue;
+    let hrs=null, late=null;
+    if(tt&&tt.i&&tt.o){
+      hrs=ocPayNetHrs(tt);
+      if(st.shiftIn){ const a=ocPayMin(tt.i), b=ocPayMin(st.shiftIn); if(a!=null&&b!=null) late=a-b; }
+    }
+    days.push({ d, dt:new Date(Y,M-1,d), i:tt&&tt.i?tt.i:'', o:tt&&tt.o?tt.o:'', hrs, late, isHol });
+  }
+
+  const W=880, HEAD=214, ROW=34, PAD=30;
+  const pay1=[
+    ['ฐานเงินเดือน', row.base, 'ทำงาน '+row.days+' วัน'+(row.holDays?(' + วันหยุด '+row.holDays+' วัน'):'')],
+    ['คอมมิชชั่น', row.com, 'ส่วนแบ่งยอดขายรายวัน'],
+    ['ค่าล่วงเวลา (OT)', row.otB, row.otH>0? (row.otH+' ชม. × '+(cfg.otMult||2)+' เท่า') : 'ไม่มี OT'],
+    ['ทำงานวันหยุด ×2', row.holPay, row.holDays>0? (row.holDays+' วัน') : 'ไม่มี'],
+    ['เบี้ยขยัน', row.dl, row.dl>0? 'ครบเงื่อนไข' :
+       ((row.lateDays>0? ('สาย '+row.lateDays+' วัน'):'') + (!row.diligDaysOk? ((row.lateDays>0?' · ':'')+'ทำงาน '+row.workedDays+'/'+row.diligMinDays+' วัน'):''))],
+  ];
+  if(row.bn) pay1.push([row.bn>0?'โบนัสพิเศษ':'หักอื่นๆ', row.bn, 'ปรับโดยเจ้าของ']);
+  const cut=[];
+  if(row.missB>0) cut.push(['หักชั่วโมงขาด', -row.missB, 'ขาด '+row.missH+' ชม.']);
+  if(row.advT>0)  cut.push(['หักเงินเบิกล่วงหน้า', -row.advT, (row.advList||[]).length+' รายการ']);
+
+  const H = HEAD + (pay1.length+cut.length)*44 + 96 + 44 + days.length*ROW + 132;
+  const cv=document.createElement('canvas'); cv.width=W*2; cv.height=H*2;
+  const g=cv.getContext('2d'); g.scale(2,2);
+  const F=(w,s)=>w+' '+s+'px Kanit, "Noto Sans Thai", sans-serif';
+  const num=(n)=>Math.round(n||0).toLocaleString('th-TH');
+
+  g.fillStyle='#FBF6EC'; g.fillRect(0,0,W,H);
+  g.fillStyle='#5B4636'; g.fillRect(0,0,W,HEAD-64);
+  g.fillStyle='#fff'; g.font=F(700,30); g.textAlign='left';
+  g.fillText((st.kind==='maid'?'🧹 ':'')+st.name, PAD, 48);
+  g.font=F(400,17); g.fillStyle='rgba(255,255,255,.85)';
+  g.fillText('สลิปเงินเดือน · '+(ocPayLabel? ocPayLabel(ym):ym), PAD, 78);
+  g.font=F(400,14); g.fillStyle='rgba(255,255,255,.6)';
+  g.fillText('Owl Cha · ออกให้วันที่ '+today(), PAD, 104);
+  /* ยอดสุทธิมุมขวา */
+  g.textAlign='right'; g.font=F(400,15); g.fillStyle='rgba(255,255,255,.75)';
+  g.fillText('รับสุทธิ', W-PAD, 56);
+  g.font=F(800,34); g.fillStyle='#fff';
+  g.fillText(num(row.toPay!=null?row.toPay:row.net)+' ฿', W-PAD, 92);
+
+  let y=HEAD-40;
+  g.textAlign='left'; g.font=F(600,19); g.fillStyle='#5B4636';
+  g.fillText('ที่มาของเงิน', PAD, y); y+=18;
+  g.strokeStyle='#E6DFCF'; g.beginPath(); g.moveTo(PAD,y); g.lineTo(W-PAD,y); g.stroke(); y+=10;
+
+  const line=(label, amt, why, col)=>{
+    g.font=F(600,18); g.fillStyle='#3B2F24'; g.textAlign='left';
+    g.fillText(label, PAD+4, y+22);
+    if(why){ g.font=F(400,14); g.fillStyle='#9A9082'; g.fillText(why, PAD+4, y+40); }
+    g.font=F(700,20); g.fillStyle=col||(amt<0?'#B0483C':'#3B2F24'); g.textAlign='right';
+    g.fillText((amt<0?'−':'')+num(Math.abs(amt))+' ฿', W-PAD, y+24);
+    y+=44;
+  };
+  pay1.forEach(r=>line(r[0], r[1], r[2], r[1]>0? '#3E7D3E' : '#B7ADA0'));
+  cut.forEach(r=>line(r[0], r[1], r[2], '#B0483C'));
+
+  /* รวมสุทธิ */
+  g.fillStyle='#F1E1B4'; g.fillRect(PAD-6, y, W-PAD*2+12, 62);
+  g.font=F(700,21); g.fillStyle='#5B4636'; g.textAlign='left';
+  g.fillText('รวมรับสุทธิ', PAD+10, y+40);
+  g.font=F(800,26); g.textAlign='right';
+  g.fillText(num(row.toPay!=null?row.toPay:row.net)+' ฿', W-PAD-10, y+41);
+  y+=96;
+
+  /* ตารางเวลา */
+  g.textAlign='left'; g.font=F(600,19); g.fillStyle='#5B4636';
+  g.fillText('เวลาเข้า-ออกรายวัน', PAD, y); y+=18;
+  g.font=F(400,13); g.fillStyle='#9A9082'; g.textAlign='left';
+  g.fillText('วันที่', PAD+4, y+16);
+  g.fillText('เข้า–ออก', PAD+150, y+16);
+  g.textAlign='right';
+  g.fillText('ชั่วโมง', W-PAD-150, y+16);
+  g.fillText('หมายเหตุ', W-PAD, y+16);
+  y+=26;
+  g.strokeStyle='#E6DFCF'; g.beginPath(); g.moveTo(PAD,y); g.lineTo(W-PAD,y); g.stroke(); y+=6;
+
+  days.forEach((r,i)=>{
+    if(i%2===0){ g.fillStyle='rgba(255,255,255,.72)'; g.fillRect(PAD-6, y, W-PAD*2+12, ROW-2); }
+    const wk=(r.dt.getDay()===0||r.dt.getDay()===6);
+    g.textAlign='left'; g.font=F(600,15); g.fillStyle= wk? '#C0566A':'#3B2F24';
+    g.fillText(r.d+' '+MON[M-1]+' ('+DOW[r.dt.getDay()]+')', PAD+4, y+22);
+    g.font=F(400,15); g.fillStyle='#4A4238';
+    g.fillText(r.i? (r.i+' → '+(r.o||'?')) : '—', PAD+150, y+22);
+    g.textAlign='right'; g.font=F(700,15);
+    g.fillStyle= (r.hrs!=null&&r.hrs>=10)? '#3E7D3E':'#3B2F24';
+    g.fillText(r.hrs!=null? (Math.round(r.hrs*10)/10)+' ชม.' : '—', W-PAD-150, y+22);
+    g.font=F(500,13);
+    if(r.isHol){ g.fillStyle='#C0566A'; g.fillText('วันหยุด ×2', W-PAD, y+22); }
+    else if(r.late!=null && r.late>(cfg.diligGrace||0)){ g.fillStyle='#C0566A'; g.fillText('สาย '+r.late+' นาที', W-PAD, y+22); }
+    else if(r.late!=null && r.late<0){ g.fillStyle='#9A9082'; g.fillText('มาก่อน '+(-r.late)+' นาที', W-PAD, y+22); }
+    else { g.fillStyle='#C7C0B4'; g.fillText('—', W-PAD, y+22); }
+    y+=ROW;
+  });
+
+  y+=14;
+  g.textAlign='left'; g.font=F(400,13.5); g.fillStyle='#A79C8C';
+  g.fillText('* เบี้ยขยัน '+num(cfg.dilig||0)+' ฿ ได้เมื่อทำงานครบ '+(cfg.diligMinDays!=null?cfg.diligMinDays:26)+' วัน และไม่สายเลยทั้งเดือน', PAD, y+16);
+  g.fillText('* OT คิด '+(cfg.otMult||2)+' เท่าของค่าจ้างต่อชั่วโมง · หากพบข้อมูลไม่ตรง แจ้งหัวหน้าได้ทันที', PAD, y+38);
+  g.fillStyle='#BFB4A2'; g.font=F(500,13);
+  g.fillText('OWL CHA · สาขา ม.ศิลปากร · PLP Finance', PAD, y+64);
+
+  return new Promise(function(res){
+    cv.toBlob(function(bl){
+      const u=URL.createObjectURL(bl);
+      const a=document.createElement('a');
+      a.href=u; a.download='slip-'+String(st.name).replace(/[^\u0E00-\u0E7Fa-zA-Z0-9]/g,'')+'-'+ym+'.png';
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(function(){ URL.revokeObjectURL(u); res(); }, 400);
+    });
+  });
+}
+
+/* บันทึกสลิปทุกคนรวดเดียว */
+async function ocPaySlipAll(pay, ym){
+  try{ if(document.fonts&&document.fonts.ready) await document.fonts.ready; }catch(e){}
+  const calc=ocPayCalc(pay,ym);
+  const list=calc.rows.filter(r=>r.days>0||r.holDays>0||r.net>0);
+  for(let i=0;i<list.length;i++){
+    await ocPaySlipOne(pay, ym, list[i], calc);
+    await new Promise(r=>setTimeout(r,320));   /* เว้นจังหวะ กันเบราว์เซอร์บล็อกดาวน์โหลดรัว */
+  }
+  return list.length;
+}
+
 async function ocPayImage(pay,ym){
   try{ if(document.fonts&&document.fonts.ready) await document.fonts.ready; }catch(e){}
   const calc=ocPayCalc(pay,ym);
@@ -4684,6 +4827,7 @@ function OCTabPay({ toast }){
   const [saveState,setSaveState]=useState('idle');
   const [advOpen,setAdvOpen]=useState(null);
   const [fpBusy,setFpBusy]=useState(false);
+  const [slipBusy,setSlipBusy]=useState(false);
   const fpMergedRef=useRef('');
   useEffect(()=>{
     if(!db || !pay) return;
@@ -4892,6 +5036,10 @@ function OCTabPay({ toast }){
           <button className="press kanit text-[12px] flex-1 py-1.5 rounded-lg" style={{background:'var(--soft)',color:'var(--primary)',border:'none'}} onClick={pull}>⇣ ดึงยอด</button>
           <button className="press kanit text-[12px] flex-1 py-1.5 rounded-lg text-white" style={{background:'#1D6F42',border:'none'}} onClick={()=>ocPayExport(pay,ym)}>⬇ Excel</button>
           <button className="press kanit text-[12px] flex-1 py-1.5 rounded-lg text-white" style={{background:'var(--primary)',border:'none'}} onClick={()=>ocPayImage(pay,ym)}>🖼 รูปสรุป</button>
+          <button className="press kanit text-[12px] flex-1 py-1.5 rounded-lg text-white" style={{background:'#3E7D3E',border:'none'}} disabled={slipBusy}
+            onClick={async()=>{ setSlipBusy(true); try{ const n=await ocPaySlipAll(pay,ym); alert('บันทึกสลิปแล้ว '+n+' รูป\nดูในโฟลเดอร์ดาวน์โหลด'); }catch(e){ alert('สร้างสลิปไม่สำเร็จ'); } setSlipBusy(false); }}>
+            {slipBusy? 'กำลังสร้าง…' : '🧾 สลิปรายคน'}
+          </button>
         </div>
         <div className="flex gap-2 mt-2">
           <button className="press kanit text-[12px] flex-1 py-1.5 rounded-lg" style={{background:'var(--soft)',color:'var(--primary)',border:'none',opacity:fpBusy?0.6:1}} disabled={fpBusy} onClick={()=>pullFp(false)}>🖐 ดึงเวลาสแกนนิ้ว</button>
