@@ -23,7 +23,7 @@
 body{font-family:'Kanit',sans-serif;background:var(--cream);color:var(--ink);padding-bottom:28px}
 .wrap{max-width:560px;margin:0 auto;padding:0 14px}
 header{background:linear-gradient(180deg,#EAF5FC,var(--cream));padding:18px 0 10px;text-align:center}
-header img{width:64px;height:64px;border-radius:50%;border:3px solid #fff;box-shadow:var(--sh)}
+header img{width:118px;height:118px;display:block;margin:0 auto -6px}
 h1{font-size:20px;font-weight:800;color:var(--navy);margin-top:6px}
 .sub{font-size:12.5px;color:var(--muted);font-weight:300;margin-top:2px}
 .card{background:var(--card);border-radius:20px;box-shadow:var(--sh);padding:15px;margin-bottom:12px}
@@ -47,6 +47,7 @@ h2 small{display:block;font-size:11.5px;font-weight:300;color:var(--muted);margi
 .tb i{font-style:normal;font-size:10.5px;color:var(--muted);font-weight:300}
 .tb.on{color:#fff;border-color:transparent}
 .tb.on i{color:rgba(255,255,255,.85)}
+.tb.on .ico-t{filter:brightness(0) invert(1); opacity:.95}
 .tb.on.cold{background:#5BA7D6} .tb.on.warm{background:#E0A33C} .tb.on.hot{background:#D6655
 5}
 .tb.on.cool{background:#7FB7DA} .tb.on.dwarm{background:#E0A33C} .tb.on.dhot{background:#D66555}
@@ -95,6 +96,9 @@ pre.msg{background:var(--soft);border-radius:14px;padding:13px;font-family:'Kani
 .chkbtn .tx i{font-style:normal;font-size:11.5px;color:#5A7E9B;font-weight:300}
 .chkbtn .ar{font-size:19px;color:var(--blue-d);flex:none}
 .chkbtn:active{transform:scale(.985)}
+.ico{width:1.3em;height:1.3em;vertical-align:-.28em;margin-right:.3em}
+.ico-lg{width:32px;height:32px;vertical-align:-9px;margin-right:7px}
+.ico-t{width:30px;height:30px;display:block;margin:0 auto 1px}
 .warn{display:none;background:#FDF0DC;border-radius:12px;padding:10px 12px;margin-top:9px;
   font-size:12.5px;line-height:1.6;color:#8A6410}
 .warn.on{display:block}
@@ -135,7 +139,7 @@ label.fl span{font-weight:600}
 <body>
 
 <header>
-  <img src="logo-teddy.jpg" alt="" onerror="this.style.display='none'">
+  <img src="ic-hero.png" alt="" onerror="this.style.display='none'">
   <h1>Teddy Wash &amp; Dry · สาขา 1</h1>
   <div class="sub">รับ-ส่งผ้าถึงที่ · กรอกแล้วส่งให้ร้านได้เลย</div>
 </header>
@@ -143,17 +147,17 @@ label.fl span{font-weight:600}
 <div class="wrap">
 
   <div class="card">
-    <h2>🫧 เครื่องซัก<small>เลือกขนาดและจำนวนเครื่องที่ต้องการ</small></h2>
+    <h2><img class="ico-lg" src="ic-wash.png" alt="">เครื่องซัก<small>เลือกขนาดและจำนวนเครื่องที่ต้องการ</small></h2>
     <div id="washList"></div>
   </div>
 
   <div class="card">
-    <h2>🔥 เครื่องอบ<small>ไม่อบก็ได้ ถ้าจะเอาไปตากเอง</small></h2>
+    <h2><img class="ico-lg" src="ic-dry.png" alt="">เครื่องอบ<small>ไม่อบก็ได้ ถ้าจะเอาไปตากเอง</small></h2>
     <div id="dryList"></div>
   </div>
 
   <div class="card">
-    <h2>🧺 บริการเสริม</h2>
+    <h2><img class="ico-lg" src="ic-fold.png" alt="">บริการเสริม</h2>
     <div class="mrow">
       <div class="mname"><b>ฝากพับผ้า</b><i>ฟรี · ต้องอบให้แห้งก่อนถึงพับได้</i></div>
       <label style="display:flex;align-items:center;gap:7px;font-size:13.5px">
@@ -170,10 +174,10 @@ label.fl span{font-weight:600}
   </div>
 
   <div class="card">
-    <h2>🛵 การรับ-ส่งผ้า<small>แตะเลือก 1 อย่าง</small></h2>
+    <h2><img class="ico-lg" src="ic-scooter.png" alt="">การรับ-ส่งผ้า<small>แตะเลือก 1 อย่าง</small></h2>
     <div class="opts" id="mode">
-      <button class="ob" data-m="both"><b>🛵 เดลิเวอรี่ รับ-ส่งถึงที่</b><i>มีค่าส่งตามระยะทาง</i></button>
-      <button class="ob" data-m="self"><b>🚶 เอาผ้ามาส่งเองที่ร้าน</b><i>ไม่เสียค่าส่ง</i></button>
+      <button class="ob" data-m="both"><b><img class="ico" src="ic-scooter.png" alt="">เดลิเวอรี่ รับ-ส่งถึงที่</b><i>มีค่าส่งตามระยะทาง</i></button>
+      <button class="ob" data-m="self"><b><img class="ico" src="ic-walk.png" alt="">เอาผ้ามาส่งเองที่ร้าน</b><i>ไม่เสียค่าส่ง</i></button>
     </div>
 
     <div id="shipBox">
@@ -227,7 +231,7 @@ label.fl span{font-weight:600}
 
 <div class="ovl" id="ovl">
   <div class="sheet" onclick="event.stopPropagation()">
-    <h3>📋 สรุปรายการของคุณ</h3>
+    <h3><img class="ico-lg" src="ic-done.png" alt="">สรุปรายการของคุณ</h3>
     <pre class="msg" id="msg"></pre>
     <div class="brow">
       <button class="btn gray" onclick="closeSheet()">แก้ไข</button>
@@ -304,6 +308,7 @@ function renderWash(){
       h+='<div class="temps">';
       TEMPW.forEach(function(tt){
         h+='<button class="tb '+tt[0]+(t===tt[0]?' on':'')+'" onclick="setT(\'wt\','+i+',\''+tt[0]+'\')">'
+          +'<img class="ico-t" src="ic-'+tt[0]+'.png" alt="">'
           +'<b>'+tt[1]+'</b><i>'+m.p[tt[0]]+'฿</i></button>';
       });
       h+='</div>';
@@ -322,7 +327,9 @@ function renderDry(){
       h+='<div class="temps">';
       TEMPD.forEach(function(tt){
         var cls = tt[0]==='cool'?'cool':(tt[0]==='warm'?'dwarm':'dhot');
+        var icn = (tt[0]==='cool')?'cold':tt[0];
         h+='<button class="tb '+cls+(t===tt[0]?' on':'')+'" onclick="setT(\'dt\','+i+',\''+tt[0]+'\')">'
+          +'<img class="ico-t" src="ic-'+icn+'.png" alt="">'
           +'<b>'+tt[1]+'</b><i>'+tt[2]+'</i></button>';
       });
       h+='</div>';
