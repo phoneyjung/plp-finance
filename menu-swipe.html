@@ -91,42 +91,47 @@ header{padding:calc(10px + env(safe-area-inset-top)) 16px 6px;display:flex;align
 .stage{position:relative;flex:1 1 auto;min-height:0;width:100%;display:grid;place-items:center;overflow:hidden}
 .stage .halo{position:absolute;width:64%;aspect-ratio:1;border-radius:50%;background:rgba(255,255,255,.5);
   filter:blur(2px);box-shadow:0 30px 62px -30px rgba(60,38,22,.5)}
-.best{display:inline-block;margin-bottom:6px;font-size:9px;letter-spacing:.16em;
-  text-transform:uppercase;font-weight:500;color:#F6ECD9;padding:4px 10px;border-radius:999px;
-  background:linear-gradient(135deg,#C08A3E,#8B5E22);box-shadow:0 8px 16px -10px rgba(90,60,20,.9)}
-.best[hidden]{display:none}
 .stage .shadow{position:absolute;bottom:5%;width:42%;height:22px;border-radius:50%;
   background:rgba(70,45,25,.22);filter:blur(11px)}
 .stage .art{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;overflow:hidden}
 .stage .art.pop{animation:pop .5s cubic-bezier(.2,.8,.2,1)}
 @keyframes pop{0%{opacity:0;transform:translateY(16px) scale(.93)}100%{opacity:1;transform:none}}
 .stage svg{height:100%;max-height:100%;width:auto;max-width:100%;filter:drop-shadow(0 22px 26px rgba(50,30,16,.28))}
-.stage img.photo{width:100%;height:100%;object-fit:contain;mix-blend-mode:multiply;
-  opacity:0;transition:opacity .35s ease}
+.stage img.photo{width:100%;height:100%;object-fit:contain;
+  opacity:0;transition:opacity .3s ease;filter:drop-shadow(0 16px 18px rgba(50,30,16,.22))}
 .stage img.photo.rdy{opacity:1}
 
-.info{flex:0 0 auto;width:100%;display:grid;grid-template-columns:1.618fr 1fr;gap:14px;
-  align-items:end;text-align:left;transition:opacity .2s ease;
-  background:rgba(255,255,255,.62);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
-  border:1px solid rgba(255,255,255,.75);border-radius:22px;padding:14px 16px 13px;
-  box-shadow:0 16px 34px -26px rgba(58,36,22,.6)}
+.info{flex:0 0 auto;width:100%;transition:opacity .2s ease;
+  background:rgba(255,255,255,.66);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+  border:1px solid rgba(255,255,255,.8);border-radius:20px;padding:11px 14px 12px;
+  box-shadow:0 14px 30px -26px rgba(58,36,22,.6)}
 .info.fade{opacity:0}
-.left{min-width:0}
-.right{min-width:0;padding-bottom:3px}
-.nm{font-size:var(--t2);font-weight:600;line-height:1.2;letter-spacing:-.01em;margin:0;
-  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.en{font-size:var(--t4);letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-top:3px;
+.row1{display:flex;align-items:baseline;gap:8px}
+.row2{display:flex;align-items:center;gap:10px;margin-top:5px}
+.best{flex:0 0 auto;align-self:center;font-size:8.5px;letter-spacing:.14em;text-transform:uppercase;
+  font-weight:500;color:#F6ECD9;padding:3px 8px;border-radius:999px;
+  background:linear-gradient(135deg,#C08A3E,#8B5E22)}
+.best[hidden]{display:none}
+.nm{flex:1;min-width:0;font-size:17px;font-weight:600;line-height:1.25;letter-spacing:-.01em;margin:0;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.lbl{font-size:9px;letter-spacing:.18em;text-transform:uppercase;color:var(--c10);
-  font-weight:500;margin-bottom:4px;opacity:.85}
-.ds{font-size:11.5px;line-height:1.5;color:#5C4634;margin:0;
-  display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
-.icons{display:flex;gap:11px;align-items:center;margin-top:8px;min-height:22px}
-.icons img{width:22px;height:22px;opacity:.7}
-.buy{display:flex;align-items:baseline;margin-top:var(--s3)}
-.pz{display:flex;align-items:baseline;gap:4px}
-.pz b{font-size:var(--t1);font-weight:600;letter-spacing:-.03em;line-height:1}
-.pz i{font-style:normal;font-size:var(--t3);color:var(--c10);font-weight:500}
+.pz{flex:0 0 auto;display:flex;align-items:baseline;gap:3px}
+.pz b{font-size:27px;font-weight:600;letter-spacing:-.03em;line-height:1}
+.pz i{font-style:normal;font-size:12px;color:var(--c10);font-weight:500}
+.ds{flex:1;min-width:0;font-size:11px;line-height:1.4;color:#6B563F;margin:0;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.icons{flex:0 0 auto;display:flex;gap:9px;align-items:center}
+.icons img{width:18px;height:18px;opacity:.6}
+
+/* ตัวบอกว่าปัดซ้าย-ขวาได้ */
+.swipeHint{flex:0 0 auto;display:flex;align-items:center;justify-content:center;gap:8px;
+  margin:9px 0 3px;font-size:10.5px;color:var(--muted);letter-spacing:.04em}
+.swipeHint b{font-weight:400;font-size:14px;color:var(--c10);display:inline-block;
+  animation:nudge 2.2s ease-in-out infinite}
+.swipeHint b.r{animation-delay:1.1s}
+@keyframes nudge{0%,100%{transform:translateX(0);opacity:.45}50%{transform:translateX(-4px);opacity:1}}
+.swipeHint b.r{animation-name:nudgeR}
+@keyframes nudgeR{0%,100%{transform:translateX(0);opacity:.45}50%{transform:translateX(4px);opacity:1}}
+
 
 /* ---------- แถบเมนูด้านล่าง: ปัดเลือกแก้ว ---------- */
 /* แถบน้ำตาลกินพื้นที่แค่ครึ่งล่าง แก้วที่เลือกจะโผล่พ้นขอบบนของแถบขึ้นมาครึ่งใบ */
@@ -143,12 +148,11 @@ header{padding:calc(10px + env(safe-area-inset-top)) 16px 6px;display:flex;align
   display:grid;place-items:center;box-shadow:0 0 0 2px rgba(255,255,255,.28);
   transition:transform .34s cubic-bezier(.2,.8,.2,1),box-shadow .3s}
 .item .box svg{height:88%;width:auto}
-.item .box img.photo{width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity .3s ease}
+.item .box img.photo{width:100%;height:100%;object-fit:contain;opacity:0;transition:opacity .3s ease}
 .item .box img.photo.rdy{opacity:1}
 .item .cap{margin-top:26px;font-size:10px;line-height:1.25;text-align:center;max-width:100%;padding:0 4px;
   color:rgba(246,236,217,.6);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:.3s}
 .item .cap b{display:block;font-weight:500;font-size:10px;color:rgba(192,138,62,.75);margin-top:2px}
-/* ใบที่เลือก: ขยาย 1.5 เท่า แล้วยกขึ้นให้ครึ่งบนพ้นแถบน้ำตาล */
 .item.on .box{transform:scale(1.5) translateY(-11px);
   box-shadow:0 0 0 3px rgba(247,239,226,.9),0 14px 26px -10px rgba(20,12,6,.75)}
 .item.on .cap{color:#F6ECD9;font-weight:500}
@@ -205,19 +209,19 @@ header{padding:calc(10px + env(safe-area-inset-top)) 16px 6px;display:flex;align
     <div class="art" id="heroArt"></div>
   </div>
   <div class="info" id="info">
-    <div class="left">
+    <div class="row1">
       <span class="best" id="best" hidden>ขายดี</span>
       <h2 class="nm" id="dName">—</h2>
-      <div class="en" id="dEn"></div>
-      <div class="buy"><div class="pz"><b id="dPrice">0</b><i>บาท</i></div></div>
+      <div class="pz"><b id="dPrice">0</b><i>฿</i></div>
     </div>
-    <div class="right">
-      <div class="lbl">ส่วนผสม</div>
+    <div class="row2">
       <p class="ds" id="dDesc"></p>
       <div class="icons" id="dIcons"></div>
     </div>
   </div>
 </section>
+
+<div class="swipeHint"><b>‹</b> ปัดซ้าย–ขวา เลือกเมนู <b class="r">›</b></div>
 
 <div class="strip">
   <div class="deck" id="deck"></div>
@@ -460,6 +464,66 @@ function grad(cat){
   return 'linear-gradient(150deg,#F3E7D4,#DCC8AA)';
 }
 function gradOf(it){ var g=styleOf(it).bg; return 'linear-gradient(150deg,'+g[0]+','+g[1]+')' }
+/* ลบพื้นขาวของรูปสินค้าออกจริงๆ ในเครื่องลูกค้า → ไม่มีกล่องขาวแวบ */
+var cutCache={};
+/* ลบ "พื้นหลัง" ออกด้วยการไล่จากขอบภาพเข้ามา (flood fill)
+   → ฟองนม ฝาขาว ชีสข้างในแก้วจะไม่หายไปด้วย */
+function cutout(url,cb){
+  if(cutCache[url]!==undefined) return cb(cutCache[url]);
+  var im=new Image();
+  try{ im.crossOrigin='anonymous' }catch(e){}
+  im.onload=function(){
+    var res=url;
+    try{
+      var W=im.naturalWidth, H=im.naturalHeight;
+      var c=document.createElement('canvas'); c.width=W; c.height=H;
+      var x=c.getContext('2d'); x.drawImage(im,0,0);
+      var d=x.getImageData(0,0,W,H), a=d.data, n=W*H;
+      var pale=new Uint8Array(n), out=new Uint8Array(n);
+      for(var i=0;i<n;i++){
+        var o=i*4, r=a[o], g=a[o+1], bl=a[o+2];
+        var mx=r>g?(r>bl?r:bl):(g>bl?g:bl), mn=r<g?(r<bl?r:bl):(g<bl?g:bl);
+        pale[i]=(mx>=228 && mx-mn<18)?1:0;      /* ขาว/เทาอ่อน = พื้นหลังที่เป็นไปได้ */
+      }
+      var q=new Int32Array(n), head=0, tail=0;
+      function push(i){ if(i>=0&&i<n&&pale[i]&&!out[i]){ out[i]=1; q[tail++]=i } }
+      for(var xx=0;xx<W;xx++){ push(xx); push((H-1)*W+xx) }
+      for(var yy=0;yy<H;yy++){ push(yy*W); push(yy*W+W-1) }
+      while(head<tail){
+        var p=q[head++], px=p%W;
+        if(px>0) push(p-1);
+        if(px<W-1) push(p+1);
+        push(p-W); push(p+W);
+      }
+      for(var i2=0;i2<n;i2++){
+        if(out[i2]) a[i2*4+3]=0;
+        else{                                   /* ไล่ขอบให้เนียน ไม่เป็นฟันเลื่อย */
+          var edge=(i2%W>0&&out[i2-1])||(i2%W<W-1&&out[i2+1])||(i2>=W&&out[i2-W])||(i2<n-W&&out[i2+W]);
+          if(edge){
+            var o2=i2*4, m2=Math.max(a[o2],a[o2+1],a[o2+2]);
+            if(m2>226) a[o2+3]=Math.round(Math.max(0,(246-m2))/20*255);
+          }
+        }
+      }
+      x.putImageData(d,0,0);
+      res=c.toDataURL('image/png');
+    }catch(e){}
+    cutCache[url]=res; cb(res);
+  };
+  im.onerror=function(){ cutCache[url]=''; cb('') };
+  im.src=url;
+}
+function setPhoto(box,it,i){
+  var u=USE_PHOTO?imgUrl(it.photo):'';
+  if(!u){ box.innerHTML=drinkSVG(it); return }
+  box.innerHTML='<img class="photo" alt="'+esc(it.n)+'">';
+  var img=box.querySelector('img');
+  cutout(u,function(src){
+    if(!src){ box.innerHTML=drinkSVG(it); return }   /* รูปเสีย → ใช้ภาพวาดแทน */
+    img.onload=function(){ img.classList.add('rdy') };
+    img.src=src;
+  });
+}
 function artHTML(it,i,cls){
   var u=USE_PHOTO?imgUrl(it.photo):'';
   return u
@@ -470,9 +534,15 @@ function artHTML(it,i,cls){
 }
 function cardHTML(it,i){
   return '<article class="item" data-i="'+i+'">'+
-      '<div class="box" style="background:'+gradOf(it)+'">'+artHTML(it,i)+'</div>'+
+      '<div class="box" style="background:'+gradOf(it)+'"></div>'+
       '<div class="cap">'+esc(it.n)+'<b>'+it.p+' ฿</b></div>'+
     '</article>';
+}
+function fillThumbs(){
+  cards().forEach(function(c){
+    var it=FLAT[+c.dataset.i]; if(!it) return;
+    setPhoto(c.querySelector('.box'),it,+c.dataset.i);
+  });
 }
 window.__art=function(i){ return drinkSVG(FLAT[i]) };
 function cards(){ return [].slice.call($('#deck').querySelectorAll('.item')) }
@@ -530,7 +600,7 @@ function buildDeck(){
     '<i class="spacer"></i>' + cardHTML(FLAT[n-1], n-1) +
     FLAT.map(cardHTML).join('') + cardHTML(FLAT[0], 0) + '<i class="spacer"></i>';
   idx=0; gi=FLAT[0].gi;
-  buildRail(); center(1,false); layout(); paint();
+  fillThumbs(); buildRail(); center(1,false); layout(); paint();
 }
 function buildRail(){}   /* เลิกใช้แถบขีด — ใช้ตัวเลข x/y แทน */
 function center(domIdx,smooth){
@@ -562,7 +632,7 @@ function paint(){
 
   /* แก้วใหญ่ด้านบน */
   var art=$('#heroArt');
-  art.innerHTML=artHTML(it,idx);
+  setPhoto(art,it,idx);
   art.classList.remove('pop'); void art.offsetWidth; art.classList.add('pop');
 
   var d=$('#info'); d.classList.add('fade');
@@ -570,7 +640,7 @@ function paint(){
   setTimeout(function(){
     if(seq!==paintSeq) return;
     $('#dName').textContent=it.n;
-    $('#dEn').textContent=it.en||'owl cha';
+    var en=$('#dEn'); if(en) en.textContent=it.en||'';
     $('#dDesc').textContent=mix(it);
     $('#dPrice').textContent=it.p;
     $('#dIcons').innerHTML=iconsFor(it).map(function(n){
