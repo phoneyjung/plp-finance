@@ -7,6 +7,8 @@
 <title>Teddy Wash &amp; Dry · สาขา 1 · สั่งเดลิเวอรี่</title>
 <link rel="icon" href="logo-teddy.jpg">
 <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
 :root{
   --cream:#FBF6EC; --card:#fff; --blue:#5BB8E8; --blue-d:#2E8FC4;
@@ -98,8 +100,12 @@ pre.msg{background:var(--soft);border-radius:14px;padding:13px;font-family:'Kani
   border:1.5px solid var(--line);background:var(--card);border-radius:14px;padding:11px 13px;color:var(--ink)}
 .ob b{display:block;font-size:14.5px;font-weight:600}
 .ob i{font-style:normal;font-size:11.5px;color:var(--muted);font-weight:300}
-.ob.on{border-color:var(--blue-d);background:#EFF8FD}
+.ob{position:relative;padding-right:44px}
+.ob.on{border-color:var(--blue-d);border-width:2px;background:#EFF8FD}
 .ob.on b{color:var(--blue-d)}
+.ob.on:after{content:'✓';position:absolute;right:14px;top:50%;transform:translateY(-50%);
+  width:26px;height:26px;border-radius:50%;background:var(--blue-d);color:#fff;
+  font-size:15px;font-weight:700;display:flex;align-items:center;justify-content:center}
 .gbtn{display:flex;align-items:center;gap:10px;width:100%;text-align:left;font-family:'Kanit';
   cursor:pointer;border:2px dashed #A9D6F0;background:#F3FAFE;border-radius:14px;padding:11px 13px;
   color:var(--ink);margin-top:9px}
@@ -109,9 +115,12 @@ pre.msg{background:var(--soft);border-radius:14px;padding:13px;font-family:'Kani
 .gbtn:active{transform:scale(.985)}
 .gbtn.done{border-style:solid;border-color:#34C26A;background:#EDF9F1}
 .gbtn.done .tx b{color:#1C6B3C}
-.geook{display:none;font-size:12px;color:#2A8A52;margin-top:6px;padding-left:4px}
-.geook.on{display:block}
-.geook a{color:var(--blue-d);font-weight:600}
+#map{height:230px;border-radius:15px;margin-top:10px;border:1.5px solid var(--line);z-index:1}
+.zres{margin-top:10px;border-radius:14px;padding:11px 13px;background:var(--soft);
+  font-size:13px;color:var(--muted);text-align:center;line-height:1.6}
+.zres.ok{background:#EDF9F1;color:#1C6B3C;font-weight:600;font-size:14.5px}
+.zres.bad{background:#FDECEE;color:#8E2B39;font-weight:600}
+.zres small{display:block;font-size:11.5px;font-weight:300;margin-top:2px;opacity:.9}
 .needs{background:#FDECEE;border-radius:13px;padding:10px 12px;margin-bottom:9px;display:none}
 .needs.on{display:block}
 .needs b{font-size:12.5px;color:#8E2B39;display:block;margin-bottom:3px}
@@ -158,18 +167,16 @@ label.fl span{font-weight:600}
   </div>
 
   <div class="card">
-    <h2>🛵 ค่าจัดส่ง</h2>
+    <h2>🛵 การรับ-ส่งผ้า<small>แตะเลือก 1 อย่าง</small></h2>
     <div class="opts" id="mode">
-      <button class="ob on" data-m="both"><b>🛵 ให้ร้านไปรับ–ส่งคืน</b><i>กดแล้วเปิดแผนที่เช็คค่าส่งให้เลย</i></button>
-      <button class="ob" data-m="self"><b>🚶 มาส่ง–มารับเอง</b><i>ไม่เสียค่าส่ง</i></button>
+      <button class="ob" data-m="both"><b>🛵 เดลิเวอรี่ รับ-ส่งถึงที่</b><i>มีค่าส่งตามระยะทาง</i></button>
+      <button class="ob" data-m="self"><b>🚶 เอาผ้ามาส่งเองที่ร้าน</b><i>ไม่เสียค่าส่ง</i></button>
     </div>
+
     <div id="shipBox">
-      <label class="fl">ค่าส่งที่เช็คได้ (บาท) <span style="color:var(--neg)">*</span></label>
-      <input class="f" id="ship" inputmode="numeric" placeholder="ใส่ราคาจากหน้าแผนที่">
-      <div class="note" style="margin-top:8px">ยังไม่รู้ราคา?
-        <a href="https://phoneyjung.github.io/washanddry-delivery/" target="_blank" rel="noopener"
-           style="color:var(--blue-d);font-weight:600">เปิดแผนที่เช็คอีกครั้ง →</a>
-      </div>
+      <button class="gbtn" id="geoBtn"><span class="ic">📍</span><span class="tx"><b>ใช้ตำแหน่งปัจจุบัน</b><i>หรือแตะบนแผนที่เพื่อเลือกจุดรับผ้า</i></span></button>
+      <div id="map"></div>
+      <div class="zres" id="zres">แตะบนแผนที่ หรือกดปุ่มด้านบน เพื่อเลือกจุดรับผ้า</div>
     </div>
   </div>
 
@@ -181,10 +188,7 @@ label.fl span{font-weight:600}
     <input class="f" id="tel" inputmode="tel" placeholder="08x-xxx-xxxx">
     <label class="fl" id="addrLb">ที่อยู่ / หอพัก / ห้อง <span style="color:var(--neg)">*</span></label>
     <textarea class="f" id="addr" placeholder="เช่น หอพักสุขใจ ห้อง 302 ซอย..."></textarea>
-    <div id="geoBox">
-      <button class="gbtn" id="geoBtn"><span class="ic">📍</span><span class="tx"><b>แนบพิกัดที่อยู่</b><i>ช่วยให้คนส่งหาเจอง่ายขึ้นมาก</i></span></button>
-      <div class="geook" id="geoOk"></div>
-    </div>
+
     <label class="fl">เวลาที่สะดวกให้ไปรับผ้า</label>
     <select class="f" id="pick">
       <option>เร็วที่สุด</option>
@@ -294,51 +298,96 @@ function chg(k,i,d){
 }
 function setT(k,i,t){ st[k][i]=t; (k==='wt'?renderWash:renderDry)(); calc(); }
 
-var MODE='both';
-var GEO=null;
+var MODE=null;
+var GEO=null, ZONE=null;
 var TRIED=false, NEED=[];
-
-function geoLabel(){
-  var b=el('geoBtn'), o=el('geoOk');
-  if(GEO){
-    b.className='gbtn done';
-    b.innerHTML='<span class="ic">✅</span><span class="tx"><b>แนบพิกัดแล้ว</b><i>แตะเพื่ออัปเดตพิกัดใหม่</i></span>';
-    o.className='geook on';
-    o.innerHTML='พิกัด '+GEO.lat.toFixed(5)+', '+GEO.lng.toFixed(5)+' · <a href="'+geoUrl()+'" target="_blank" rel="noopener">ดูบนแผนที่</a>';
-  }else{
-    b.className='gbtn';
-    b.innerHTML='<span class="ic">📍</span><span class="tx"><b>แนบพิกัดที่อยู่</b><i>ช่วยให้คนส่งหาเจอง่ายขึ้นมาก</i></span>';
-    o.className='geook'; o.innerHTML='';
+var SHOP_LL=[13.811021719164973,100.04216362744025];
+var ZCFG={ green:{label:'โซนสีเขียว',price:20,color:'#22c55e'},
+           yellow:{label:'โซนสีเหลือง',price:30,color:'#eab308'},
+           blue:{label:'โซนสีน้ำเงิน',price:40,color:'#3b82f6'},
+           red:{label:'โซนสีแดง',price:50,color:'#ef4444'} };
+var ZORDER=['green','yellow','blue','red'];
+var GEOJSON={ "type":"FeatureCollection", "features": [ {"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[100.0353178,13.805396],[100.0358113,13.804875],[100.0394377,13.8051459],[100.0468191,13.8066254],[100.0452742,13.8151895],[100.0509604,13.8161689],[100.0507673,13.8170023],[100.0504455,13.8173357],[100.0503382,13.8177941],[100.0506815,13.8184192],[100.0498876,13.8238992],[100.0361761,13.8233991],[100.0365623,13.8207737],[100.0374636,13.8176274],[100.0375923,13.8169606],[100.0373777,13.813981],[100.0365623,13.8135434],[100.0363692,13.8125224],[100.0353178,13.805396]]]},"properties":{"name":"green"}}, {"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[100.0468191,13.8066254],[100.0624965,13.8098741],[100.0625073,13.8110619],[100.0631403,13.8129476],[100.0624242,13.8180332],[100.0582615,13.8173665],[100.0573173,13.8225756],[100.0540558,13.8221797],[100.0518456,13.8230756],[100.0509229,13.8237841],[100.0509229,13.8240549],[100.0498876,13.8238992],[100.0506654,13.8182833],[100.0503382,13.8177941],[100.0504455,13.8173357],[100.0507673,13.8170023],[100.0509604,13.8161689],[100.0452742,13.8151895],[100.0468191,13.8066254]]]},"properties":{"name":"yellow"}}, {"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[100.0361761,13.8233991],[100.0304224,13.8232783],[100.0305083,13.8216948],[100.0285771,13.81286],[100.0284054,13.8107971],[100.0286193,13.8044186],[100.0358113,13.804875],[100.0353178,13.805396],[100.0365623,13.8135434],[100.0373777,13.813981],[100.0375923,13.8169606],[100.0364949,13.8209446],[100.0361761,13.8233991]]]},"properties":{"name":"yellow"}}, {"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[100.0235047,13.7987154],[100.0672956,13.8009956],[100.0672741,13.8028294],[100.0667377,13.8042464],[100.0667591,13.8062676],[100.0671668,13.8079346],[100.0656433,13.8144775],[100.0649138,13.8167904],[100.0660939,13.8171863],[100.0665875,13.8177489],[100.0673599,13.8178114],[100.0685616,13.8175406],[100.0685186,13.8201451],[100.0666089,13.8200618],[100.0666304,13.8211036],[100.0620384,13.8208327],[100.0615449,13.8248333],[100.0548084,13.8246885],[100.0540681,13.8257303],[100.0535316,13.8258762],[100.0512571,13.8258345],[100.0496693,13.8267617],[100.0485856,13.8275118],[100.0477488,13.8276785],[100.0463433,13.8276368],[100.0455065,13.8278972],[100.045367,13.8278035],[100.0443585,13.8275118],[100.0441761,13.8269284],[100.0435646,13.8274909],[100.0431063,13.8270748],[100.0422372,13.8267206],[100.041497,13.8268039],[100.0407459,13.8271685],[100.0401022,13.8272102],[100.0385251,13.8279811],[100.0372591,13.8280228],[100.0359072,13.8284499],[100.0343623,13.8293667],[100.0334396,13.8295751],[100.0329461,13.8301793],[100.0319161,13.8304501],[100.0303926,13.8312836],[100.0285902,13.8311794],[100.0254144,13.8313461],[100.0238051,13.8305543],[100.0253715,13.8280332],[100.0266375,13.8264914],[100.0280752,13.8255537],[100.0289979,13.8245744],[100.0287404,13.8238243],[100.0287833,13.823366],[100.0281395,13.8232409],[100.0271096,13.82247],[100.0268735,13.821699],[100.0258007,13.8206989],[100.0250926,13.8204905],[100.0250282,13.817886],[100.0246634,13.8166566],[100.0247063,13.815198],[100.0227108,13.8126142],[100.0221958,13.8104888],[100.0227966,13.8095095],[100.0228395,13.8087385],[100.0221529,13.8082175],[100.022346,13.8079258],[100.0237622,13.8062588],[100.0239338,13.8055087],[100.0242343,13.8051127],[100.0239338,13.8045293],[100.0238909,13.8041959],[100.0233545,13.8041334],[100.0235047,13.7987154]]]},"properties":{"name":"blue"}}, {"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[100.0141581,13.7981919],[100.0149306,13.7968583],[100.0152739,13.7968166],[100.0156602,13.7964206],[100.0212392,13.7944201],[100.0227841,13.7942743],[100.0247582,13.7937116],[100.0255522,13.7940659],[100.0260028,13.793795],[100.0269254,13.7936908],[100.0290068,13.7923779],[100.028921,13.7915027],[100.0294145,13.7916902],[100.029672,13.7864179],[100.0324615,13.7870639],[100.0379761,13.7898981],[100.0406584,13.789773],[100.0408729,13.7895855],[100.0485548,13.7910025],[100.0582107,13.7921487],[100.0677368,13.7957993],[100.0700327,13.7958097],[100.0704941,13.7956222],[100.070934,13.7960389],[100.0727302,13.7965603],[100.0747687,13.7976647],[100.0779873,13.8012698],[100.0782448,13.8026034],[100.0788242,13.8032494],[100.0780517,13.8038537],[100.0780946,13.8051873],[100.0785452,13.8078962],[100.0780088,13.8120637],[100.0778371,13.8172729],[100.0778157,13.8195233],[100.0807554,13.8189815],[100.0806481,13.8195649],[100.0813133,13.8211694],[100.0803262,13.8230863],[100.0802189,13.8244198],[100.0803906,13.8246698],[100.0806406,13.8246517],[100.0804582,13.8272875],[100.0797823,13.8287772],[100.0791171,13.829121],[100.0776687,13.8309545],[100.0779906,13.8312567],[100.0773683,13.832038],[100.0773468,13.8325276],[100.0767997,13.8325484],[100.067487,13.832663],[100.0561681,13.8327881],[100.0553527,13.8330589],[100.0501707,13.8380593],[100.0455144,13.8424867],[100.0402143,13.8476953],[100.040547,13.8470264],[100.0400749,13.8455472],[100.0396243,13.8451305],[100.0391308,13.8435888],[100.0391952,13.8430887],[100.0388769,13.8413287],[100.0379542,13.8396411],[100.0360994,13.8402932],[100.035563,13.8415224],[100.0345544,13.8417933],[100.0322585,13.8443143],[100.0306062,13.8439601],[100.030735,13.8452726],[100.029705,13.8453351],[100.0293617,13.8446059],[100.0247054,13.8447101],[100.0240402,13.8443768],[100.0229029,13.8420016],[100.0227742,13.8400015],[100.0225382,13.8387306],[100.0226454,13.8373555],[100.0230961,13.8343552],[100.0221948,13.8337093],[100.0209288,13.8340427],[100.0205211,13.8336468],[100.0201563,13.8339385],[100.0183783,13.8315815],[100.0182067,13.8304356],[100.0178419,13.8298313],[100.0180779,13.8292479],[100.0183354,13.8288312],[100.0176702,13.8276227],[100.0179277,13.8273935],[100.0179921,13.8269977],[100.0185929,13.8266018],[100.0180245,13.8247981],[100.0177027,13.8248814],[100.0176597,13.8172553],[100.0183249,13.8175053],[100.018797,13.81563],[100.0186468,13.8135463],[100.0183464,13.8127337],[100.0188399,13.8108166],[100.0180674,13.8093372],[100.0172091,13.8085662],[100.0169516,13.8075868],[100.0171448,13.806149],[100.0169516,13.8048988],[100.0161577,13.803836],[100.0163508,13.8019606],[100.0152565,13.7989182],[100.0156213,13.7982097],[100.0141581,13.7981919]]]},"properties":{"name":"red"}} ] };
+var ZONES=(function(){
+  var by={};
+  GEOJSON.features.forEach(function(f){
+    var n=f.properties.name;
+    var ring=f.geometry.coordinates[0].map(function(c){ return [c[1],c[0]]; });
+    (by[n]=by[n]||[]).push(ring);
+  });
+  return ZORDER.map(function(n){ return { name:n, price:ZCFG[n].price, label:ZCFG[n].label, color:ZCFG[n].color, polys:by[n]||[] }; });
+})();
+function inRing(pt,ring){
+  var x=pt[0],y=pt[1],inside=false;
+  for(var i=0,j=ring.length-1;i<ring.length;j=i++){
+    var xi=ring[i][0],yi=ring[i][1],xj=ring[j][0],yj=ring[j][1];
+    if(((yi>y)!==(yj>y)) && (x < (xj-xi)*(y-yi)/(yj-yi)+xi)) inside=!inside;
   }
+  return inside;
 }
-function geoUrl(){ return GEO? ('https://maps.google.com/?q='+GEO.lat+','+GEO.lng) : ''; }
+function zoneOf(lat,lng){
+  for(var i=0;i<ZONES.length;i++){
+    for(var j=0;j<ZONES[i].polys.length;j++){
+      if(inRing([lat,lng],ZONES[i].polys[j])) return ZONES[i];
+    }
+  }
+  return null;
+}
+var MAP=null, PIN=null;
+function initMap(){
+  if(MAP || typeof L==='undefined') return;
+  MAP=L.map('map',{ zoomControl:true }).setView(SHOP_LL,14);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(MAP);
+  ZONES.slice().reverse().forEach(function(z){
+    z.polys.forEach(function(p){
+      L.polygon(p,{color:z.color,weight:1.5,fillOpacity:.16}).addTo(MAP);
+    });
+  });
+  L.circleMarker(SHOP_LL,{radius:7,color:'#143A60',fillColor:'#5BB8E8',fillOpacity:1,weight:2})
+   .addTo(MAP).bindTooltip('ร้าน');
+  MAP.on('click',function(e){ setPin(e.latlng.lat,e.latlng.lng,true); });
+  setTimeout(function(){ MAP.invalidateSize(); },200);
+}
+function setPin(lat,lng,fly){
+  GEO={lat:lat,lng:lng};
+  ZONE=zoneOf(lat,lng);
+  if(MAP){
+    if(PIN) MAP.removeLayer(PIN);
+    PIN=L.marker([lat,lng]).addTo(MAP);
+    if(fly!==false) MAP.setView([lat,lng], Math.max(MAP.getZoom(),15));
+  }
+  var z=el('zres');
+  if(ZONE){
+    z.className='zres ok';
+    z.innerHTML='ค่าส่ง '+ZONE.price+' บาท<small>'+ZONE.label+' · แตะจุดอื่นเพื่อเปลี่ยนได้</small>';
+  }else{
+    z.className='zres bad';
+    z.innerHTML='อยู่นอกพื้นที่จัดส่ง<small>ทักไลน์สอบถามร้านได้เลยค่ะ</small>';
+  }
+  calc();
+}
 function askGeo(){
   var b=el('geoBtn');
-  if(!navigator.geolocation){
-    el('geoOk').className='geook on';
-    el('geoOk').style.color='var(--neg)';
-    el('geoOk').textContent='เครื่องนี้ไม่รองรับการหาพิกัด — พิมพ์ที่อยู่ให้ละเอียดแทนได้ค่ะ';
-    return;
-  }
-  b.innerHTML='<span class="ic">⏳</span><span class="tx"><b>กำลังหาพิกัด…</b><i>อนุญาตให้เข้าถึงตำแหน่งด้วยนะคะ</i></span>';
+  if(!navigator.geolocation){ el('zres').className='zres bad'; el('zres').textContent='เครื่องนี้หาตำแหน่งไม่ได้ — แตะบนแผนที่แทนได้ค่ะ'; return; }
+  b.innerHTML='<span class="ic">⏳</span><span class="tx"><b>กำลังหาตำแหน่ง…</b><i>อนุญาตให้เข้าถึงตำแหน่งด้วยนะคะ</i></span>';
   navigator.geolocation.getCurrentPosition(function(p){
-    GEO={ lat:p.coords.latitude, lng:p.coords.longitude };
-    geoLabel(); calc();
+    b.innerHTML='<span class="ic">📍</span><span class="tx"><b>ใช้ตำแหน่งปัจจุบัน</b><i>หรือแตะบนแผนที่เพื่อเลือกจุดรับผ้า</i></span>';
+    setPin(p.coords.latitude,p.coords.longitude,true);
   },function(){
-    GEO=null; geoLabel();
-    el('geoOk').className='geook on';
-    el('geoOk').style.color='var(--neg)';
-    el('geoOk').textContent='ไม่ได้รับอนุญาตให้ใช้ตำแหน่ง — พิมพ์ที่อยู่ให้ละเอียดแทนได้ค่ะ';
+    b.innerHTML='<span class="ic">📍</span><span class="tx"><b>ใช้ตำแหน่งปัจจุบัน</b><i>หรือแตะบนแผนที่เพื่อเลือกจุดรับผ้า</i></span>';
+    el('zres').className='zres bad';
+    el('zres').innerHTML='ไม่ได้รับอนุญาตให้ใช้ตำแหน่ง<small>แตะบนแผนที่เพื่อเลือกจุดรับผ้าแทนได้ค่ะ</small>';
   },{ enableHighAccuracy:true, timeout:12000, maximumAge:0 });
 }
+function geoUrl(){ return GEO? ('https://maps.google.com/?q='+GEO.lat+','+GEO.lng) : ''; }
+
 function calc(){
   var w=0,wn=0,dr=0,dn=0;
   WASH.forEach(function(m,i){ var q=st.wash[i]||0; if(q){ w+=m.p[st.wt[i]||'cold']*q; wn+=q; } });
   DRY.forEach(function(m,i){ var q=st.dry[i]||0; if(q){ dr+=m.price*q; dn+=q; } });
-  var needShip = (MODE!=='self');
-  var ship = parseInt(el('ship').value,10);
-  if(isNaN(ship)||ship<0) ship=null;
-  if(!needShip) ship=0;
+  var picked = (MODE!==null);
+  var needShip = (MODE==='both');
+  var ship = needShip ? (ZONE? ZONE.price : null) : 0;
   var fold = el('fold').checked, sep = el('sep').checked;
 
   /* ── เงื่อนไขบังคับ ── */
@@ -351,11 +400,13 @@ function calc(){
   el('sepWarn').className = (TRIED && wr.length)? 'warn on':'warn';
 
   if((wn+dn)===0) need.push('เลือกเครื่องซักหรือเครื่องอบอย่างน้อย 1 เครื่อง');
+  if(!picked) need.push('เลือกว่าจะให้ไปรับ–ส่ง หรือเอาผ้ามาส่งเอง');
   wr.forEach(function(t){ need.push(t); });
   if(!el('name').value.trim()) need.push('กรอกชื่อผู้รับ');
   if(!el('tel').value.trim())  need.push('กรอกเบอร์โทร');
   if(needShip && !el('addr').value.trim()) need.push('กรอกที่อยู่สำหรับจัดส่ง');
-  if(needShip && ship==null)   need.push('กดเช็คค่าส่ง แล้วใส่ราคาที่ได้');
+  if(needShip && !GEO)  need.push('เลือกจุดรับผ้า (กดใช้ตำแหน่งปัจจุบัน หรือแตะบนแผนที่)');
+  else if(needShip && !ZONE) need.push('จุดที่เลือกอยู่นอกพื้นที่จัดส่ง — ทักไลน์สอบถามร้านได้เลย');
 
   el('needList').innerHTML = need.map(function(t){ return '<li>'+t+'</li>'; }).join('');
   /* โชว์รายการที่ขาด เฉพาะหลังกดส่งแล้วยังไม่ครบ */
@@ -363,7 +414,7 @@ function calc(){
   NEED = need;
 
   el('shipBox').style.display = needShip? '':'none';
-  el('geoBox').style.display = needShip? '':'none';
+  if(needShip) initMap();
   el('addrLb').innerHTML = needShip
       ? 'ที่อยู่ / หอพัก / ห้อง <span style="color:var(--neg)">*</span>'
       : 'ที่อยู่ (ไม่บังคับ)';
@@ -372,12 +423,13 @@ function calc(){
   el('pWash').textContent = money(w);
   el('pDry').textContent  = money(dr);
   el('rowFold').style.display = fold? 'flex':'none';
-  el('pShip').innerHTML = !needShip
-      ? '<span class="free">ไม่มี (รับ-ส่งเอง)</span>'
-      : (ship==null ? '<span style="color:var(--muted);font-weight:400">ยังไม่ได้ใส่</span>' : money(ship));
+  el('pShip').innerHTML = !picked
+      ? '<span style="color:var(--muted);font-weight:400">ยังไม่ได้เลือก</span>'
+      : (!needShip ? '<span class="free">ไม่มี (มาส่งเอง)</span>'
+      : (ship==null ? '<span style="color:var(--muted);font-weight:400">ยังไม่ได้เลือกจุด</span>' : money(ship)));
   var tot = w+dr+(ship||0);
   el('pTot').textContent = money(tot);
-  return { w:w, wn:wn, dr:dr, dn:dn, ship:ship, fold:fold, sep:sep, tot:tot, mode:MODE, needShip:needShip };
+  return { w:w, wn:wn, dr:dr, dn:dn, ship:ship, fold:fold, sep:sep, tot:tot, mode:MODE, needShip:needShip, picked:picked };
 }
 
 function build(){
@@ -407,8 +459,8 @@ function build(){
   L.push('');
   L.push('💵 ค่าซัก '+c.w+'฿ · ค่าอบ '+c.dr+'฿');
   if(c.fold) L.push('🧺 ฝากพับผ้า — ฟรี ไม่มีค่าบริการ');
-  var MN={ both:'ให้ร้านไปรับ–ส่งคืน', self:'มาส่ง–มารับเอง' };
-  L.push('🛵 '+MN[c.mode]+(c.needShip? (' · ค่าส่ง '+c.ship+'฿') : ' · ไม่มีค่าส่ง'));
+  if(c.needShip) L.push('🛵 เดลิเวอรี่ · ค่าส่ง '+c.ship+'฿'+(ZONE? (' ('+ZONE.label+')') : ''));
+  else           L.push('🚶 เอาผ้ามาส่งเอง · ไม่มีค่าส่ง');
   L.push('รวมประมาณ '+c.tot+'฿');
   L.push('');
   L.push('📍 ข้อมูลลูกค้า');
@@ -416,10 +468,7 @@ function build(){
   L.push('   เบอร์: '+el('tel').value.trim());
   var ad=el('addr').value.trim().replace(/\n/g,' ');
   if(ad) L.push('   ที่อยู่: '+ad);
-  if(c.needShip){
-    if(GEO) L.push('   พิกัด: '+geoUrl());
-    else    L.push('   พิกัด: — (ไม่ได้แนบ กรุณาโทรถามทางค่ะ)');
-  }
+  if(c.needShip && GEO) L.push('   พิกัด: '+geoUrl());
   L.push('   เวลาที่สะดวก: '+el('pick').value);
   var mm=el('memo').value.trim();
   if(mm) L.push('   หมายเหตุ: '+mm);
@@ -451,19 +500,22 @@ el('copyBtn').addEventListener('click',function(){
   }
 });
 
-el('ship').addEventListener('input',calc);
 el('geoBtn').addEventListener('click',askGeo);
 ['fold','sep'].forEach(function(id){ el(id).addEventListener('change',calc); });
 ['name','tel','addr'].forEach(function(id){ el(id).addEventListener('input',calc); });
-var SHIP_URL='https://phoneyjung.github.io/washanddry-delivery/';
 [].slice.call(el('mode').children).forEach(function(b){
   b.addEventListener('click',function(){
     var m=b.getAttribute('data-m');
     MODE=m;
     [].slice.call(el('mode').children).forEach(function(x){ x.className='ob'+(x===b?' on':''); });
     calc();
-    /* เลือกให้ร้านไปรับ-ส่ง = เปิดหน้าคำนวณค่าส่งให้เลย */
-    if(m==='both'){ window.open(SHIP_URL,'_blank','noopener'); }
+    if(m==='both'){
+      setTimeout(function(){
+        if(MAP) MAP.invalidateSize();
+        el('shipBox').scrollIntoView({behavior:'smooth',block:'nearest'});
+        if(!GEO) askGeo();
+      },250);
+    }
   });
 });
 
