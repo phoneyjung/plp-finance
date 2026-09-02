@@ -4047,8 +4047,8 @@ function AttendPanel({ user }){
                     </span>
                   ))}
                 </div>
-                <div className="num" style={{width:80,padding:'9px 8px',textAlign:'right',fontWeight:700,display:'flex',alignItems:'center',justifyContent:'flex-end',color: r.net>=10?'#3E7D3E':'var(--ink)'}}>{r.net? r.net+'ช':'–'}</div>
-                <div className="num" style={{width:62,padding:'9px 4px',textAlign:'right',display:'flex',alignItems:'center',justifyContent:'flex-end',fontWeight:700,fontSize:12,color: r.hol?'#CE4A5A':(r.otMin>0?'#C68B4A':(r.otMin<0?'#CE4A5A':'var(--muted)'))}}>{r.hol? '×2' : minTxt(r.otMin)}</div>
+                <div className="num" style={{width:80,padding:'9px 8px',textAlign:'right',fontWeight:700,display:'flex',alignItems:'center',justifyContent:'flex-end',color: hasShop(d,r.pin,'owlcha')? (r.net>=10?'#3E7D3E':'var(--ink)') : 'var(--line)'}}>{hasShop(d,r.pin,'owlcha')? (r.net? r.net+'ช':'–') : <span className="kanit text-[10.5px]" style={{fontWeight:400,color:'var(--muted)'}}>ทำที่อื่น</span>}</div>
+                <div className="num" style={{width:62,padding:'9px 4px',textAlign:'right',display:'flex',alignItems:'center',justifyContent:'flex-end',fontWeight:700,fontSize:12,color: r.hol?'#CE4A5A':(r.otMin>0?'#C68B4A':(r.otMin<0?'#CE4A5A':'var(--muted)'))}}>{!hasShop(d,r.pin,'owlcha')? '–' : (r.hol? '×2' : minTxt(r.otMin))}</div>
                 <div style={{width:96,padding:'9px 4px',textAlign:'center',display:'flex',alignItems:'center',justifyContent:'center',gap:4}} className="text-[11px]">
                   <button className="press kanit text-[10.5px]" title="แตะเพื่อเปลี่ยนสถานะ"
                     style={{border:'1px solid '+(r.hol?'#CE4A5A':'var(--line)'),background: r.hol?'#CE4A5A':'var(--card)',color: r.hol?'#fff':'var(--ink)',borderRadius:999,padding:'2px 9px',fontWeight:600}}
@@ -4139,8 +4139,10 @@ function AttendPanel({ user }){
                   </span>
                   {r.pairs.length>1 && <span className="text-[10.5px]" style={{color:'var(--muted)'}}>{r.pairs.length} ช่วง</span>}
                   {r.fixed>0 && <span className="text-[10.5px]" style={{color:'var(--muted)',opacity:.75}}>ตัดซ้ำ {r.fixed}</span>}
-                  <div className="num text-[13px]" style={{fontWeight:700,color: r.net>=10?'#3E7D3E':'var(--ink)'}}>{r.net? r.net+' ชม.':'–'}</div>
-                  {!r.hol && r.otMin!==0 && <span className="num text-[11px]" style={{color: r.otMin>0?'#C68B4A':'#CE4A5A',fontWeight:700}}>{minTxt(r.otMin)}</span>}
+                  {hasShop(d,r.pin,'owlcha')
+                    ? <div className="num text-[13px]" style={{fontWeight:700,color: r.net>=10?'#3E7D3E':'var(--ink)'}}>{r.net? r.net+' ชม.':'–'}</div>
+                    : <span className="kanit text-[10.5px]" style={{color:'var(--muted)'}}>ทำที่อื่น</span>}
+                  {hasShop(d,r.pin,'owlcha') && !r.hol && r.otMin!==0 && <span className="num text-[11px]" style={{color: r.otMin>0?'#C68B4A':'#CE4A5A',fontWeight:700}}>{minTxt(r.otMin)}</span>}
                   {r.hol && <span className="text-[10.5px]" style={{color:'#CE4A5A',fontWeight:700}}>🆘×2</span>}
                   <span className="text-[12px]" style={{color:'var(--muted)'}}>✏️</span>
                 </div>
@@ -4231,7 +4233,7 @@ function AttendPanel({ user }){
                             ))}
                             {r.manual && <span className="text-[10.5px]" style={{color:'var(--muted)'}}>&#9999;</span>}
                           </div>
-                          <div className="num" style={{width:66,textAlign:'right',fontWeight:700,color: r.net>=10?'#3E7D3E':'var(--ink)'}}>{r.net? r.net+'ช':'–'}</div>
+                          <div className="num" style={{width:66,textAlign:'right',fontWeight:700,color: hasShop(d,detail,'owlcha')? (r.net>=10?'#3E7D3E':'var(--ink)') : 'var(--line)'}}>{hasShop(d,detail,'owlcha')? (r.net? r.net+'ช':'–') : <span className="kanit text-[10px]" style={{fontWeight:400,color:'var(--muted)'}}>ที่อื่น</span>}</div>
                           <div className="num text-[11.5px]" style={{width:58,textAlign:'right',fontWeight:700,color: hol?'#CE4A5A':(otMin>0?'#C68B4A':(otMin<0?'#CE4A5A':'var(--muted)'))}}>{hol? '×2' : minTxt(otMin)}</div>
                           <div style={{width:52,textAlign:'center'}}>
                             <button className="press kanit text-[10.5px]"
@@ -4886,6 +4888,31 @@ function OCTabPay({ toast }){
               const arr=att[d]||(att[d]=[]);
               if(arr.indexOf(sid)<0) arr.push(sid);
             }
+            ch=true;
+          });
+        });
+        /* 🧹 ตัดวันที่ effective shop ไม่มี owlcha ออกจากเงินเดือน Owl (กันคิดเงินผิด)
+           ถ้ากลับไปติ๊ก 🧋 วันนั้น ข้อมูลจะไหลกลับเข้ามาเองจาก fpScans */
+        const idToPin2={};
+        (p.staff||[]).forEach(function(x){ if(x.fpId!=null&&x.fpId!==''){ idToPin2[x.id]=String(x.fpId); } });
+        const holM=m.hol||{};
+        Object.keys(times).forEach(function(d2){
+          Object.keys(times[d2]||{}).forEach(function(sid2){
+            const pin2=idToPin2[sid2];
+            if(!pin2) return;
+            if(String(shopAt(d2,pin2)).split(',').indexOf('owlcha')>=0) return;
+            delete times[d2][sid2];
+            if(att[d2]){ const ix=att[d2].indexOf(sid2); if(ix>=0) att[d2].splice(ix,1); }
+            if(holM[d2]){ const ix2=holM[d2].indexOf(sid2); if(ix2>=0) holM[d2].splice(ix2,1); }
+            ch=true;
+          });
+        });
+        Object.keys(att).forEach(function(d2){
+          (att[d2]||[]).slice().forEach(function(sid2){
+            const pin2=idToPin2[sid2];
+            if(!pin2) return;
+            if(String(shopAt(d2,pin2)).split(',').indexOf('owlcha')>=0) return;
+            const ix=att[d2].indexOf(sid2); if(ix>=0) att[d2].splice(ix,1);
             ch=true;
           });
         });
