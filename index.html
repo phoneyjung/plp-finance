@@ -3254,6 +3254,7 @@ function AttendPanel({ user }){
   const [holMap,setHolMap]=useState({});
   const [cfg,setCfg]=useState({});
   const [payAll,setPayAll]=useState(null);
+  const [lnHome,setLnHome]=useState({});
   const [showSync,setShowSync]=useState(false);
   const [detail,setDetail]=useState(null);
   const [leaveEdit,setLeaveEdit]=useState(null);
@@ -3275,6 +3276,9 @@ function AttendPanel({ user }){
     db.collection('owlCost').doc('payroll').get()
       .then(s=>{ if(!stop && s.exists){ const v=s.data()||{}; setStaff(v.staff||[]); setCfg(v.cfg||{}); setPayAll(v); } })
       .catch(()=>{});
+    db.collection('owlCost').doc('laundryPay').get()
+      .then(s=>{ if(!stop && s.exists){ const v=s.data()||{}; const mp={}; (v.staff||[]).forEach(x=>{ const p=String(x.fpId||'').trim(); if(p) mp[p]=x.shop||'teddy2'; }); setLnHome(mp); } })
+      .catch(()=>{});
     db.collection('fpScans').doc(ym).get()
       .then(s=>{ if(stop) return; const v=s.exists? (s.data()||{}) : {}; setScans(v.d||{}); setShopMap(v.shop||{}); setLeaveMap(v.leave||{}); setHolMap(v.hol||{}); })
       .catch(e=>{ if(!stop){ setScans({}); setErr('โหลดข้อมูลไม่สำเร็จ'); } });
@@ -3289,6 +3293,8 @@ function AttendPanel({ user }){
   const shopOf=(d,pin)=>{
     const ov=((shopMap||{})[String(d)]||{})[String(pin)];
     if(ov) return ov;
+    const lh=lnHome[String(pin)];      /* คนในทะเบียนซักผ้า ใช้บ้านหลักจากทะเบียนซักผ้าก่อน */
+    if(lh) return lh;
     const st=stOf(pin);
     return (st&&st.shop)? st.shop : 'owlcha';
   };
@@ -4805,10 +4811,16 @@ function OCTabPay({ toast }){
     if(!db || !pay) return;
     if(fpMergedRef.current===ym) return;
     let stop=false;
-    db.collection('fpScans').doc(ym).get().then(s=>{
+    Promise.all([
+      db.collection('fpScans').doc(ym).get(),
+      db.collection('owlCost').doc('laundryPay').get().catch(function(){ return null; })
+    ]).then(function(res){
+      const s=res[0], ls=res[1];
       if(stop) return;
       fpMergedRef.current=ym;
       if(!s.exists) return;
+      const lnHomeM={};
+      if(ls && ls.exists){ (((ls.data()||{}).staff)||[]).forEach(function(x){ const p=String(x.fpId||'').trim(); if(p) lnHomeM[p]=x.shop||'teddy2'; }); }
       const sdat=s.data()||{};
       const sc=sdat.d||{};
       const shopOv=sdat.shop||{};
@@ -4818,7 +4830,7 @@ function OCTabPay({ toast }){
         (p.staff||[]).forEach(st=>{ if(st.fpId!=null&&st.fpId!==''){ map[String(st.fpId)]=st.id; homeShop[String(st.fpId)]=st.shop||'owlcha'; } });
         const shopAt=(d,pin)=>{
           const ov=(shopOv[String(d)]||{})[String(pin)];
-          return ov || homeShop[String(pin)] || 'owlcha';
+          return ov || lnHomeM[String(pin)] || homeShop[String(pin)] || 'owlcha';
         };
         const m=p.months[ym]||(p.months[ym]={});
         const times=m.times||(m.times={});
@@ -5939,7 +5951,7 @@ function LnAttendPanel({ shop, user }){
     selArr=WORK_SHOPS.map(function(s2){ return s2.id; }).filter(function(x2){ return selArr.indexOf(x2)>=0; });
     if(!selArr.length) selArr=[home];
     const selStr=selArr.join(',');
-    const selIsHome=(home==='otteri') || (selArr.length===1 && selArr[0]===home);
+    const selIsHome=(home==='otteri'); /* ประทับร้านเสมอ กันข้อมูล 2 ระบบไม่ตรงกัน */
     setBusy(true); setMsg('');
     try{
       const DEL=firebase.firestore.FieldValue.delete();
