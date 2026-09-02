@@ -6010,6 +6010,7 @@ function LnAttendPanel({ shop, user }){
 
       {st && (
         <div className="card p-3 mb-3">
+          <div className="text-[11px] mb-1" style={{color:'var(--muted)'}}>นับเฉพาะวันที่ลงเวลาให้ {shop.name} เท่านั้น</div>
           <div className="flex flex-wrap gap-x-4 gap-y-1 text-[12.5px]" style={{color:'var(--muted)'}}>
             <span>ทำงาน <b className="num" style={{color:'var(--ink)'}}>{tot.work}</b> วัน</span>
             <span>หยุด×2 <b className="num" style={{color:'var(--ink)'}}>{tot.hol}</b> วัน</span>
@@ -6029,7 +6030,13 @@ function LnAttendPanel({ shop, user }){
         const others=o.effList.filter(x=>x!==shop.id);
         const shopTag=(id)=> id==='owlcha'? '🧋 Owl' : (lnShopInfo(id).emoji+' '+lnShopInfo(id).label);
         let body;
-        if(o.netMin>0){
+        if(o.netMin>0 && !mine){
+          body=(
+            <span className="text-[12px]" style={{color:'var(--muted)'}}>
+              {o.pairs[0].i}–{o.pairs[o.pairs.length-1].o} · ลงให้ {others.map(shopTag).join(' · ')} — ไม่นับร้านนี้
+            </span>
+          );
+        } else if(o.netMin>0){
           body=(
             <React.Fragment>
               <span className="num" style={{fontWeight:600}}>{o.pairs[0].i}–{o.pairs[o.pairs.length-1].o}</span>
@@ -6052,7 +6059,7 @@ function LnAttendPanel({ shop, user }){
               <div style={{flex:1,minWidth:0}}>{body}</div>
               {o.hol && <span className="text-[10.5px] px-1.5 py-0.5 rounded" style={{background:'#FFF2CC',color:'#8a6d1a'}}>×2</span>}
               {o.edited && <span className="text-[10.5px] px-1.5 py-0.5 rounded" style={{background:'var(--soft)',color:'var(--muted)'}}>แก้มือ</span>}
-              {others.length>0 && <span className="text-[10.5px] px-1.5 py-0.5 rounded" style={{background:'var(--soft)',color: mine? 'var(--muted)' : lnShopInfo(others[0]).color}}>{(mine?'+':'')+others.map(shopTag).join(' · ')}</span>}
+              {mine && others.length>0 && <span className="text-[10.5px] px-1.5 py-0.5 rounded" style={{background:'var(--soft)',color:'var(--muted)'}}>{'+'+others.map(shopTag).join(' · ')}</span>}
             </div>
           </div>
         );
