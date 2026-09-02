@@ -2668,6 +2668,7 @@ function ocPayCalc(pay,ym){
     if(!st || st.kind!=='partner') return 0;
     return (st.minHrs!=null && st.minHrs!=='')? Number(st.minHrs) : (cfg.partnerMinHrs!=null? Number(cfg.partnerMinHrs) : 5);
   };
+  const sickArr=m.sick||{};   /* 🤒 วันลาป่วย (แม่บ้าน: ได้เงิน ไม่นับ OT) — เติมจากแท็บเวลาอัตโนมัติ */
   const shortDay={};   /* shortDay[d][id] = true ถ้าทำไม่ถึงขั้นต่ำ */
   for(let d=1;d<=nDays;d++){
     shortDay[d]={};
@@ -2720,16 +2721,20 @@ function ocPayCalc(pay,ym){
     const quota=(st.kind==='maid' && st.offQuota!==''&&st.offQuota!=null)? Number(st.offQuota) : null;
     const inMonth=(dt)=> !!dt && String(dt).slice(0,7)===ym;
     const partialMonth = inMonth(st.start) || inMonth(st.end);
+    let sickDays=0;
+    if(isMaid){ for(let d=1;d<=nDays;d++){ if(((sickArr[d]||[]).indexOf(st.id))>=0 && perDay[d].ids.indexOf(st.id)<0) sickDays++; } }
     let base, offDays=nDays-(days+holDays), offExcess=0;
     let extraDays=0, extraRate=0;
     if(quota!=null && !isNaN(quota) && partialMonth){
-      /* 🌱 เริ่มงาน/ลาออกเดือนนี้: ฐาน ÷ จำนวนวันของเดือน × วันที่เข้าทำงาน (ไม่ใช้สูตรโควตา) */
-      base=Math.max(0, Math.round(baseUsed/nDays*(days+holDays)));
+      /* 🌱 เริ่มงาน/ลาออกเดือนนี้: ฐาน ÷ จำนวนวันของเดือน × วันที่เข้าทำงาน (ลาป่วยนับเป็นวันได้เงิน) */
+      base=Math.max(0, Math.round(baseUsed/nDays*(days+holDays+sickDays)));
     } else if(quota!=null && !isNaN(quota)){
-      const dayRate=baseUsed/Math.max(1,(nDays-quota));
-      const diff=(days+holDays)-(nDays-quota);
-      offExcess=Math.max(0,-diff);
-      extraDays=Math.max(0,diff);
+      const req=Math.max(1,(nDays-quota));
+      const dayRate=baseUsed/req;
+      /* 🤒 ลาป่วย: นับเป็นวันได้เงิน (กันโดนหักโควตา) · OT/ทำแทน นับจากวันทำจริงเท่านั้น */
+      const credit=(days+holDays)+sickDays;
+      offExcess=Math.max(0, req-credit);
+      extraDays=Math.max(0, (days+holDays)-req);
       extraRate=(st.extraRate!==''&&st.extraRate!=null&&Number(st.extraRate)>0)? Number(st.extraRate) : dayRate;
       base=Math.max(0, Math.round(baseUsed - offExcess*dayRate + extraDays*extraRate));
     } else {
@@ -2796,7 +2801,7 @@ function ocPayCalc(pay,ym){
     const bn=Number(bonus[st.id])||0;
     const net = base+com+otB+dl+bn+holPay-missB;
     const diligForced = (dg[st.id]===0 || dg[st.id]===1);
-    return { st, isMaid, days, holDays, holPay, baseUsed, base, com, otAuto, otMan, otH, otB, dl, bn, missH, missB, advT, advList, quota, offDays, offExcess, extraDays, extraRate, net, toPay: net-advT, lateDays, lateMin, diligAuto, diligForced, workedDays, diligMinDays, diligDaysOk, isPartner, myMinHrs, shortDays, partialMonth, otMin, otRestMin:(isMaid?0:otRestMin), missMin, missRestMin:(isMaid?0:missRestMin) };
+    return { st, isMaid, days, holDays, holPay, baseUsed, base, com, otAuto, otMan, otH, otB, dl, bn, missH, missB, advT, advList, quota, offDays, offExcess, extraDays, extraRate, net, toPay: net-advT, lateDays, lateMin, diligAuto, diligForced, workedDays, diligMinDays, diligDaysOk, isPartner, myMinHrs, shortDays, partialMonth, sickDays, otMin, otRestMin:(isMaid?0:otRestMin), missMin, missRestMin:(isMaid?0:missRestMin) };
   });
   const total=rows.reduce((s,r)=>s+r.net,0);
   const rev=cupsT*(cfg.avgPrice||0);
@@ -3004,7 +3009,7 @@ async function ocPayPersonImage(pay,ym,stId){
   const ab=ocPayAbsent(pay,ym,stId);
   const elsAll=((pay.months[ym]||{}).els)||{};
   const elsCnt=Object.keys(elsAll).filter(function(d9){ return !!((elsAll[d9]||{})[stId]); }).length;
-  g.fillText('ทำงาน '+(r.days+r.holDays)+' วัน'+(r.holDays?(' (วันหยุด×2 '+r.holDays+' วัน)'):'')+(elsCnt? (' · ไปช่วยร้านอื่น '+elsCnt+' วัน'):'')+' · หยุด '+ab.n+' วัน'+(r.quota!=null&&r.partialMonth? ' (🌱 เริ่ม/ออกงานเดือนนี้ · ฐาน÷'+calc.nDays+'×'+(r.days+r.holDays)+' วัน)' : (r.quota!=null?(' (โควตา '+r.quota+(r.offExcess>0?' · เกิน '+r.offExcess+' วัน':'')+(r.extraDays>0?' · ทำแทน +'+r.extraDays+' วัน × '+Math.round(r.extraRate):'')+')'):''))+': '+ab.text,32,106);
+  g.fillText('ทำงาน '+(r.days+r.holDays)+' วัน'+(r.holDays?(' (วันหยุด×2 '+r.holDays+' วัน)'):'')+(elsCnt? (' · ไปช่วยร้านอื่น '+elsCnt+' วัน'):'')+(r.sickDays? (' · ลาป่วย '+r.sickDays+' วัน (ได้เงิน)') : '')+' · หยุด '+ab.n+' วัน'+(r.quota!=null&&r.partialMonth? ' (🌱 เริ่ม/ออกงานเดือนนี้ · ฐาน÷'+calc.nDays+'×'+(r.days+r.holDays)+' วัน)' : (r.quota!=null?(' (โควตา '+r.quota+(r.offExcess>0?' · เกิน '+r.offExcess+' วัน':'')+(r.extraDays>0?' · ทำแทน +'+r.extraDays+' วัน × '+Math.round(r.extraRate):'')+')'):''))+': '+ab.text,32,106);
   const chips=[['ฐาน',r.base],['คอม',r.com],['OT '+(r.otH||0)+' ชม.',r.otB],['หยุด×2',r.holPay],['เบี้ยขยัน',r.dl],['โบนัส/หัก',r.bn],['หักขาด '+(r.missH||0)+' ชม.',-(r.missB||0)]];
   const otTotMin=(r.otMin||0), otRest=(r.otRestMin||0);
   chips.forEach((c,k)=>{
@@ -4890,6 +4895,29 @@ function OCTabPay({ toast }){
             ch=true;
           });
         });
+        /* 🤒 ดึงวันลาป่วยจากแท็บเวลา → months.sick (เฉพาะวันที่นับเป็นของ Owl) */
+        const sickM=m.sick||(m.sick={});
+        const lvAll=sdat.leave||{};
+        Object.keys(lvAll).forEach(function(d3){
+          Object.keys(lvAll[d3]||{}).forEach(function(pin3){
+            const lv3=(lvAll[d3]||{})[pin3];
+            if(!lv3 || lv3.t!=='sick') return;
+            const sid3=map[String(pin3)]; if(!sid3) return;
+            if(String(shopAt(d3,pin3)).split(',').indexOf('owlcha')<0) return;
+            const arr3=sickM[d3]||(sickM[d3]=[]);
+            if(arr3.indexOf(sid3)<0){ arr3.push(sid3); ch=true; }
+          });
+        });
+        Object.keys(sickM).forEach(function(d3){
+          (sickM[d3]||[]).slice().forEach(function(sid3){
+            const st3=(p.staff||[]).find(function(x){return x.id===sid3;});
+            const pin3= st3&&st3.fpId!=null&&st3.fpId!==''? String(st3.fpId):null;
+            if(!pin3) return;
+            const lv3=(lvAll[d3]||{})[pin3];
+            const ok3= lv3 && lv3.t==='sick' && String(shopAt(d3,pin3)).split(',').indexOf('owlcha')>=0;
+            if(!ok3){ const ix3=sickM[d3].indexOf(sid3); if(ix3>=0){ sickM[d3].splice(ix3,1); ch=true; } }
+          });
+        });
         /* 🧹 ตัดวันที่ effective shop ไม่มี owlcha ออกจากเงินเดือน Owl (กันคิดเงินผิด)
            ถ้ากลับไปติ๊ก 🧋 วันนั้น ข้อมูลจะไหลกลับเข้ามาเองจาก fpScans */
         const idToPin2={};
@@ -5331,7 +5359,7 @@ function lnPayCalc(pay, ym, shopId, fp){
     const sOut= st.shiftOut? attHM(st.shiftOut):null;
     const gr=(cfg.otGrace!=null? Number(cfg.otGrace):15);
     const dGrace=(cfg.diligGrace!=null? Number(cfg.diligGrace):0);
-    let days=0,holDays=0,holPay=0,otMin=0,missMin=0,lateDays=0,lateMin=0,shortDays=0,openDays=0;
+    let days=0,holDays=0,holPay=0,otMin=0,missMin=0,lateDays=0,lateMin=0,shortDays=0,openDays=0,sickDays=0;
     const daily=[]; const other={};
     for(let d=1;d<=nDays;d++){
       const effRaw= pin? ((fs[String(d)]||{})[pin]) : null;
@@ -5353,7 +5381,7 @@ function lnPayCalc(pay, ym, shopId, fp){
       if(netMin>0||hol) effList.forEach(function(e2){ if(e2!==shopId) other[e2]=(other[e2]||0)+1; });
       if(!(netMin>0)){
         if(open){ openDays++; daily.push({d, open:true, tIn:list[0]||'', tOut:''}); }
-        else if(lv) daily.push({d, leave:lv});
+        else if(lv){ if(lv.t==='sick') sickDays++; daily.push({d, leave:lv}); }
         continue;
       }
       const hrs=netMin/60;
@@ -5398,15 +5426,16 @@ function lnPayCalc(pay, ym, shopId, fp){
     const partialMonth = inMonth(st.start) || inMonth(st.end);
     let base, offExcess=0, extraDays=0, dayRate=0, extraPay=0;
     if(modeMonth && partialMonth){
-      /* 🌱 เริ่มงาน/ลาออกเดือนนี้: ฐาน ÷ จำนวนวันของเดือน × วันที่เข้าทำงาน */
-      base=Math.max(0, Math.round(rate/nDays*workedDays0));
+      /* 🌱 เริ่มงาน/ลาออกเดือนนี้: ฐาน ÷ จำนวนวันของเดือน × วันที่เข้าทำงาน (ลาป่วยนับเป็นวันได้เงิน) */
+      base=Math.max(0, Math.round(rate/nDays*(workedDays0+sickDays)));
     } else if(modeMonth){
       const Q=Math.max(0,Number(pc.offQuota)||0);
       const req=Math.max(1,nDays-Q);
       dayRate=rate/req;
-      const diff=workedDays0-req;
-      offExcess=Math.max(0,-diff);
-      extraDays=Math.max(0,diff);
+      /* 🤒 ลาป่วย: นับเป็นวันได้เงิน (กันโดนหักโควตา) แต่ไม่นับเป็นวันทำแทน/OT */
+      const credit=workedDays0+sickDays;
+      offExcess=Math.max(0, req-credit);
+      extraDays=Math.max(0, workedDays0-req);
       extraPay=Math.round(extraDays*(Number(pc.extraRate)||0));
       base=Math.max(0,Math.round(rate - offExcess*dayRate));
     } else {
@@ -5438,7 +5467,7 @@ function lnPayCalc(pay, ym, shopId, fp){
       lateDays, lateMin, shortDays, minHrs, openDays, dl, diligAuto,
       diligForced:(dg[st.id]===0||dg[st.id]===1), dgVal:dg[st.id], workedDays, diligMinDays,
       otOn:!!pc.ot, otMult:(pc.otMult||2), diligOn:!!pc.diligOn, deduct:!!pc.deduct, shiftHrs,
-      modeMonth, partialMonth, offQuota:(Number(pc.offQuota)||0), extraRate:(Number(pc.extraRate)||0), offExcess, extraDays, dayRate, extraPay,
+      modeMonth, partialMonth, sickDays, offQuota:(Number(pc.offQuota)||0), extraRate:(Number(pc.extraRate)||0), offExcess, extraDays, dayRate, extraPay,
       jobOn:!!pc.jobOn, jobN, jobB, jobRate:(Number(pc.jobRate)||0), bnNote:String(bnNote[st.id]||''),
       bn, advList, advT, net, toPay:net-advT, daily, home });
   });
@@ -5469,7 +5498,7 @@ async function lnPaySlipImage(pay,ym,shopId,stId,shopName){
   g.fillText('สลิปเงินเดือน · '+r.st.name,30,42);
   g.font=FN(400,16); g.fillStyle='#CFE2F5';
   g.fillText(shopName+' · '+ocPayLabel(ym)+' · '+((r.pos.emoji||'')+' '+r.pos.name),30,72);
-  g.fillText('ทำงาน '+r.workedDays+' วัน'+(r.modeMonth&&r.partialMonth? ' (เริ่ม/ออกงานเดือนนี้ · คิดตามวันเข้าจริง ฐาน÷'+calc.nDays+'×'+r.workedDays+')' : '')+(r.modeMonth&&!r.partialMonth?(' (โควตาหยุด '+r.offQuota+(r.extraDays?(' · ทำแทน +'+r.extraDays+'ว ×'+r.extraRate):'')+(r.offExcess?(' · หยุดเกิน '+r.offExcess+'ว −'+Math.round(r.dayRate)+'/ว'):'')+')'):(r.holDays?(' (วันหยุด×2 '+r.holDays+' วัน)'):''))+(r.shortDays?(' · ตัด '+r.shortDays+' วัน (<'+r.minHrs+'ชม.)'):''),30,100);
+  g.fillText('ทำงาน '+r.workedDays+' วัน'+(r.sickDays? (' · ลาป่วย '+r.sickDays+' วัน (ได้เงิน)') : '')+(r.modeMonth&&r.partialMonth? ' (เริ่ม/ออกงานเดือนนี้ · คิดตามวันเข้าจริง ฐาน÷'+calc.nDays+'×'+r.workedDays+')' : '')+(r.modeMonth&&!r.partialMonth?(' (โควตาหยุด '+r.offQuota+(r.extraDays?(' · ทำแทน +'+r.extraDays+'ว ×'+r.extraRate):'')+(r.offExcess?(' · หยุดเกิน '+r.offExcess+'ว −'+Math.round(r.dayRate)+'/ว'):'')+')'):(r.holDays?(' (วันหยุด×2 '+r.holDays+' วัน)'):''))+(r.shortDays?(' · ตัด '+r.shortDays+' วัน (<'+r.minHrs+'ชม.)'):''),30,100);
   const chips=[[r.modeMonth?'เหมาเดือน':'ฐาน ('+r.days+'ว)',r.base]];
   if(r.extraDays) chips.push(['ทำแทนวันหยุด +'+r.extraDays+'ว',r.extraPay]);
   if(r.jobOn) chips.push(['พับ '+r.jobN+' งาน',r.jobB]);
@@ -6350,12 +6379,12 @@ function LnPayPanel({ shop, user, toast }){
                 </div>
                 {r.modeMonth && r.partialMonth && (
                   <div className="text-[11px] mt-1" style={{color:'#0E7A5F'}}>
-                    🌱 เริ่ม/ออกงานเดือนนี้ → คิดตามวันจริง: ฐาน ÷ {calc.nDays} วัน × เข้า {r.workedDays} วัน (ไม่ใช้สูตรโควตา)
+                    🌱 เริ่ม/ออกงานเดือนนี้ → คิดตามวันจริง: ฐาน ÷ {calc.nDays} วัน × เข้า {r.workedDays}{r.sickDays? '+ป่วย '+r.sickDays : ''} วัน (ไม่ใช้สูตรโควตา)
                   </div>
                 )}
                 {r.modeMonth && !r.partialMonth && (
                   <div className="text-[11px] mt-1" style={{color:'var(--muted)'}}>
-                    เหมาเดือน · ต้องเข้า {r.diligMinDays} วัน (หยุดได้ {r.offQuota}) · เข้าจริง {r.workedDays} วัน{r.extraDays? ' → ทำแทนวันหยุด +'+r.extraDays+' วัน ×'+ocFmt(r.extraRate,0) : ''}{r.offExcess? ' → หยุดเกินโควตา '+r.offExcess+' วัน −'+ocFmt(Math.round(r.dayRate),0)+'/วัน' : ''}
+                    เหมาเดือน · ต้องเข้า {r.diligMinDays} วัน (หยุดได้ {r.offQuota}) · เข้าจริง {r.workedDays} วัน{r.sickDays? ' + ลาป่วย '+r.sickDays+' วัน (ได้เงิน ไม่นับ OT)' : ''}{r.extraDays? ' → ทำแทนวันหยุด +'+r.extraDays+' วัน ×'+ocFmt(r.extraRate,0) : ''}{r.offExcess? ' → หยุดเกินโควตา '+r.offExcess+' วัน −'+ocFmt(Math.round(r.dayRate),0)+'/วัน' : ''}
                   </div>
                 )}
                 <div className="text-[11px] mt-1" style={{color:'var(--muted)'}}>
