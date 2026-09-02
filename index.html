@@ -3224,6 +3224,7 @@ const leaveInfo=(id)=> LEAVE_TYPES.find(x=>x.id===id) || LEAVE_TYPES[0];
 
 const WORK_SHOPS = [
   { id:'owlcha', label:'Owl Cha',  emoji:'🧋', color:'#8A5A3B' },
+  { id:'teddy1', label:'Teddy 1',  emoji:'🧸', color:'#C68B4A' },
   { id:'teddy2', label:'Teddy 2',  emoji:'🧺', color:'#2E8FC4' },
 ];
 const shopInfo=(id)=> WORK_SHOPS.find(x=>x.id===id) || WORK_SHOPS[0];
@@ -3290,6 +3291,15 @@ function AttendPanel({ user }){
     if(ov) return ov;
     const st=stOf(pin);
     return (st&&st.shop)? st.shop : 'owlcha';
+  };
+  const shopsOf=(d,pin)=> String(shopOf(d,pin)||'').split(',').filter(Boolean);
+  const hasShop=(d,pin,sid)=> shopsOf(d,pin).indexOf(sid)>=0;
+  const tglShop=(d,pin,sid)=>{
+    const cur=shopsOf(d,pin);
+    let nx = cur.indexOf(sid)>=0 ? cur.filter(x=>x!==sid) : cur.concat([sid]);
+    if(!nx.length) return; /* ต้องเหลืออย่างน้อย 1 ร้าน */
+    nx=WORK_SHOPS.map(x=>x.id).filter(x=>nx.indexOf(x)>=0);
+    setShop(d,pin,nx.join(','));
   };
   const isMaid=(pin)=>{ const st=stOf(pin); return !!(st&&st.kind==='maid'); };
   const leaveOf=(d,pin)=> ((leaveMap||{})[String(d)]||{})[String(pin)] || null;
@@ -3369,7 +3379,7 @@ function AttendPanel({ user }){
         nx[String(d)]=nx[String(d)]||{}; nx[String(d)][String(pin)]=sid;
         return nx;
       });
-      setMsg('ย้ายไป '+shopInfo(sid).label+' แล้ว'); setTimeout(()=>setMsg(''),1500);
+      setMsg('บันทึกร้านของวันนั้นแล้ว'); setTimeout(()=>setMsg(''),1500);
     }catch(e){ setMsg('เปลี่ยนร้านไม่สำเร็จ'); }
   };
   const pins=React.useMemo(()=>{
@@ -3413,7 +3423,7 @@ function AttendPanel({ user }){
       for(let d=1; d<=nDay; d++){
         const v=(scans[d]||{})[who];
         const rows=[];
-        if(v && (shopF==='all' || shopOf(d,who)===shopF)){
+        if(v && (shopF==='all' || hasShop(d,who,shopF))){
           const pr=parseRow(v);
           const hl=isHol(d,who);
           rows.push({ pin:who, ...v, ...pr, shop:shopOf(d,who), otMin: hl?0:otMinFrom(who,pr), hol:hl });
@@ -3425,7 +3435,7 @@ function AttendPanel({ user }){
     Object.keys(scans).map(Number).sort((a,b)=>b-a).forEach(d=>{
       const rows=Object.keys(scans[d]||{})
         .filter(p=> who==='all' || String(p)===who)
-        .filter(p=> shopF==='all' || shopOf(d,p)===shopF)
+        .filter(p=> shopF==='all' || hasShop(d,p,shopF))
         .sort((a,b)=>(+a)-(+b))
         .map(p=>{ const pr=parseRow(scans[d][p]||{}); const hl=isHol(d,p); return { pin:p, ...(scans[d][p]||{}), ...pr, shop:shopOf(d,p), otMin: hl?0:otMinFrom(p,pr), hol:hl }; });
       if(rows.length) out.push({ d, rows });
@@ -3443,10 +3453,11 @@ function AttendPanel({ user }){
         per[p].hours+=r.net;
         const hl2=isHol(d,p);
         if(hl2){ per[p].hol++; per[p].holHours+=r.net; } else per[p].otMin+=otMinFrom(p,r);
-        const sid=shopOf(d,p);
-        if(!per[p].byShop[sid]) per[p].byShop[sid]={ days:0, hours:0 };
-        per[p].byShop[sid].days++;
-        per[p].byShop[sid].hours+=r.net;
+        shopsOf(d,p).forEach(function(sid){
+          if(!per[p].byShop[sid]) per[p].byShop[sid]={ days:0, hours:0 };
+          per[p].byShop[sid].days++;
+          per[p].byShop[sid].hours+=r.net;
+        });
         if(r.manual) per[p].manual++;
         if(r.pairs.some(x=>!x.o)) per[p].open++;
       });
@@ -3636,7 +3647,7 @@ function AttendPanel({ user }){
       Object.keys(scans[d]||{}).forEach(pin=>{
         const sid=pinToId[String(pin)];
         if(!sid){ skip++; return; }
-        if(shopOf(d,pin)!=='owlcha') return;
+        if(!hasShop(d,pin,'owlcha')) return;
         const pr=parseRow(scans[d][pin]||{});
         if(!pr.pairs.length || !pr.pairs[0].i) return;
         let brk=0;
@@ -3755,7 +3766,7 @@ function AttendPanel({ user }){
           else { x.fillStyle='#C7CDD4'; x.font='400 13px Kanit,sans-serif'; x.fillText('–', W-PAD-142, ry+3); }
           x.font='400 12px Kanit,sans-serif';
           if(row.hol){ x.fillStyle='#CE4A5A'; x.fillText('วันหยุด ×2', W-PAD-86, ry+3); }
-          else { x.fillStyle='#8A95A0'; x.fillText(shopInfo(shopOf(row.d,pin)).label, W-PAD-86, ry+3); }
+          else { x.fillStyle='#8A95A0'; x.fillText(shopsOf(row.d,pin).map(function(s2){ return shopInfo(s2).emoji; }).join(' '), W-PAD-86, ry+3); }
         }else{
           const li2=leaveInfo(row.lv? row.lv.t : 'off');
           x.fillStyle='#9AA1AB'; x.font='400 13px Kanit,sans-serif';
@@ -3877,8 +3888,7 @@ function AttendPanel({ user }){
             <div>
               <div className="flex text-[11.5px] pb-1.5" style={{color:'var(--muted)',borderBottom:'1px solid var(--line)'}}>
                 <div className="flex-1">พนักงาน</div>
-                <div style={{width:96,textAlign:'right'}}>🧋 Owl</div>
-                <div style={{width:96,textAlign:'right'}}>🧺 Teddy2</div>
+                {WORK_SHOPS.map(sh=>(<div key={sh.id} style={{width:78,textAlign:'right'}}>{sh.emoji} {sh.id==='owlcha'?'Owl':sh.label.replace('Teddy ','T')}</div>))}
                 <div style={{width:48,textAlign:'right'}}>วัน</div>
                 <div style={{width:64,textAlign:'right'}}>รวม ชม.</div>
                 <div style={{width:52,textAlign:'right'}}>OT</div>
@@ -3894,7 +3904,7 @@ function AttendPanel({ user }){
                   {WORK_SHOPS.map(sh=>{
                     const b=(r.byShop||{})[sh.id];
                     return (
-                      <div key={sh.id} className="num" style={{width:96,textAlign:'right',color: b? sh.color:'var(--muted)',fontWeight: b?600:400}}>
+                      <div key={sh.id} className="num" style={{width:78,textAlign:'right',color: b? sh.color:'var(--muted)',fontWeight: b?600:400}}>
                         {b? (Math.round(b.hours*10)/10)+' ' : '–'}
                         {b && <span className="text-[10.5px]" style={{opacity:.75}}>({b.days}ว)</span>}
                       </div>
@@ -3910,7 +3920,7 @@ function AttendPanel({ user }){
                 <div className="kanit flex-1">รวมทุกคน</div>
                 {WORK_SHOPS.map(sh=>{
                   let h=0; sum.forEach(r=>{ const b=(r.byShop||{})[sh.id]; if(b) h+=b.hours; });
-                  return <div key={sh.id} className="num" style={{width:96,textAlign:'right',color:sh.color}}>{Math.round(h*10)/10}</div>;
+                  return <div key={sh.id} className="num" style={{width:78,textAlign:'right',color:sh.color}}>{Math.round(h*10)/10}</div>;
                 })}
                 <div className="num" style={{width:48,textAlign:'right'}}>{stat.days}</div>
                 <div className="num" style={{width:64,textAlign:'right',color:'var(--primary)'}}>{stat.hours}</div>
@@ -3988,12 +3998,15 @@ function AttendPanel({ user }){
                   ) : <span/>}
                 </div>
                 <div className="kanit min-w-0" style={{flex:1,padding:'9px 10px',display:'flex',alignItems:'center',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{nameOf(r.pin)}</div>
-                <div style={{width:110,padding:'9px 4px',display:'flex',alignItems:'center',justifyContent:'center'}}>
-                  <button className="press kanit text-[11.5px]" title="แตะเพื่อสลับร้าน"
-                    style={{border:'1px solid '+shopInfo(r.shop).color,background:'transparent',color:shopInfo(r.shop).color,borderRadius:999,padding:'2px 9px',fontWeight:600}}
-                    onClick={()=>{ const nx = r.shop==='owlcha'?'teddy2':'owlcha'; setShop(d,r.pin,nx); }}>
-                    {shopInfo(r.shop).emoji} {shopInfo(r.shop).label}
-                  </button>
+                <div style={{width:110,padding:'9px 2px',display:'flex',alignItems:'center',justifyContent:'center',gap:3}}>
+                  {WORK_SHOPS.map(sh=>{
+                    const on=hasShop(d,r.pin,sh.id);
+                    return (
+                      <button key={sh.id} className="press" title={sh.label}
+                        style={{border:'1.5px solid '+(on? sh.color:'var(--line)'),background: on? sh.color:'transparent',borderRadius:999,width:30,height:26,fontSize:13,lineHeight:'1',padding:0,opacity:on?1:.45,filter:on?'none':'grayscale(1)'}}
+                        onClick={()=>tglShop(d,r.pin,sh.id)}>{sh.emoji}</button>
+                    );
+                  })}
                 </div>
                 <div style={{width:236,color:'var(--muted)',padding:'9px 6px',display:'flex',alignItems:'center',flexWrap:'wrap',gap:2}} className="num text-[12.5px]">
                   {r.pairs.map((x,k)=>(
@@ -4082,10 +4095,16 @@ function AttendPanel({ user }){
                     {nameOf(r.pin)}
                     {r.manual && <span className="text-[10.5px]" style={{color:'var(--muted)',marginLeft:5}}>✏️</span>}
                   </div>
-                  <button className="press kanit text-[10.5px]" style={{border:'1px solid '+shopInfo(r.shop).color,background:'transparent',color:shopInfo(r.shop).color,borderRadius:999,padding:'2px 8px',fontWeight:600,flex:'none'}}
-                    onClick={(e)=>{ e.stopPropagation(); const nx=r.shop==='owlcha'?'teddy2':'owlcha'; setShop(d,r.pin,nx); }}>
-                    {shopInfo(r.shop).emoji}
-                  </button>
+                  <span style={{display:'flex',gap:3,flex:'none'}} onClick={(e)=>e.stopPropagation()}>
+                    {WORK_SHOPS.map(sh=>{
+                      const on=hasShop(d,r.pin,sh.id);
+                      return (
+                        <button key={sh.id} className="press" title={sh.label}
+                          style={{border:'1.5px solid '+(on? sh.color:'var(--line)'),background: on? sh.color:'transparent',borderRadius:999,width:28,height:24,fontSize:12,lineHeight:'1',padding:0,opacity:on?1:.45,filter:on?'none':'grayscale(1)'}}
+                          onClick={()=>tglShop(d,r.pin,sh.id)}>{sh.emoji}</button>
+                      );
+                    })}
+                  </span>
                   {r.pairs.length>1 && <span className="text-[10.5px]" style={{color:'var(--muted)'}}>{r.pairs.length} ช่วง</span>}
                   {r.fixed>0 && <span className="text-[10.5px]" style={{color:'var(--muted)',opacity:.75}}>ตัดซ้ำ {r.fixed}</span>}
                   <div className="num text-[13px]" style={{fontWeight:700,color: r.net>=10?'#3E7D3E':'var(--ink)'}}>{r.net? r.net+' ชม.':'–'}</div>
@@ -4164,11 +4183,15 @@ function AttendPanel({ user }){
                       </div>
                       {r ? (
                         <React.Fragment>
-                          <div style={{width:88,flex:'none',textAlign:'center'}}>
-                            <button className="press kanit text-[11px]" style={{border:'1px solid '+shopInfo(shopOf(d,detail)).color,background:'transparent',color:shopInfo(shopOf(d,detail)).color,borderRadius:999,padding:'2px 8px',fontWeight:600}}
-                              onClick={()=>{ const nx=shopOf(d,detail)==='owlcha'?'teddy2':'owlcha'; setShop(d,detail,nx); }}>
-                              {shopInfo(shopOf(d,detail)).emoji}
-                            </button>
+                          <div style={{width:96,flex:'none',display:'flex',gap:3,justifyContent:'center'}}>
+                            {WORK_SHOPS.map(sh=>{
+                              const on=hasShop(d,detail,sh.id);
+                              return (
+                                <button key={sh.id} className="press" title={sh.label}
+                                  style={{border:'1.5px solid '+(on? sh.color:'var(--line)'),background: on? sh.color:'transparent',borderRadius:999,width:28,height:24,fontSize:12,lineHeight:'1',padding:0,opacity:on?1:.45,filter:on?'none':'grayscale(1)'}}
+                                  onClick={()=>tglShop(d,detail,sh.id)}>{sh.emoji}</button>
+                              );
+                            })}
                           </div>
                           <div className="num text-[12.5px]" style={{flex:1,color:'var(--muted)'}}>
                             {r.pairs.map((x,k)=>(
@@ -4497,7 +4520,7 @@ function StaffPanel({ user, toast }){
       custom:parseFloat(edit.custom)||0,
       kind: (edit.kind==='maid'? 'maid' : (edit.kind==='partner'? 'partner':'staff')),
       fpId:String(edit.fpId||'').trim(),
-      shop: (edit.shop==='teddy2'?'teddy2':'owlcha'),
+      shop: (WORK_SHOPS.some(x=>x.id===edit.shop)? edit.shop : 'owlcha'),
       shiftIn: attFmt(edit.shiftIn||''),
       shiftOut: attFmt(edit.shiftOut||''),
       minHrs: (edit.kind==='partner' && edit.minHrs!==''&&edit.minHrs!=null)? (parseFloat(edit.minHrs)||0) : '',
@@ -4804,7 +4827,7 @@ function OCTabPay({ toast }){
         Object.keys(sc).forEach(d=>{
           Object.keys(sc[d]||{}).forEach(pin=>{
             const sid=map[String(pin)]; if(!sid) return;
-            if(shopAt(d,pin)!=='owlcha') return;   /* วันนั้นไปทำอีกร้าน ไม่นับเป็นของ Owl Cha */
+            if(String(shopAt(d,pin)).split(',').indexOf('owlcha')<0) return;   /* วันนั้นไม่ได้ติ๊ก Owl Cha */
             const cur=(times[d]||{})[sid];
             if(cur && (cur.i||cur.o)) return;
             const v=sc[d][pin]||{};
@@ -5238,7 +5261,8 @@ function lnPayCalc(pay, ym, shopId, fp){
     let days=0,holDays=0,holPay=0,otMin=0,missMin=0,lateDays=0,lateMin=0,shortDays=0,openDays=0;
     const daily=[]; const other={};
     for(let d=1;d<=nDays;d++){
-      const eff= pin? (((fs[String(d)]||{})[pin]) || st.shop || shopId) : (st.shop||shopId);
+      const effRaw= pin? ((fs[String(d)]||{})[pin]) : null;
+      const effList= effRaw? String(effRaw).split(',').filter(Boolean) : [st.shop||shopId];
       const rec= pin? ((fd[String(d)]||{})[pin]) : null;
       const list= rec? fpClean(rec.t) : [];
       const lv= pin? ((fl[String(d)]||{})[pin]) : null;
@@ -5249,7 +5273,11 @@ function lnPayCalc(pay, ym, shopId, fp){
         if(a!=null&&b!=null){ let mm=b-a; if(mm<0)mm+=1440; netMin+=mm; pairs.push({i:list[k],o:list[k+1]}); }
       }
       const open=(list.length%2===1);
-      if(eff!==shopId){ if(netMin>0||hol) other[eff]=(other[eff]||0)+1; continue; }
+      if(effList.indexOf(shopId)<0){
+        if(netMin>0||hol) effList.forEach(function(e2){ other[e2]=(other[e2]||0)+1; });
+        continue;
+      }
+      if(netMin>0||hol) effList.forEach(function(e2){ if(e2!==shopId) other[e2]=(other[e2]||0)+1; });
       if(!(netMin>0)){
         if(open){ openDays++; daily.push({d, open:true, tIn:list[0]||'', tOut:''}); }
         else if(lv) daily.push({d, leave:lv});
@@ -5344,7 +5372,9 @@ async function lnPaySlipImage(pay,ym,shopId,stId,shopName){
   const daysRows=r.daily;
   const W=860, headH=132, sumH=92, colH=40, rowH=36, footH=104;
   const advRows=(r.advList&&r.advList.length)? r.advList.length+1 : 0;
-  const H=headH+sumH+colH+Math.max(1,daysRows.length)*rowH+advRows*32+footH+70;
+  const hasBank=!!(r.st.bankAcc||r.st.bank||r.st.realName);
+  const bankH=hasBank? 74 : 0;
+  const H=headH+sumH+colH+Math.max(1,daysRows.length)*rowH+advRows*32+bankH+footH+70;
   const cv=document.createElement('canvas'); cv.width=W*2; cv.height=H*2;
   const g=cv.getContext('2d'); g.scale(2,2);
   const FN=(w,s)=>w+' '+s+'px Kanit, "Noto Sans Thai", sans-serif';
@@ -5405,7 +5435,19 @@ async function lnPaySlipImage(pay,ym,shopId,stId,shopName){
       y+=30;
     });
   }
-  y+=8;
+  if(hasBank){
+    y+=6;
+    g.fillStyle='#E9F1FA'; 
+    if(g.roundRect){ g.beginPath(); g.roundRect(20,y,W-40,58,12); g.fill(); }
+    else g.fillRect(20,y,W-40,58);
+    g.font=FN(600,13.5); g.fillStyle='#113D6C'; g.textAlign='left';
+    g.fillText('💳 ข้อมูลรับเงิน — โปรดตรวจสอบก่อนยืนยัน',36,y+24);
+    g.font=FN(400,14.5); g.fillStyle='#33445A';
+    g.fillText((r.st.bank? r.st.bank+' ':'')+(r.st.bankAcc||'')+(r.st.realName? '  ·  ชื่อบัญชี '+r.st.realName:''),36,y+47);
+    y+=58+10;
+  } else {
+    y+=8;
+  }
   g.fillStyle='#113D6C'; g.fillRect(0,y,W,footH);
   g.font=FN(400,15.5); g.fillStyle='#CFE2F5'; g.textAlign='left';
   g.fillText('ยอดเดือนนี้ '+num(r.net)+(r.advT?('  −  เบิกไปแล้ว '+num(r.advT)):''),30,y+38);
@@ -5461,8 +5503,8 @@ function LnStaffPanel({ shop, user, toast }){
   };
   const saveStaff=async(next)=>{ const ok=await saveDoc({staff:next},{staff:next}); if(ok) setEdit(null); };
 
-  const openNew=()=>setEdit({ id:'L'+ocUid(), name:'', pos:'maid', custom:0, shop:shop.id, fpId:'',
-    shiftIn:'', shiftOut:'', minHrs:'', active:true, start:today(), end:'', phone:'', note:'', _new:true });
+  const openNew=()=>setEdit({ id:'L'+ocUid(), name:'', realName:'', pos:'maid', custom:0, shop:shop.id, fpId:'',
+    shiftIn:'', shiftOut:'', minHrs:'', active:true, start:today(), end:'', phone:'', bank:'', bankAcc:'', note:'', _new:true });
   const commit=()=>{
     if(!edit) return;
     const nm=String(edit.name||'').trim();
@@ -5477,7 +5519,11 @@ function LnStaffPanel({ shop, user, toast }){
       shiftIn:attFmt(edit.shiftIn||''), shiftOut:attFmt(edit.shiftOut||''),
       minHrs:(lnPosCfg(cfg,edit.pos).minRule && edit.minHrs!==''&&edit.minHrs!=null)? (parseFloat(edit.minHrs)||0) : '',
       active:edit.active!==false, start:edit.start||'', end:edit.end||'',
-      phone:String(edit.phone||'').trim(), note:String(edit.note||'').trim() };
+      phone:String(edit.phone||'').trim(),
+      realName:String(edit.realName||'').trim(),
+      bank:String(edit.bank||'').trim(),
+      bankAcc:String(edit.bankAcc||'').trim(),
+      note:String(edit.note||'').trim() };
     saveStaff(edit._new? [...staff,clean] : staff.map(x=>x.id===clean.id? clean:x));
   };
   const setOff=(st)=>{
@@ -5600,6 +5646,11 @@ function LnStaffPanel({ shop, user, toast }){
                     {st.start? 'เริ่ม '+st.start:''}{st.end? ' · ออก '+st.end:''}{st.phone? ' · 📞 '+st.phone:''}{st.note? ' · 📝 '+st.note:''}
                   </div>
                 )}
+                {(st.bankAcc||st.realName)&&(
+                  <div className="text-[11.5px] mt-0.5" style={{color:'var(--muted)'}}>
+                    💳 {st.bank||'-'} {st.bankAcc||''}{st.realName? ' · '+st.realName:''}
+                  </div>
+                )}
               </div>
               {!ro && (
                 <div className="flex flex-col gap-1">
@@ -5624,9 +5675,13 @@ function LnStaffPanel({ shop, user, toast }){
           <div className="card" style={{width:'100%',maxWidth:480,maxHeight:'88vh',overflowY:'auto',borderRadius:'20px 20px 0 0',padding:16,paddingBottom:'calc(96px + env(safe-area-inset-bottom))'}} onClick={e=>e.stopPropagation()}>
             <div className="kanit text-[15px] mb-3" style={{fontWeight:700}}>{edit._new?'เพิ่มพนักงาน':'แก้ไข · '+edit.name}</div>
             <div className="grid gap-2.5" style={{gridTemplateColumns:'1fr 1fr'}}>
-              <div style={{gridColumn:'1/-1'}}>
-                <div className="text-[12px] mb-1" style={{color:'var(--muted)'}}>ชื่อ</div>
+              <div>
+                <div className="text-[12px] mb-1" style={{color:'var(--muted)'}}>ชื่อเล่น (ใช้ในแอป)</div>
                 <input className="kanit" style={INP} value={edit.name} onChange={e=>setEdit({...edit,name:e.target.value})}/>
+              </div>
+              <div>
+                <div className="text-[12px] mb-1" style={{color:'var(--muted)'}}>ชื่อจริง-นามสกุล</div>
+                <input className="kanit" style={INP} placeholder="ตามหน้าสมุดบัญชี" value={edit.realName||''} onChange={e=>setEdit({...edit,realName:e.target.value})}/>
               </div>
               <div>
                 <div className="text-[12px] mb-1" style={{color:'var(--muted)'}}>ตำแหน่ง</div>
@@ -5673,6 +5728,17 @@ function LnStaffPanel({ shop, user, toast }){
               <div style={{gridColumn:'1/-1'}}>
                 <div className="text-[12px] mb-1" style={{color:'var(--muted)'}}>เบอร์โทร</div>
                 <input className="num" style={INP} inputMode="tel" value={edit.phone||''} onChange={e=>setEdit({...edit,phone:e.target.value})}/>
+              </div>
+              <div>
+                <div className="text-[12px] mb-1" style={{color:'var(--muted)'}}>ธนาคาร</div>
+                <input className="kanit" style={INP} placeholder="เช่น กสิกรไทย" list="lnBanks" value={edit.bank||''} onChange={e=>setEdit({...edit,bank:e.target.value})}/>
+                <datalist id="lnBanks">
+                  {['กสิกรไทย','ไทยพาณิชย์','กรุงเทพ','กรุงไทย','กรุงศรี','ทหารไทยธนชาต','ออมสิน','ธ.ก.ส.','พร้อมเพย์'].map(b=><option key={b} value={b}/>)}
+                </datalist>
+              </div>
+              <div>
+                <div className="text-[12px] mb-1" style={{color:'var(--muted)'}}>เลขบัญชี / พร้อมเพย์</div>
+                <input className="num" style={INP} inputMode="numeric" placeholder="xxx-x-xxxxx-x" value={edit.bankAcc||''} onChange={e=>setEdit({...edit,bankAcc:e.target.value})}/>
               </div>
               <div style={{gridColumn:'1/-1'}}>
                 <div className="text-[12px] mb-1" style={{color:'var(--muted)'}}>บันทึกเพิ่มเติม</div>
@@ -5818,7 +5884,7 @@ function LnAttendPanel({ shop, user }){
     const lv=pin? ((fl[String(d)]||{})[pin]):null;
     const hol=pin? !!((fh[String(d)]||{})[pin]):false;
     const ov=pin? ((fs[String(d)]||{})[pin]):null;
-    const eff=ov || (st&&st.shop) || shop.id;
+    const effList= ov? String(ov).split(',').filter(Boolean) : [(st&&st.shop)||shop.id];
     let netMin=0; const pairs=[];
     for(let k=0;k+1<list.length;k+=2){
       const a=attHM(list[k]), b=attHM(list[k+1]);
@@ -5837,7 +5903,7 @@ function LnAttendPanel({ shop, user }){
         ot=Math.round(over-late);
       }
     }
-    return { rec, list, pairs, netMin, open, lv, hol, ov, eff, ot, edited:!!(rec&&rec.m) };
+    return { rec, list, pairs, netMin, open, lv, hol, ov, effList, ot, edited:!!(rec&&rec.m) };
   };
 
   const tot=(()=>{
@@ -5846,7 +5912,7 @@ function LnAttendPanel({ shop, user }){
       const sIn=st.shiftIn? attHM(st.shiftIn):null;
       for(let d=1;d<=nDays;d++){
         const o=dayInfo(d);
-        if(o.eff!==shop.id) continue;
+        if(o.effList.indexOf(shop.id)<0) continue;
         if(o.lv&&!(o.netMin>0)){ leave++; continue; }
         if(!(o.netMin>0)) continue;
         if(o.hol) hol++; else { work++; otM+=o.ot; if(sIn!=null){ const aIn=attHM(o.pairs[0].i); if(aIn!=null&&aIn-sIn>0) late++; } }
@@ -5863,11 +5929,17 @@ function LnAttendPanel({ shop, user }){
     setEdit({ d, mode:mode==='none'?'work':mode, blank:mode==='none',
       i:o.pairs.length? o.pairs[0].i : (o.list[0]||st.shiftIn||''),
       o:o.pairs.length? o.pairs[o.pairs.length-1].o : (st.shiftOut||''),
-      note:(o.lv&&o.lv.n)||'', shopSel:o.eff });
+      note:(o.lv&&o.lv.n)||'', shopSel:o.effList.slice() });
   };
   const saveEdit=async(clear)=>{
     if(!edit||!db||!st) return;
     const d=String(edit.d);
+    const home=(st.shop||shop.id);
+    let selArr=(edit.shopSel&&edit.shopSel.length)? edit.shopSel.slice() : [home];
+    selArr=WORK_SHOPS.map(function(s2){ return s2.id; }).filter(function(x2){ return selArr.indexOf(x2)>=0; });
+    if(!selArr.length) selArr=[home];
+    const selStr=selArr.join(',');
+    const selIsHome=(home==='otteri') || (selArr.length===1 && selArr[0]===home);
     setBusy(true); setMsg('');
     try{
       const DEL=firebase.firestore.FieldValue.delete();
@@ -5880,7 +5952,7 @@ function LnAttendPanel({ shop, user }){
         patch.d[d]={ [pin]:{ t:a+','+b, m:1 } };
         patch.leave[d]={ [pin]:DEL };
         patch.hol[d]={ [pin]: edit.mode==='holiday'? 1 : DEL };
-        patch.shop[d]={ [pin]: (edit.shopSel && edit.shopSel!==(st.shop||shop.id))? edit.shopSel : DEL };
+        patch.shop[d]={ [pin]: selIsHome? DEL : selStr };
       } else {
         patch.d[d]={ [pin]:DEL };
         patch.hol[d]={ [pin]:DEL };
@@ -5896,7 +5968,7 @@ function LnAttendPanel({ shop, user }){
           put('d',{ t:attFmt(edit.i)+','+attFmt(edit.o), m:1 });
           put('leave');
           if(edit.mode==='holiday') put('hol',1); else put('hol');
-          if(edit.shopSel && edit.shopSel!==(st.shop||shop.id)) put('shop',edit.shopSel); else put('shop');
+          if(!selIsHome) put('shop',selStr); else put('shop');
         } else {
           put('d'); put('hol'); put('shop');
           put('leave',{ t:edit.mode, n:String(edit.note||'').trim() });
@@ -5953,7 +6025,9 @@ function LnAttendPanel({ shop, user }){
         const o=dayInfo(d);
         const wd=new Date(y,mo-1,d).getDay();
         const isToday=(today()===ym+'-'+String(d).padStart(2,'0'));
-        const otherShop=(o.eff!==shop.id);
+        const mine=(o.effList.indexOf(shop.id)>=0);
+        const others=o.effList.filter(x=>x!==shop.id);
+        const shopTag=(id)=> id==='owlcha'? '🧋 Owl' : (lnShopInfo(id).emoji+' '+lnShopInfo(id).label);
         let body;
         if(o.netMin>0){
           body=(
@@ -5972,13 +6046,13 @@ function LnAttendPanel({ shop, user }){
           body=<span style={{color:'var(--line)'}}>—</span>;
         }
         return (
-          <div key={d} className={'card press'} style={{padding:'9px 12px',marginBottom:6,opacity:otherShop?0.55:1,border:isToday?'1.5px solid var(--primary)':undefined}} onClick={()=>openEdit(d)}>
+          <div key={d} className={'card press'} style={{padding:'9px 12px',marginBottom:6,opacity:mine?1:0.55,border:isToday?'1.5px solid var(--primary)':undefined}} onClick={()=>openEdit(d)}>
             <div className="flex items-center gap-2 text-[13px]">
               <div className="num" style={{width:52,color:(wd===0||wd===6)?'#B0483C':'var(--muted)'}}>{d} {LN_WD[wd]}</div>
               <div style={{flex:1,minWidth:0}}>{body}</div>
               {o.hol && <span className="text-[10.5px] px-1.5 py-0.5 rounded" style={{background:'#FFF2CC',color:'#8a6d1a'}}>×2</span>}
               {o.edited && <span className="text-[10.5px] px-1.5 py-0.5 rounded" style={{background:'var(--soft)',color:'var(--muted)'}}>แก้มือ</span>}
-              {otherShop && <span className="text-[10.5px] px-1.5 py-0.5 rounded" style={{background:'var(--soft)',color:lnShopInfo(o.eff).color}}>{o.eff==='owlcha'? '🧋 Owl':lnShopInfo(o.eff).emoji+' '+lnShopInfo(o.eff).label}</span>}
+              {others.length>0 && <span className="text-[10.5px] px-1.5 py-0.5 rounded" style={{background:'var(--soft)',color: mine? 'var(--muted)' : lnShopInfo(others[0]).color}}>{(mine?'+':'')+others.map(shopTag).join(' · ')}</span>}
             </div>
           </div>
         );
@@ -6006,16 +6080,29 @@ function LnAttendPanel({ shop, user }){
                   <div className="text-[12px] mb-1" style={{color:'var(--muted)'}}>เวลาออก</div>
                   <input className="num" style={INP} placeholder="20:00" value={edit.o} onChange={e=>setEdit({...edit,o:e.target.value})}/>
                 </div>
-                <div style={{gridColumn:'1/-1'}}>
-                  <div className="text-[12px] mb-1" style={{color:'var(--muted)'}}>ทำที่สาขา (วันนี้)</div>
-                  <div className="flex gap-1.5">
-                    {LN_SHOPS.map(s=>(
-                      <button key={s.id} className="press kanit text-[12px] flex-1 py-1.5 rounded-xl"
-                        style={ edit.shopSel===s.id? {background:s.color,color:'#fff',border:'none'}:{background:'var(--card)',border:'1px solid var(--line)',color:'var(--ink)'} }
-                        onClick={()=>setEdit({...edit,shopSel:s.id})}>{s.emoji} {s.label}</button>
-                    ))}
+                {st.shop!=='otteri' && (
+                  <div style={{gridColumn:'1/-1'}}>
+                    <div className="text-[12px] mb-1" style={{color:'var(--muted)'}}>ลงเวลาให้ร้านไหนบ้าง (วันนี้) · เลือกได้หลายร้าน</div>
+                    <div className="flex gap-1.5">
+                      {WORK_SHOPS.map(s=>{
+                        const on=edit.shopSel.indexOf(s.id)>=0;
+                        const col= s.id==='owlcha'? '#8A5A3B' : lnShopInfo(s.id).color;
+                        return (
+                          <button key={s.id} className="press kanit text-[12px] flex-1 py-1.5 rounded-xl"
+                            style={ on? {background:col,color:'#fff',border:'none'}:{background:'var(--card)',border:'1px solid var(--line)',color:'var(--muted)'} }
+                            onClick={()=>{
+                              const cur=edit.shopSel.slice();
+                              const k2=cur.indexOf(s.id);
+                              if(k2>=0){ if(cur.length<=1) return; cur.splice(k2,1); }
+                              else cur.push(s.id);
+                              setEdit({...edit,shopSel:cur});
+                            }}>{on?'✓ ':''}{s.emoji} {s.label}</button>
+                        );
+                      })}
+                    </div>
+                    <div className="text-[10.5px] mt-1" style={{color:'var(--muted)'}}>ติ๊กหลายร้าน = แต่ละร้านนับเต็มวันของตัวเอง</div>
                   </div>
-                </div>
+                )}
               </div>
             ) : (
               <div>
@@ -6172,6 +6259,11 @@ function LnPayPanel({ shop, user, toast }){
                   OT รวม {r.otMin} นาที → {r.otAuto} ชม.{r.otRestMin? ' (เศษ '+r.otRestMin+' น. ตัดทิ้ง)':''}{r.otManH? ' · เพิ่มมือ '+r.otManH+' ชม.':''} · เบี้ยขยัน{r.diligForced? (r.dgVal===1?' (บังคับให้)':' (บังคับตัด)') : (r.diligAuto?' ✓ ผ่านอัตโนมัติ':' ✗ ไม่ผ่าน ('+(r.lateDays? 'สาย '+r.lateDays+' วัน':'เข้า '+r.workedDays+'/'+r.diligMinDays+' วัน')+')')}
                 </div>
 
+                {(r.st.bankAcc||r.st.realName) && (
+                  <div className="text-[11.5px] mt-1" style={{color:'var(--muted)'}}>
+                    💳 โอนเข้า: {r.st.bank||'-'} {r.st.bankAcc||''}{r.st.realName? ' · ชื่อบัญชี '+r.st.realName:''}
+                  </div>
+                )}
                 <div className="flex flex-wrap gap-1.5 mt-2 items-center">
                   <button className="press kanit text-[12px] px-2.5 py-1 rounded-lg" style={{border:'1px solid var(--line)',background:'var(--card)'}} disabled={busy} onClick={()=>cycleDilig(r)}>
                     เบี้ยขยัน: {r.dgVal===1?'บังคับให้':(r.dgVal===0?'บังคับตัด':'อัตโนมัติ')}
