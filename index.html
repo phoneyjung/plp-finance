@@ -2718,9 +2718,14 @@ function ocPayCalc(pay,ym){
     com=Math.round(com); holPay=Math.round(holPay);
     const baseUsed=ocPayBaseOf(st,cfg);
     const quota=(st.kind==='maid' && st.offQuota!==''&&st.offQuota!=null)? Number(st.offQuota) : null;
+    const inMonth=(dt)=> !!dt && String(dt).slice(0,7)===ym;
+    const partialMonth = inMonth(st.start) || inMonth(st.end);
     let base, offDays=nDays-(days+holDays), offExcess=0;
     let extraDays=0, extraRate=0;
-    if(quota!=null && !isNaN(quota)){
+    if(quota!=null && !isNaN(quota) && partialMonth){
+      /* 🌱 เริ่มงาน/ลาออกเดือนนี้: ฐาน ÷ จำนวนวันของเดือน × วันที่เข้าทำงาน (ไม่ใช้สูตรโควตา) */
+      base=Math.max(0, Math.round(baseUsed/nDays*(days+holDays)));
+    } else if(quota!=null && !isNaN(quota)){
       const dayRate=baseUsed/Math.max(1,(nDays-quota));
       const diff=(days+holDays)-(nDays-quota);
       offExcess=Math.max(0,-diff);
@@ -2791,7 +2796,7 @@ function ocPayCalc(pay,ym){
     const bn=Number(bonus[st.id])||0;
     const net = base+com+otB+dl+bn+holPay-missB;
     const diligForced = (dg[st.id]===0 || dg[st.id]===1);
-    return { st, isMaid, days, holDays, holPay, baseUsed, base, com, otAuto, otMan, otH, otB, dl, bn, missH, missB, advT, advList, quota, offDays, offExcess, extraDays, extraRate, net, toPay: net-advT, lateDays, lateMin, diligAuto, diligForced, workedDays, diligMinDays, diligDaysOk, isPartner, myMinHrs, shortDays, otMin, otRestMin:(isMaid?0:otRestMin), missMin, missRestMin:(isMaid?0:missRestMin) };
+    return { st, isMaid, days, holDays, holPay, baseUsed, base, com, otAuto, otMan, otH, otB, dl, bn, missH, missB, advT, advList, quota, offDays, offExcess, extraDays, extraRate, net, toPay: net-advT, lateDays, lateMin, diligAuto, diligForced, workedDays, diligMinDays, diligDaysOk, isPartner, myMinHrs, shortDays, partialMonth, otMin, otRestMin:(isMaid?0:otRestMin), missMin, missRestMin:(isMaid?0:missRestMin) };
   });
   const total=rows.reduce((s,r)=>s+r.net,0);
   const rev=cupsT*(cfg.avgPrice||0);
@@ -2999,7 +3004,7 @@ async function ocPayPersonImage(pay,ym,stId){
   const ab=ocPayAbsent(pay,ym,stId);
   const elsAll=((pay.months[ym]||{}).els)||{};
   const elsCnt=Object.keys(elsAll).filter(function(d9){ return !!((elsAll[d9]||{})[stId]); }).length;
-  g.fillText('ทำงาน '+(r.days+r.holDays)+' วัน'+(r.holDays?(' (วันหยุด×2 '+r.holDays+' วัน)'):'')+(elsCnt? (' · ไปช่วยร้านอื่น '+elsCnt+' วัน'):'')+' · หยุด '+ab.n+' วัน'+(r.quota!=null?(' (โควตา '+r.quota+(r.offExcess>0?' · เกิน '+r.offExcess+' วัน':'')+(r.extraDays>0?' · ทำแทน +'+r.extraDays+' วัน × '+Math.round(r.extraRate):'')+')'):'')+': '+ab.text,32,106);
+  g.fillText('ทำงาน '+(r.days+r.holDays)+' วัน'+(r.holDays?(' (วันหยุด×2 '+r.holDays+' วัน)'):'')+(elsCnt? (' · ไปช่วยร้านอื่น '+elsCnt+' วัน'):'')+' · หยุด '+ab.n+' วัน'+(r.quota!=null&&r.partialMonth? ' (🌱 เริ่ม/ออกงานเดือนนี้ · ฐาน÷'+calc.nDays+'×'+(r.days+r.holDays)+' วัน)' : (r.quota!=null?(' (โควตา '+r.quota+(r.offExcess>0?' · เกิน '+r.offExcess+' วัน':'')+(r.extraDays>0?' · ทำแทน +'+r.extraDays+' วัน × '+Math.round(r.extraRate):'')+')'):''))+': '+ab.text,32,106);
   const chips=[['ฐาน',r.base],['คอม',r.com],['OT '+(r.otH||0)+' ชม.',r.otB],['หยุด×2',r.holPay],['เบี้ยขยัน',r.dl],['โบนัส/หัก',r.bn],['หักขาด '+(r.missH||0)+' ชม.',-(r.missB||0)]];
   const otTotMin=(r.otMin||0), otRest=(r.otRestMin||0);
   chips.forEach((c,k)=>{
@@ -5389,8 +5394,13 @@ function lnPayCalc(pay, ym, shopId, fp){
     if(!home && days+holDays+shortDays===0) return;
     if(st.active===false && days+holDays===0 && !advList.length && !(Number(bonus[st.id])||0) && !(Number(otMan[st.id])||0)) return;
     const workedDays0=days+holDays;
+    const inMonth=(dt)=> !!dt && String(dt).slice(0,7)===ym;
+    const partialMonth = inMonth(st.start) || inMonth(st.end);
     let base, offExcess=0, extraDays=0, dayRate=0, extraPay=0;
-    if(modeMonth){
+    if(modeMonth && partialMonth){
+      /* 🌱 เริ่มงาน/ลาออกเดือนนี้: ฐาน ÷ จำนวนวันของเดือน × วันที่เข้าทำงาน */
+      base=Math.max(0, Math.round(rate/nDays*workedDays0));
+    } else if(modeMonth){
       const Q=Math.max(0,Number(pc.offQuota)||0);
       const req=Math.max(1,nDays-Q);
       dayRate=rate/req;
@@ -5428,7 +5438,7 @@ function lnPayCalc(pay, ym, shopId, fp){
       lateDays, lateMin, shortDays, minHrs, openDays, dl, diligAuto,
       diligForced:(dg[st.id]===0||dg[st.id]===1), dgVal:dg[st.id], workedDays, diligMinDays,
       otOn:!!pc.ot, otMult:(pc.otMult||2), diligOn:!!pc.diligOn, deduct:!!pc.deduct, shiftHrs,
-      modeMonth, offQuota:(Number(pc.offQuota)||0), extraRate:(Number(pc.extraRate)||0), offExcess, extraDays, dayRate, extraPay,
+      modeMonth, partialMonth, offQuota:(Number(pc.offQuota)||0), extraRate:(Number(pc.extraRate)||0), offExcess, extraDays, dayRate, extraPay,
       jobOn:!!pc.jobOn, jobN, jobB, jobRate:(Number(pc.jobRate)||0), bnNote:String(bnNote[st.id]||''),
       bn, advList, advT, net, toPay:net-advT, daily, home });
   });
@@ -5459,7 +5469,7 @@ async function lnPaySlipImage(pay,ym,shopId,stId,shopName){
   g.fillText('สลิปเงินเดือน · '+r.st.name,30,42);
   g.font=FN(400,16); g.fillStyle='#CFE2F5';
   g.fillText(shopName+' · '+ocPayLabel(ym)+' · '+((r.pos.emoji||'')+' '+r.pos.name),30,72);
-  g.fillText('ทำงาน '+r.workedDays+' วัน'+(r.modeMonth?(' (โควตาหยุด '+r.offQuota+(r.extraDays?(' · ทำแทน +'+r.extraDays+'ว ×'+r.extraRate):'')+(r.offExcess?(' · หยุดเกิน '+r.offExcess+'ว −'+Math.round(r.dayRate)+'/ว'):'')+')'):(r.holDays?(' (วันหยุด×2 '+r.holDays+' วัน)'):''))+(r.shortDays?(' · ตัด '+r.shortDays+' วัน (<'+r.minHrs+'ชม.)'):''),30,100);
+  g.fillText('ทำงาน '+r.workedDays+' วัน'+(r.modeMonth&&r.partialMonth? ' (เริ่ม/ออกงานเดือนนี้ · คิดตามวันเข้าจริง ฐาน÷'+calc.nDays+'×'+r.workedDays+')' : '')+(r.modeMonth&&!r.partialMonth?(' (โควตาหยุด '+r.offQuota+(r.extraDays?(' · ทำแทน +'+r.extraDays+'ว ×'+r.extraRate):'')+(r.offExcess?(' · หยุดเกิน '+r.offExcess+'ว −'+Math.round(r.dayRate)+'/ว'):'')+')'):(r.holDays?(' (วันหยุด×2 '+r.holDays+' วัน)'):''))+(r.shortDays?(' · ตัด '+r.shortDays+' วัน (<'+r.minHrs+'ชม.)'):''),30,100);
   const chips=[[r.modeMonth?'เหมาเดือน':'ฐาน ('+r.days+'ว)',r.base]];
   if(r.extraDays) chips.push(['ทำแทนวันหยุด +'+r.extraDays+'ว',r.extraPay]);
   if(r.jobOn) chips.push(['พับ '+r.jobN+' งาน',r.jobB]);
@@ -6338,7 +6348,12 @@ function LnPayPanel({ shop, user, toast }){
                   {r.missB>0 && <span style={{color:'#B0483C'}}>หักขาด {r.missH} ชม. −{ocFmt(r.missB,0)}</span>}
                   <span style={{color:'var(--muted)'}}>สุทธิ <b className="num" style={{color:'var(--ink)'}}>{ocFmt(r.net,0)}</b></span>
                 </div>
-                {r.modeMonth && (
+                {r.modeMonth && r.partialMonth && (
+                  <div className="text-[11px] mt-1" style={{color:'#0E7A5F'}}>
+                    🌱 เริ่ม/ออกงานเดือนนี้ → คิดตามวันจริง: ฐาน ÷ {calc.nDays} วัน × เข้า {r.workedDays} วัน (ไม่ใช้สูตรโควตา)
+                  </div>
+                )}
+                {r.modeMonth && !r.partialMonth && (
                   <div className="text-[11px] mt-1" style={{color:'var(--muted)'}}>
                     เหมาเดือน · ต้องเข้า {r.diligMinDays} วัน (หยุดได้ {r.offQuota}) · เข้าจริง {r.workedDays} วัน{r.extraDays? ' → ทำแทนวันหยุด +'+r.extraDays+' วัน ×'+ocFmt(r.extraRate,0) : ''}{r.offExcess? ' → หยุดเกินโควตา '+r.offExcess+' วัน −'+ocFmt(Math.round(r.dayRate),0)+'/วัน' : ''}
                   </div>
