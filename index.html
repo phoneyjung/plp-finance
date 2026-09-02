@@ -2742,12 +2742,24 @@ function ocPayCalc(pay,ym){
       if(tt&&tt.i&&tt.o){
         const mi=ocPayMin(tt.i), mo2=ocPayMin(tt.o);
         if(mi!=null&&mo2!=null){
-          let hrs=ocPayNetHrs(tt);
-          const diffM=Math.round((hrs-(cfg.shiftHrs||10))*60);
           const gr=(cfg.otGrace!=null? Number(cfg.otGrace) : 15);
-          /* หักช่วงผ่อนผันออกก่อน — เช่น ผ่อนผัน 15 น. ออกช้า 16 น. = OT 1 นาที */
-          if(diffM>gr) otMin+=(diffM-gr);
-          else if(diffM<-gr && !isPartner) missMin+=(-diffM-gr);   /* หุ้นส่วนไม่หักชั่วโมงขาด */
+          const msIn=(isMaid && st.shiftIn)? ocPayMin(st.shiftIn) : null;
+          const msOut=(isMaid && st.shiftOut)? ocPayMin(st.shiftOut) : null;
+          if(msIn!=null && msOut!=null){
+            /* 🧹 แม่บ้าน: เทียบกะประจำที่แจ้ง · มาก่อนเวลาไม่นับ · ผ่อนผันหักออกก่อน */
+            let late=Math.max(0, mi-msIn);
+            let over=mo2-msOut; if(over>720)over-=1440; if(over<-720)over+=1440;
+            late=Math.max(0, late-gr);
+            over= over>0? Math.max(0,over-gr) : Math.min(0,over+gr);
+            const dOt=Math.round(over-late);
+            if(dOt>0) otMin+=dOt; else if(dOt<0) missMin+=(-dOt);
+          } else {
+            let hrs=ocPayNetHrs(tt);
+            const diffM=Math.round((hrs-(cfg.shiftHrs||10))*60);
+            /* หักช่วงผ่อนผันออกก่อน — เช่น ผ่อนผัน 15 น. ออกช้า 16 น. = OT 1 นาที */
+            if(diffM>gr) otMin+=(diffM-gr);
+            else if(diffM<-gr && !isPartner) missMin+=(-diffM-gr);   /* หุ้นส่วนไม่หักชั่วโมงขาด */
+          }
           if(shiftInMin!=null){
             const late=mi-shiftInMin;
             if(late>dGrace){ lateDays++; lateMin+=late; }
@@ -2772,7 +2784,7 @@ function ocPayCalc(pay,ym){
     if(dg[st.id]===0) dl=0;                       /* กดปิดเอง */
     else if(dg[st.id]===1) dl=(cfg.dilig||0);     /* กดเปิดเอง (ยกเว้นให้) */
     else dl = diligAuto? (cfg.dilig||0) : 0;      /* อัตโนมัติตามการมาสาย */
-    if(isMaid){ otMin=0; otH=0; otB=0; dl=0; }
+    if(isMaid){ dl=0; }   /* แม่บ้าน: ไม่มีเบี้ยขยัน · OT คิดตามกะที่แจ้ง จ่าย ×2 เหมือนคนอื่น */
     if(isPartner){ missMin=0; missH=0; }   /* หุ้นส่วน: ตัดทั้งวันถ้าไม่ถึงขั้นต่ำ · ไม่หักรายชั่วโมง */
     const missB=Math.round(missH*hourRate);
     const advList=(adv[st.id]||[]);
@@ -2951,7 +2963,21 @@ function ocPayPersonDays(pay,ym,stId){
     if(tt.i&&tt.o){ hrs=ocPayNetHrs(tt); }
     const gr=(cfg.otGrace!=null? Number(cfg.otGrace) : 15);
     let otM=0, missM=0;
-    if(!isHol && hrs!=null){
+    const isMd=!!(stObj && stObj.kind==='maid');
+    const msIn=(isMd && stObj.shiftIn)? ocPayMin(stObj.shiftIn) : null;
+    const msOut=(isMd && stObj.shiftOut)? ocPayMin(stObj.shiftOut) : null;
+    if(!isHol && tt.i && tt.o && msIn!=null && msOut!=null){
+      /* 🧹 แม่บ้าน: เทียบกะที่แจ้ง เหมือน ocPayCalc */
+      const mi=ocPayMin(tt.i), mo2=ocPayMin(tt.o);
+      if(mi!=null && mo2!=null){
+        let late=Math.max(0, mi-msIn);
+        let over=mo2-msOut; if(over>720)over-=1440; if(over<-720)over+=1440;
+        late=Math.max(0, late-gr);
+        over= over>0? Math.max(0,over-gr) : Math.min(0,over+gr);
+        const dOt=Math.round(over-late);
+        if(dOt>0) otM=dOt; else if(dOt<0) missM=(-dOt);
+      }
+    } else if(!isHol && hrs!=null){
       const diffM=Math.round((hrs-(cfg.shiftHrs||10))*60);
       if(diffM>gr) otM=diffM-gr;
       else if(diffM<-gr && !isPtn) missM=(-diffM)-gr;
