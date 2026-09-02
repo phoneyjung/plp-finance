@@ -249,8 +249,8 @@ label.fl span{font-weight:600}
     <label class="fl" id="addrLb">ที่อยู่ / หอพัก / ห้อง <span style="color:var(--neg)">*</span></label>
     <textarea class="f" id="addr" placeholder="เช่น หอพักสุขใจ ห้อง 302 ซอย..."></textarea>
 
-    <label class="fl">เวลาที่สะดวกให้ไปรับผ้า <span style="color:var(--muted);font-weight:400;font-size:13.5px">(ร้านไปรับ 09:00–21:00)</span></label>
-    <input type="hidden" id="pick" value="เร็วที่สุด">
+    <label class="fl">เวลาที่สะดวกให้ไปรับผ้า <span style="color:var(--muted);font-weight:400;font-size:13.5px">(ร้านไปรับ 09:00–20:30 · ฝากหน้าร้านถึง 21:00)</span></label>
+    <input type="hidden" id="pick" value="">
     <div class="pkrow" id="pkRow"></div>
     <div class="pknote" id="pkNote"></div>
     <label class="fl">หมายเหตุถึงร้าน (ถ้ามี)</label>
@@ -719,14 +719,16 @@ renderWash(); renderDry(); calc();
 
 /* ===== ตัวเลือกเวลารับผ้า: ตอนนี้–21:00 · หลัง 19:00 ได้ผ้าคืนวันถัดไป ===== */
 function pkCompute(nowMin){
-  var OPEN=9*60, CLOSE=21*60;
-  var s=Math.ceil(nowMin/30)*30;
+  var OPEN=9*60, DELI_LAST=20*60+30, SHOP_CLOSE=21*60;
+  var s=Math.ceil((nowMin+15)/15)*15; /* เร็วสุด = ตอนนี้ +15 นาที ปัดขึ้นเข้าช่อง 15 นาที */
   if(s<OPEN) s=OPEN;
-  var tomorrow=(s>CLOSE);
+  var closed = nowMin>SHOP_CLOSE;                 /* เลย 21:00 — ปิดรับทุกอย่างของวันนี้ */
+  var tomorrow = (s>DELI_LAST);                   /* หมดรอบไปรับของวันนี้ → โชว์ช่องพรุ่งนี้ */
+  var walkin = tomorrow && !closed;               /* ยังเอาผ้ามาส่งหน้าร้านได้ถึง 21:00 */
   if(tomorrow) s=OPEN;
   var slots=[];
-  for(var t=s;t<=CLOSE;t+=30) slots.push(t);
-  return { tomorrow:tomorrow, slots:slots };
+  for(var t=s;t<=DELI_LAST;t+=15) slots.push(t);  /* ช่องไปรับถึงที่: ถึง 20:30 */
+  return { tomorrow:tomorrow, walkin:walkin, closed:closed, slots:slots };
 }
 function pkHM(t){ return String(Math.floor(t/60)).padStart(2,'0')+':'+String(t%60).padStart(2,'0'); }
 function pkBuild(){
@@ -736,7 +738,6 @@ function pkBuild(){
   var nm=now.getHours()*60+now.getMinutes();
   var r=pkCompute(nm);
   var chips=[];
-  if(!r.tomorrow) chips.push({ v:'เร็วที่สุด', label:'⚡ เร็วที่สุด', t:nm });
   r.slots.forEach(function(t){
     var day=r.tomorrow?'พรุ่งนี้ ':'';
     chips.push({ v:day+pkHM(t), label:day+pkHM(t)+(t>=19*60?' 🌙':''), t:t });
@@ -745,17 +746,14 @@ function pkBuild(){
   function pickChip(c,btn){
     Array.prototype.forEach.call(row.children,function(b){ b.classList.remove('on'); });
     btn.classList.add('on');
-    var late = c.t>=19*60 && c.t<=21*60;
+    var late = c.t>=19*60;
     hid.value = c.v + (late?' (ได้ผ้าคืนวันถัดไป)':'');
-    if(r.tomorrow){
-      note.textContent='🌙 วันนี้เลยเวลาไปรับแล้ว — เลือกเวลาของพรุ่งนี้ได้เลยค่ะ';
-      note.classList.add('show');
-    } else if(late){
-      note.textContent='🌙 รับผ้าหลัง 19:00 — จะได้ผ้าคืนวันถัดไปนะคะ';
-      note.classList.add('show');
-    } else {
-      note.classList.remove('show');
-    }
+    var msgs=[];
+    if(r.closed) msgs.push('🕘 เวลารับบริการ (ไปรับถึงที่/ฝากหน้าร้าน) 09:00–21:00 น. — ตอนนี้ปิดแล้ว เลือกเวลาให้ไปรับพรุ่งนี้ได้เลยค่ะ');
+    else if(r.walkin) msgs.push('🕘 วันนี้หมดรอบไปรับถึงที่แล้ว (รอบสุดท้าย 20:30) — ยังเอาผ้ามาส่งหน้าร้านได้ถึง 21:00 หรือเลือกเวลาพรุ่งนี้ค่ะ');
+    if(late) msgs.push('🌙 รับผ้าหลัง 19:00 — จะได้ผ้าคืนวันถัดไปนะคะ');
+    if(msgs.length){ note.textContent=msgs.join('  ·  '); note.classList.add('show'); }
+    else note.classList.remove('show');
   }
   chips.forEach(function(c,i){
     var b=document.createElement('button');
