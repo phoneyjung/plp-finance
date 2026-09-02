@@ -2746,13 +2746,12 @@ function ocPayCalc(pay,ym){
           const msIn=(isMaid && st.shiftIn)? ocPayMin(st.shiftIn) : null;
           const msOut=(isMaid && st.shiftOut)? ocPayMin(st.shiftOut) : null;
           if(msIn!=null && msOut!=null){
-            /* 🧹 แม่บ้าน: เทียบกะประจำที่แจ้ง · มาก่อนเวลาไม่นับ · ผ่อนผันหักออกก่อน */
-            let late=Math.max(0, mi-msIn);
-            let over=mo2-msOut; if(over>720)over-=1440; if(over<-720)over+=1440;
-            late=Math.max(0, late-gr);
-            over= over>0? Math.max(0,over-gr) : Math.min(0,over+gr);
-            const dOt=Math.round(over-late);
-            if(dOt>0) otMin+=dOt; else if(dOt<0) missMin+=(-dOt);
+            /* 🧹 แม่บ้าน: OT จากชั่วโมงรวมทั้งวัน เกินชั่วโมงกะที่แจ้ง (เช่น 11 ชม. → OT นับหลัง 11:15 · มาก่อนก็นับชั่วโมง) */
+            let mh=msOut-msIn; if(mh<0)mh+=1440;
+            const hrs2=ocPayNetHrs(tt);
+            const diffM2=Math.round(hrs2*60-mh);
+            if(diffM2>gr) otMin+=(diffM2-gr);
+            else if(diffM2<-gr) missMin+=(-diffM2-gr);
           } else {
             let hrs=ocPayNetHrs(tt);
             const diffM=Math.round((hrs-(cfg.shiftHrs||10))*60);
@@ -2784,7 +2783,7 @@ function ocPayCalc(pay,ym){
     if(dg[st.id]===0) dl=0;                       /* กดปิดเอง */
     else if(dg[st.id]===1) dl=(cfg.dilig||0);     /* กดเปิดเอง (ยกเว้นให้) */
     else dl = diligAuto? (cfg.dilig||0) : 0;      /* อัตโนมัติตามการมาสาย */
-    if(isMaid){ dl=0; }   /* แม่บ้าน: ไม่มีเบี้ยขยัน · OT คิดตามกะที่แจ้ง จ่าย ×2 เหมือนคนอื่น */
+    if(isMaid){ otMin=0; otH=0; otB=0; dl=0; missMin=0; missH=0; }   /* 🧹 แม่บ้าน: ไม่คิด OT/หักขาดจากเวลา — ใช้โควตาวันหยุด + ทำแทนวันหยุดรายวันแทน */
     if(isPartner){ missMin=0; missH=0; }   /* หุ้นส่วน: ตัดทั้งวันถ้าไม่ถึงขั้นต่ำ · ไม่หักรายชั่วโมง */
     const missB=Math.round(missH*hourRate);
     const advList=(adv[st.id]||[]);
@@ -2792,7 +2791,7 @@ function ocPayCalc(pay,ym){
     const bn=Number(bonus[st.id])||0;
     const net = base+com+otB+dl+bn+holPay-missB;
     const diligForced = (dg[st.id]===0 || dg[st.id]===1);
-    return { st, isMaid, days, holDays, holPay, baseUsed, base, com, otAuto, otMan, otH, otB, dl, bn, missH, missB, advT, advList, quota, offDays, offExcess, extraDays, extraRate, net, toPay: net-advT, lateDays, lateMin, diligAuto, diligForced, workedDays, diligMinDays, diligDaysOk, isPartner, myMinHrs, shortDays, otMin, otRestMin, missMin, missRestMin };
+    return { st, isMaid, days, holDays, holPay, baseUsed, base, com, otAuto, otMan, otH, otB, dl, bn, missH, missB, advT, advList, quota, offDays, offExcess, extraDays, extraRate, net, toPay: net-advT, lateDays, lateMin, diligAuto, diligForced, workedDays, diligMinDays, diligDaysOk, isPartner, myMinHrs, shortDays, otMin, otRestMin:(isMaid?0:otRestMin), missMin, missRestMin:(isMaid?0:missRestMin) };
   });
   const total=rows.reduce((s,r)=>s+r.net,0);
   const rev=cupsT*(cfg.avgPrice||0);
@@ -2947,7 +2946,8 @@ function ocPayRanges(list){
 }
 function ocPayAbsent(pay,ym,stId){
   const calc=ocPayCalc(pay,ym); const abs=[];
-  for(let d=1;d<=calc.nDays;d++){ const pd=calc.perDay[d]; if(!pd||pd.ids.indexOf(stId)<0) abs.push(d); }
+  const els=((pay.months[ym]||{}).els)||{};
+  for(let d=1;d<=calc.nDays;d++){ const pd=calc.perDay[d]; if(!pd||pd.ids.indexOf(stId)<0){ if(!((els[d]||{})[stId])) abs.push(d); } }
   return { n:abs.length, text:ocPayRanges(abs) };
 }
 function ocPayPersonDays(pay,ym,stId){
@@ -2956,7 +2956,7 @@ function ocPayPersonDays(pay,ym,stId){
   const stObj=(pay.staff||[]).find(x=>x.id===stId);
   const isPtn=!!(stObj && stObj.kind==='partner');
   for(let d=1;d<=calc.nDays;d++){
-    const pd=calc.perDay[d]; if(!pd || pd.ids.indexOf(stId)<0){ out.push({ d, off:true }); continue; }
+    const pd=calc.perDay[d]; if(!pd || pd.ids.indexOf(stId)<0){ out.push({ d, off:true, els:(((m.els||{})[d]||{})[stId])||'' }); continue; }
     const isHol=((hol[d]||[]).indexOf(stId))>=0;
     const tt=(times[d]||{})[stId]||{};
     let hrs=null;
@@ -2966,17 +2966,8 @@ function ocPayPersonDays(pay,ym,stId){
     const isMd=!!(stObj && stObj.kind==='maid');
     const msIn=(isMd && stObj.shiftIn)? ocPayMin(stObj.shiftIn) : null;
     const msOut=(isMd && stObj.shiftOut)? ocPayMin(stObj.shiftOut) : null;
-    if(!isHol && tt.i && tt.o && msIn!=null && msOut!=null){
-      /* 🧹 แม่บ้าน: เทียบกะที่แจ้ง เหมือน ocPayCalc */
-      const mi=ocPayMin(tt.i), mo2=ocPayMin(tt.o);
-      if(mi!=null && mo2!=null){
-        let late=Math.max(0, mi-msIn);
-        let over=mo2-msOut; if(over>720)over-=1440; if(over<-720)over+=1440;
-        late=Math.max(0, late-gr);
-        over= over>0? Math.max(0,over-gr) : Math.min(0,over+gr);
-        const dOt=Math.round(over-late);
-        if(dOt>0) otM=dOt; else if(dOt<0) missM=(-dOt);
-      }
+    if(isMd){
+      /* 🧹 แม่บ้าน: เวลาเข้าออกไว้ดูอย่างเดียว — ไม่คิด OT/หักขาดจากเวลา */
     } else if(!isHol && hrs!=null){
       const diffM=Math.round((hrs-(cfg.shiftHrs||10))*60);
       if(diffM>gr) otM=diffM-gr;
@@ -3006,7 +2997,9 @@ async function ocPayPersonImage(pay,ym,stId){
   g.font=F(400,17); g.fillStyle='#E8DCC8';
   g.fillText('Owl Cha · '+ocPayLabel(ym)+(r.isMaid?' · แม่บ้าน':' · เฟส '+r.st.phase),32,76);
   const ab=ocPayAbsent(pay,ym,stId);
-  g.fillText('ทำงาน '+(r.days+r.holDays)+' วัน'+(r.holDays?(' (วันหยุด×2 '+r.holDays+' วัน)'):'')+' · หยุด '+ab.n+' วัน'+(r.quota!=null?(' (โควตา '+r.quota+(r.offExcess>0?' · เกิน '+r.offExcess+' วัน':'')+(r.extraDays>0?' · ทำแทน +'+r.extraDays+' วัน × '+Math.round(r.extraRate):'')+')'):'')+': '+ab.text,32,106);
+  const elsAll=((pay.months[ym]||{}).els)||{};
+  const elsCnt=Object.keys(elsAll).filter(function(d9){ return !!((elsAll[d9]||{})[stId]); }).length;
+  g.fillText('ทำงาน '+(r.days+r.holDays)+' วัน'+(r.holDays?(' (วันหยุด×2 '+r.holDays+' วัน)'):'')+(elsCnt? (' · ไปช่วยร้านอื่น '+elsCnt+' วัน'):'')+' · หยุด '+ab.n+' วัน'+(r.quota!=null?(' (โควตา '+r.quota+(r.offExcess>0?' · เกิน '+r.offExcess+' วัน':'')+(r.extraDays>0?' · ทำแทน +'+r.extraDays+' วัน × '+Math.round(r.extraRate):'')+')'):'')+': '+ab.text,32,106);
   const chips=[['ฐาน',r.base],['คอม',r.com],['OT '+(r.otH||0)+' ชม.',r.otB],['หยุด×2',r.holPay],['เบี้ยขยัน',r.dl],['โบนัส/หัก',r.bn],['หักขาด '+(r.missH||0)+' ชม.',-(r.missB||0)]];
   const otTotMin=(r.otMin||0), otRest=(r.otRestMin||0);
   chips.forEach((c,k)=>{
@@ -3026,7 +3019,7 @@ async function ocPayPersonImage(pay,ym,stId){
       g.fillStyle= i%2? '#EFEBE1':'#F8F5EE'; g.fillRect(0,y,W,rowH);
       g.fillStyle='#B7A88F'; g.font=F(400,15.5);
       g.textAlign=cols[0][2]; g.fillText(String(o.d),cols[0][1],y+26);
-      g.textAlign='right'; g.fillText('หยุด',cols[7][1],y+26);
+      g.textAlign='right'; g.fillText(o.els? ('ไปช่วย '+(o.els==='teddy1'?'Teddy 1': o.els==='teddy2'?'Teddy 2': o.els)) : 'หยุด',cols[7][1],y+26);
       y+=rowH; return;
     }
     g.fillStyle= o.isHol? '#FBE9E5' : (i%2? '#F5EEDD':'#FFFFFF'); g.fillRect(0,y,W,rowH);
@@ -3348,6 +3341,7 @@ function AttendPanel({ user }){
   /* OT (นาที) — มาก่อนเวลาไม่บวก · เข้าสายหัก · ออกช้าบวก · ออกก่อนหัก */
   const otMinFrom=(pin, pr)=>{
     const st=stOf(pin);
+    if(st && st.kind==='maid') return 0;   /* 🧹 แม่บ้าน: เวลาไว้ดูอย่างเดียว ไม่คิด OT จากเวลา */
     if(st && st.shiftIn && st.shiftOut && pr && pr.pairs && pr.pairs.length){
       const sIn=attHM(st.shiftIn), sOut=attHM(st.shiftOut);
       const first=pr.pairs[0], last=pr.pairs[pr.pairs.length-1];
@@ -4896,6 +4890,13 @@ function OCTabPay({ toast }){
         const idToPin2={};
         (p.staff||[]).forEach(function(x){ if(x.fpId!=null&&x.fpId!==''){ idToPin2[x.id]=String(x.fpId); } });
         const holM=m.hol||{};
+        const elsM=m.els||(m.els={});
+        Object.keys(elsM).forEach(function(d2){
+          Object.keys(elsM[d2]||{}).forEach(function(sid2){
+            const pin2=idToPin2[sid2]; if(!pin2) return;
+            if(String(shopAt(d2,pin2)).split(',').indexOf('owlcha')>=0){ delete elsM[d2][sid2]; ch=true; }
+          });
+        });
         Object.keys(times).forEach(function(d2){
           Object.keys(times[d2]||{}).forEach(function(sid2){
             const pin2=idToPin2[sid2];
@@ -4904,6 +4905,7 @@ function OCTabPay({ toast }){
             delete times[d2][sid2];
             if(att[d2]){ const ix=att[d2].indexOf(sid2); if(ix>=0) att[d2].splice(ix,1); }
             if(holM[d2]){ const ix2=holM[d2].indexOf(sid2); if(ix2>=0) holM[d2].splice(ix2,1); }
+            (elsM[d2]||(elsM[d2]={}))[sid2]=String(shopAt(d2,pin2)).split(',')[0];
             ch=true;
           });
         });
@@ -4913,6 +4915,7 @@ function OCTabPay({ toast }){
             if(!pin2) return;
             if(String(shopAt(d2,pin2)).split(',').indexOf('owlcha')>=0) return;
             const ix=att[d2].indexOf(sid2); if(ix>=0) att[d2].splice(ix,1);
+            (elsM[d2]||(elsM[d2]={}))[sid2]=String(shopAt(d2,pin2)).split(',')[0];
             ch=true;
           });
         });
@@ -5267,7 +5270,7 @@ const LN_CFG_SEED=()=>({ pos:{}, diligMinDays:26, diligGrace:0, divisor:26, shif
 const LN_PC_DEF=(posId)=>( posId==='partner'
   ? { base:0, payMode:'day',   offQuota:4, extraRate:400, jobOn:0, jobRate:20, diligOn:1, dilig:500, ot:1, otMult:2, shiftHrs:11, deduct:0, minRule:1, minHrs:5 }
   : posId==='maid'
-  ? { base:0, payMode:'month', offQuota:4, extraRate:400, jobOn:0, jobRate:20, diligOn:1, dilig:500, ot:1, otMult:2, shiftHrs:11, deduct:1, minRule:0, minHrs:5 }
+  ? { base:0, payMode:'month', offQuota:4, extraRate:400, jobOn:0, jobRate:20, diligOn:1, dilig:500, ot:0, otMult:2, shiftHrs:11, deduct:0, minRule:0, minHrs:5 }
   : { base:0, payMode:'day',   offQuota:4, extraRate:400, jobOn:0, jobRate:20, diligOn:1, dilig:500, ot:1, otMult:2, shiftHrs:11, deduct:1, minRule:0, minHrs:5 });
 /* อ่าน option ของตำแหน่งในสาขานั้น (รองรับข้อมูลเก่าแบบ rates) */
 const lnPosCfg=(cfg,posId)=>{
@@ -5357,7 +5360,12 @@ function lnPayCalc(pay, ym, shopId, fp){
         holDays++; if(!modeMonth) holPay+=hrs*hourRate*2;
       } else {
         days++;
-        if(sIn!=null&&sOut!=null&&aIn!=null&&aOut!=null){
+        if(st.pos==='maid'){
+          /* 🧹 แม่บ้าน: OT จากชั่วโมงรวมทั้งวัน เกินชั่วโมงกะที่แจ้ง (มาก่อนก็นับเป็นชั่วโมงทำงาน) */
+          const baseMin=(sIn!=null&&sOut!=null)? ((sOut-sIn+1440)%1440) : Math.round(shiftHrs*60);
+          const df=Math.round(netMin-baseMin);
+          dOt = df>gr? df-gr : (df<-gr? df+gr : 0);
+        } else if(sIn!=null&&sOut!=null&&aIn!=null&&aOut!=null){
           /* เทียบกะประจำ · มาก่อนเวลาไม่บวก · ผ่อนผัน 15 น.แรก */
           let late=Math.max(0,aIn-sIn);
           let over=aOut-sOut; if(over>720)over-=1440; if(over<-720)over+=1440;
@@ -5368,6 +5376,7 @@ function lnPayCalc(pay, ym, shopId, fp){
           const df=Math.round(netMin-shiftHrs*60);
           dOt = df>gr? df-gr : (df<-gr? df+gr : 0);
         }
+        if(!pc.ot) dOt=0;
         if(dOt>0) otMin+=dOt;
         else if(dOt<0 && pc.deduct) missMin+=(-dOt);
         if(sIn!=null&&aIn!=null){ const lt=aIn-sIn; if(lt>dGrace){ lateDays++; lateMin+=lt; } }
@@ -5957,15 +5966,22 @@ function LnAttendPanel({ shop, user }){
     }
     const open=(list.length%2===1);
     let ot=0;
-    if(netMin>0 && st && !hol){
+    const pcA= st? lnPosCfg(lnCfgOf(pay,shop.id), st.pos) : null;
+    if(netMin>0 && st && !hol && pcA && pcA.ot){
       const sIn=st.shiftIn? attHM(st.shiftIn):null, sOut=st.shiftOut? attHM(st.shiftOut):null;
-      const aIn=attHM(pairs[0].i), aOut=attHM(pairs[pairs.length-1].o);
-      if(sIn!=null&&sOut!=null&&aIn!=null&&aOut!=null){
-        let late=Math.max(0,aIn-sIn);
-        let over=aOut-sOut; if(over>720)over-=1440; if(over<-720)over+=1440;
-        late=Math.max(0,late-gr);
-        over= over>0? Math.max(0,over-gr):Math.min(0,over+gr);
-        ot=Math.round(over-late);
+      if(st.pos==='maid'){
+        const baseMin=(sIn!=null&&sOut!=null)? ((sOut-sIn+1440)%1440) : Math.round((Number(lnCfgOf(pay,shop.id).shiftHrs)||11)*60);
+        const df=Math.round(netMin-baseMin);
+        ot = df>gr? df-gr : (df<-gr? df+gr : 0);
+      } else {
+        const aIn=attHM(pairs[0].i), aOut=attHM(pairs[pairs.length-1].o);
+        if(sIn!=null&&sOut!=null&&aIn!=null&&aOut!=null){
+          let late=Math.max(0,aIn-sIn);
+          let over=aOut-sOut; if(over>720)over-=1440; if(over<-720)over+=1440;
+          late=Math.max(0,late-gr);
+          over= over>0? Math.max(0,over-gr):Math.min(0,over+gr);
+          ot=Math.round(over-late);
+        }
       }
     }
     return { rec, list, pairs, netMin, open, lv, hol, ov, effList, ot, edited:!!(rec&&rec.m) };
