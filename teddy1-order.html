@@ -63,6 +63,24 @@ textarea.f{min-height:74px;resize:vertical}
 .pk.on{background:var(--gold);border-color:var(--gold);color:#fff;font-weight:600;box-shadow:0 3px 10px rgba(198,139,74,.35)}
 .pknote{display:none;font-size:14px;color:#8a6d3b;background:#FFF6E5;border:1px solid #F2E3C4;border-radius:12px;padding:8px 11px;margin:2px 0 4px}
 .pknote.show{display:block}
+/* --- แถบยอดลอยล่างจอ --- */
+.stky{position:fixed;left:0;right:0;bottom:0;z-index:55;display:flex;align-items:center;gap:12px;
+  padding:10px 14px calc(10px + env(safe-area-inset-bottom));background:rgba(255,255,255,.96);
+  border-top:1.5px solid var(--line);box-shadow:0 -6px 20px rgba(20,58,96,.10);backdrop-filter:blur(6px);
+  transform:translateY(110%);transition:transform .25s}
+.stky.on{transform:translateY(0)}
+.stky .stTot{font-family:'Kanit';font-weight:700;font-size:19px;color:var(--navy);flex:1;line-height:1.15}
+.stky .stTot small{display:block;font-weight:400;font-size:12.5px;color:var(--muted)}
+.stky .stGo{font-family:'Kanit';font-weight:600;font-size:16.5px;color:#fff;background:var(--gold);
+  border:none;border-radius:999px;padding:12px 22px;box-shadow:0 4px 12px rgba(198,139,74,.35)}
+/* --- การ์ดลูกค้าเก่า --- */
+.wb{display:none;background:#FFF9EE;border:1.5px solid #F0DFC2;border-radius:16px;padding:12px 14px;margin:0 0 12px}
+.wb.on{display:block}
+.wb .wbT{font-family:'Kanit';font-weight:600;font-size:15.5px;color:var(--navy)}
+.wb .wbD{font-size:13.5px;color:var(--muted);margin:2px 0 8px}
+.wb .wbBtns{display:flex;gap:8px}
+.wb .wbUse{flex:1;font-family:'Kanit';font-weight:600;font-size:14.5px;color:#fff;background:var(--gold);border:none;border-radius:12px;padding:9px}
+.wb .wbNo{font-family:'Kanit';font-size:14.5px;color:var(--muted);background:var(--soft);border:none;border-radius:12px;padding:9px 14px}
 .sumbar{background:var(--card);border-radius:20px;box-shadow:var(--sh);padding:15px;margin-bottom:12px}
 .sumbar .in{max-width:100%}
 .sumbar h2{margin-bottom:9px}
@@ -242,6 +260,14 @@ label.fl span{font-weight:600}
 
   <div class="card">
     <h2>📍 ข้อมูลจัดส่ง</h2>
+    <div class="wb" id="wbCard">
+      <div class="wbT">👋 กลับมาอีกแล้ว!</div>
+      <div class="wbD" id="wbInfo"></div>
+      <div class="wbBtns">
+        <button type="button" class="wbUse" id="wbUse">ใช้ข้อมูลเดิมเลย</button>
+        <button type="button" class="wbNo" id="wbNo">กรอกใหม่</button>
+      </div>
+    </div>
     <label class="fl">ชื่อผู้รับ <span style="color:var(--neg)">*</span></label>
     <input class="f" id="name" placeholder="ชื่อเล่นก็ได้">
     <label class="fl">เบอร์โทร <span style="color:var(--neg)">*</span></label>
@@ -291,6 +317,10 @@ label.fl span{font-weight:600}
   </div>
 </div>
 
+<div class="stky" id="stkyBar">
+  <div class="stTot"><small>ยอดรวมโดยประมาณ</small><span id="sTot">0฿</span></div>
+  <button type="button" class="stGo" id="sGo">ส่งเข้าไลน์ร้าน 🧺</button>
+</div>
 <div class="okovl" id="okOvl">
   <img src="ic-done.png" alt="" onerror="this.style.display='none'">
   <div class="okt">ส่งรายการให้ร้านแล้ว 🎉</div>
@@ -355,6 +385,7 @@ function el(id){ return document.getElementById(id); }
 function money(n){ return n.toLocaleString('th-TH')+'฿'; }
 var TOT_CUR=0, TOT_ANI=null;
 function setTot(v){
+  syncSticky(v);
   if(v===TOT_CUR){ el('pTot').textContent=money(v); return; }
   var from=TOT_CUR, to=v, t0=performance.now();
   TOT_CUR=v;
@@ -366,6 +397,7 @@ function setTot(v){
   }
   TOT_ANI=requestAnimationFrame(step);
 }
+function syncSticky(v){ var e=el('sTot'); if(e) e.textContent=money(v); }
 
 function renderWash(){
   var h='';
@@ -621,6 +653,7 @@ el('send').addEventListener('click',function(){
 });
 function closeSheet(){ el('ovl').className='ovl'; }
 function showOk(code,t){
+  wbSave();
   el('ovl').className='ovl';
   el('okCode').textContent=code||'';
   el('okOvl').className='okovl on';
@@ -770,6 +803,43 @@ setInterval(function(){
   if(on && row.children.length && on===row.children[0]) pkBuild();
 }, 5*60*1000);
 
+
+/* ===== แถบยอดลอยล่างจอ ===== */
+(function(){
+  var bar=el('stkyBar');
+  el('sGo').addEventListener('click',function(){ el('send').click(); });
+  /* ซ่อนเมื่อเห็นปุ่มส่งจริงในจอ (กันปุ่มซ้ำ) */
+  if('IntersectionObserver' in window){
+    var io=new IntersectionObserver(function(en){
+      bar.className = en[0].isIntersecting? 'stky' : 'stky on';
+    },{ threshold:0.1 });
+    io.observe(el('send'));
+  } else { bar.className='stky on'; }
+  document.body.style.paddingBottom='84px';
+})();
+
+/* ===== จำข้อมูลลูกค้า (เครื่องนี้) ===== */
+var WB_KEY='tdCust-'+BRAND;
+function wbSave(){
+  try{
+    localStorage.setItem(WB_KEY, JSON.stringify({
+      name:el('name').value.trim(), tel:el('tel').value.trim(),
+      addr:el('addr').value.trim(), ts:Date.now() }));
+  }catch(e){}
+}
+(function(){
+  var d=null;
+  try{ d=JSON.parse(localStorage.getItem(WB_KEY)||'null'); }catch(e){}
+  if(!d || !d.name || !d.tel) return;
+  el('wbInfo').textContent = d.name+' · '+d.tel+(d.addr? ' · '+d.addr.split('\n')[0] : '');
+  el('wbCard').className='wb on';
+  el('wbUse').addEventListener('click',function(){
+    el('name').value=d.name; el('tel').value=d.tel; if(d.addr) el('addr').value=d.addr;
+    el('wbCard').className='wb'; calc();
+    if(navigator.vibrate) navigator.vibrate(30);
+  });
+  el('wbNo').addEventListener('click',function(){ el('wbCard').className='wb'; });
+})();
 </script>
 </body>
 </html>
