@@ -48,8 +48,7 @@ h2 small{display:block;font-size:11.5px;font-weight:300;color:var(--muted);margi
 .tb.on{color:#fff;border-color:transparent}
 .tb.on i{color:rgba(255,255,255,.85)}
 .tb.on .ico-t{filter:brightness(0) invert(1); opacity:.95}
-.tb.on.cold{background:#5BA7D6} .tb.on.warm{background:#E0A33C} .tb.on.hot{background:#D6655
-5}
+.tb.on.cold{background:#5BA7D6} .tb.on.warm{background:#E0A33C} .tb.on.hot{background:#D66555}
 .tb.on.cool{background:#7FB7DA} .tb.on.dwarm{background:#E0A33C} .tb.on.dhot{background:#D66555}
 label.fl{display:block;font-size:12px;color:var(--muted);margin:10px 0 4px;font-weight:400}
 input.f,textarea.f,select.f{width:100%;font-family:'Kanit';font-size:15px;border:1.5px solid var(--line);
@@ -134,6 +133,42 @@ pre.msg{background:var(--soft);border-radius:14px;padding:13px;font-family:'Kani
 .needs ul{margin:0;padding-left:18px}
 .needs li{font-size:12px;color:#A65563;line-height:1.7}
 label.fl span{font-weight:600}
+
+/* ── 1) แถบขั้นตอน ── */
+.stepsW{position:sticky;top:0;z-index:50;background:rgba(251,246,236,.94);
+  backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border-bottom:1px solid var(--line)}
+.steps{max-width:560px;margin:0 auto;display:flex;align-items:center;justify-content:center;gap:7px;padding:9px 14px}
+.st{display:flex;align-items:center;gap:5px;font-size:11.5px;color:var(--muted);font-weight:500;white-space:nowrap}
+.sn{width:20px;height:20px;border-radius:50%;background:#E7DFCE;color:#95886F;display:flex;
+  align-items:center;justify-content:center;font-size:11px;font-weight:700;flex:none}
+.st.done{color:var(--gold);font-weight:600}
+.st.done .sn{background:var(--gold);color:#fff}
+.sl{width:24px;height:2px;background:#E7DFCE;border-radius:2px;flex:none}
+.sl.done{background:var(--gold)}
+/* ── 3) ลิงก์อ่านรายละเอียด ── */
+.more{border:none;background:none;font-family:'Kanit';font-size:11px;color:var(--blue-d);
+  padding:0;margin-top:3px;cursor:pointer;display:inline-block;font-weight:500}
+.moreTx{font-size:11.5px;color:#6B7A54;background:#F3F7EC;border-radius:11px;
+  padding:8px 12px;margin:2px 0 7px;line-height:1.7;font-weight:300}
+/* ── 5) การ์ดที่เลือกแล้ว ── */
+.mrow.sel{background:linear-gradient(135deg,#FFFBF2,#FDF3E1);border:1.5px solid var(--gold);
+  border-radius:14px;padding:11px 11px;margin:5px 0;box-shadow:0 0 0 3px rgba(198,139,74,.10)}
+.mrow.sel .qn{color:var(--gold)}
+.mrow.sel .mname b{color:#8A5E2C}
+/* ── 6) สถานะว่าง ── */
+.empty{display:flex;flex-direction:column;align-items:center;gap:5px;padding:8px 0 4px;
+  color:var(--muted);font-size:13px;text-align:center;font-weight:300}
+.empty img{width:78px;height:78px;opacity:.92}
+/* ── 2) หน้าส่งสำเร็จ ── */
+.okovl{position:fixed;inset:0;background:var(--cream);z-index:120;display:none;
+  flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:24px}
+.okovl.on{display:flex}
+.okovl img{width:130px;height:130px;margin-bottom:4px}
+.okt{font-size:18px;font-weight:700;color:var(--navy)}
+.okc{font-size:31px;font-weight:800;color:var(--gold);letter-spacing:.5px;margin:6px 0 2px}
+.okh{font-size:12.5px;color:var(--muted);font-weight:300;margin-top:6px}
+.okh:after{content:'';display:inline-block;width:12px;text-align:left;animation:dots 1.2s steps(4) infinite}
+@keyframes dots{0%{content:''}25%{content:'.'}50%{content:'..'}75%{content:'...'}}
 </style>
 </head>
 <body>
@@ -143,6 +178,16 @@ label.fl span{font-weight:600}
   <h1>Teddy Wash &amp; Dry · สาขา 2</h1>
   <div class="sub">รับ-ส่งผ้าถึงที่ · กรอกแล้วส่งให้ร้านได้เลย</div>
 </header>
+
+<div class="stepsW">
+  <div class="steps">
+    <div class="st" id="st1"><span class="sn">1</span>เลือกเครื่อง</div>
+    <div class="sl" id="sl1"></div>
+    <div class="st" id="st2"><span class="sn">2</span>รับ-ส่ง</div>
+    <div class="sl" id="sl2"></div>
+    <div class="st" id="st3"><span class="sn">3</span>ข้อมูล</div>
+  </div>
+</div>
 
 <div class="wrap">
 
@@ -211,7 +256,8 @@ label.fl span{font-weight:600}
 
   <div class="sumbar">
     <h2>💵 สรุปยอด</h2>
-    <div class="in">
+    <div class="empty" id="empty"><img src="ic-hero.png" alt="" onerror="this.style.display='none'">เริ่มจากเลือกเครื่องซักด้านบนได้เลยค่ะ 🧺</div>
+    <div class="in" id="sumIn">
     <div class="sline"><span id="sumWash">ค่าซัก</span><b id="pWash">0฿</b></div>
     <div class="sline"><span id="sumDry">ค่าอบ</span><b id="pDry">0฿</b></div>
     <div class="sline" id="rowFold" style="display:none"><span>ฝากพับผ้า</span><b class="free">ฟรี</b></div>
@@ -239,6 +285,13 @@ label.fl span{font-weight:600}
     </div>
     <div class="hint">จะเปิดแชทร้านพร้อมข้อความนี้ · กดส่งในไลน์อีกครั้งได้เลย</div>
   </div>
+</div>
+
+<div class="okovl" id="okOvl">
+  <img src="ic-done.png" alt="" onerror="this.style.display='none'">
+  <div class="okt">ส่งรายการให้ร้านแล้ว 🎉</div>
+  <div class="okc" id="okCode"></div>
+  <div class="okh">กำลังเปิดไลน์ · กดส่งในแชทอีกครั้งได้เลย</div>
 </div>
 
 <script>
@@ -283,27 +336,42 @@ function nextCode(){
 
 var SHOP = { name:'Teddy Wash & Dry สาขา 2 (ม.ศิลปากร)', oa:'@736vkujr' };
 var WASH = [
-  { kg:12, hint:'ผ้า 1 คน/สัปดาห์', p:{cold:50,warm:60,hot:70} },
-  { kg:17, hint:'ผ้านวม/กองใหญ่',   p:{cold:60,warm:70,hot:80} }
+  { kg:12, hint:'ผ้า 1 คน/สัปดาห์', p:{cold:50,warm:60,hot:70} , g:'ผ้าใส่ 1 คน ~1 สัปดาห์ (เสื้อ กางเกง ผ้าเช็ดตัว) · อย่าอัดแน่นเกิน 2 ใน 3 ของถัง ผ้าจะได้สะอาดทั่วถึง' },
+  { kg:17, hint:'ผ้านวม/กองใหญ่',   p:{cold:60,warm:70,hot:80} , g:'ผ้ากองใหญ่ ~2 ตะกร้า หรือผ้านวม 6 ฟุต 1 ผืน · อย่าอัดแน่นเกิน 2 ใน 3 ของถัง' }
 ];
 var DRY  = [
-  { kg:12, hint:'ผ้าทั่วไป', price:50 },
-  { kg:17, hint:'ผ้าหนา/นวม', price:60 }
+  { kg:12, hint:'ผ้าทั่วไป', price:50 , g:'รับผ้าจากเครื่องซัก 12 กก. ได้พอดี 1 เครื่อง · ใส่ผ้าน้อยหน่อยจะแห้งไวขึ้น' },
+  { kg:17, hint:'ผ้าหนา/นวม', price:60 , g:'เหมาะกับผ้าหนา ผ้านวม · รับผ้าจากเครื่องซัก 17 กก. ได้พอดี' }
 ];
 var TEMPW = [['cold','เย็น','ผ้าสีทั่วไป'],['warm','อุ่น','ผ้าขาว'],['hot','ร้อน','ผ้าปู ฆ่าไรฝุ่น']];
 var TEMPD = [['cool','เย็น','ผ้ายืด บอบบาง'],['warm','อุ่น','ผ้าทั่วไป'],['hot','ร้อน','ผ้าหนา']];
-var st = { wash:{}, dry:{}, wt:{}, dt:{} };
+var st = { wash:{}, dry:{}, wt:{}, dt:{}, gw:{}, gd:{} };
 
 function el(id){ return document.getElementById(id); }
 function money(n){ return n.toLocaleString('th-TH')+'฿'; }
+var TOT_CUR=0, TOT_ANI=null;
+function setTot(v){
+  if(v===TOT_CUR){ el('pTot').textContent=money(v); return; }
+  var from=TOT_CUR, to=v, t0=performance.now();
+  TOT_CUR=v;
+  if(TOT_ANI) cancelAnimationFrame(TOT_ANI);
+  function step(t){
+    var k=Math.min(1,(t-t0)/300), e=1-Math.pow(1-k,3);
+    el('pTot').textContent=money(Math.round(from+(to-from)*e));
+    if(k<1) TOT_ANI=requestAnimationFrame(step); else TOT_ANI=null;
+  }
+  TOT_ANI=requestAnimationFrame(step);
+}
 
 function renderWash(){
   var h='';
   WASH.forEach(function(m,i){
     var q=st.wash[i]||0, t=st.wt[i]||'cold';
-    h+='<div class="mrow"><div class="mname"><b>'+m.kg+' กก.</b><i>'+m.hint+' · '+m.p.cold+'–'+m.p.hot+'฿</i></div>'
+    h+='<div class="mrow'+(q>0?' sel':'')+'"><div class="mname"><b>'+m.kg+' กก.</b><i>'+m.hint+' · '+m.p.cold+'–'+m.p.hot+'฿</i>'
+      +(m.g? '<button class="more" onclick="tgG(\'gw\','+i+')">'+(st.gw[i]?'⌃ ซ่อน':'⌄ ใส่ได้แค่ไหน?')+'</button>' : '')+'</div>'
       +'<div class="qty"><button class="qb" '+(q<=0?'disabled':'')+' onclick="chg(\'wash\','+i+',-1)">−</button>'
       +'<span class="qn">'+q+'</span><button class="qb" onclick="chg(\'wash\','+i+',1)">+</button></div></div>';
+    if(m.g && st.gw[i]) h+='<div class="moreTx">'+m.g+'</div>';
     if(q>0){
       h+='<div class="temps">';
       TEMPW.forEach(function(tt){
@@ -320,9 +388,11 @@ function renderDry(){
   var h='';
   DRY.forEach(function(m,i){
     var q=st.dry[i]||0, t=st.dt[i]||'warm';
-    h+='<div class="mrow"><div class="mname"><b>'+m.kg+' กก.</b><i>'+m.hint+' · '+m.price+'฿/รอบ</i></div>'
+    h+='<div class="mrow'+(q>0?' sel':'')+'"><div class="mname"><b>'+m.kg+' กก.</b><i>'+m.hint+' · '+m.price+'฿/รอบ</i>'
+      +(m.g? '<button class="more" onclick="tgG(\'gd\','+i+')">'+(st.gd[i]?'⌃ ซ่อน':'⌄ ใส่ได้แค่ไหน?')+'</button>' : '')+'</div>'
       +'<div class="qty"><button class="qb" '+(q<=0?'disabled':'')+' onclick="chg(\'dry\','+i+',-1)">−</button>'
       +'<span class="qn">'+q+'</span><button class="qb" onclick="chg(\'dry\','+i+',1)">+</button></div></div>';
+    if(m.g && st.gd[i]) h+='<div class="moreTx">'+m.g+'</div>';
     if(q>0){
       h+='<div class="temps">';
       TEMPD.forEach(function(tt){
@@ -346,6 +416,7 @@ function chg(k,i,d){
   calc();
 }
 function setT(k,i,t){ st[k][i]=t; (k==='wt'?renderWash:renderDry)(); calc(); }
+function tgG(k,i){ st[k][i]=!st[k][i]; (k==='gw'?renderWash:renderDry)(); }
 
 var MODE=null;
 var GEO=null, ZONE=null;
@@ -477,7 +548,18 @@ function calc(){
       : (!needShip ? '<span class="free">ไม่มี (มาส่งเอง)</span>'
       : (ship==null ? '<span style="color:var(--muted);font-weight:400">ยังไม่ได้เลือกจุด</span>' : money(ship)));
   var tot = w+dr+(ship||0);
-  el('pTot').textContent = money(tot);
+  setTot(tot);
+  var none=(wn+dn)===0;
+  el('empty').style.display = none? '':'none';
+  el('sumIn').style.display = none? 'none':'';
+  var s1=!none;
+  var s2= picked && (!needShip || !!ZONE);
+  var s3= !!(el('name').value.trim() && el('tel').value.trim() && (!needShip || el('addr').value.trim()));
+  el('st1').className='st'+(s1?' done':'');
+  el('st2').className='st'+(s2?' done':'');
+  el('st3').className='st'+(s3?' done':'');
+  el('sl1').className='sl'+(s1?' done':'');
+  el('sl2').className='sl'+(s2?' done':'');
   return { w:w, wn:wn, dr:dr, dn:dn, ship:ship, fold:fold, sep:sep, tot:tot, mode:MODE, needShip:needShip, picked:picked };
 }
 
@@ -534,6 +616,12 @@ el('send').addEventListener('click',function(){
   el('ovl').className='ovl on';
 });
 function closeSheet(){ el('ovl').className='ovl'; }
+function showOk(code,t){
+  el('ovl').className='ovl';
+  el('okCode').textContent=code||'';
+  el('okOvl').className='okovl on';
+  setTimeout(function(){ goLine(t); },1200);
+}
 el('ovl').addEventListener('click',closeSheet);
 
 /* แปลงตะกร้า → รูปแบบเดียวกับแอปร้าน */
@@ -578,10 +666,10 @@ el('copyBtn').addEventListener('click',function(){
   btn.disabled=true; btn.textContent='กำลังส่ง…';
   nextCode().then(function(code){
     var t='🎫 รหัสงาน '+code+'\n'+el('msg').textContent;
-    return saveOrder(code,t).catch(function(){}).then(function(){ return t; });
-  }).then(function(t){
+    return saveOrder(code,t).catch(function(){}).then(function(){ return {code:code,t:t}; });
+  }).then(function(o){
     btn.disabled=false; btn.textContent='ส่งเข้าไลน์ร้าน';
-    goLine(t);
+    showOk(o.code,o.t);
   }).catch(function(){
     btn.disabled=false; btn.textContent='ส่งเข้าไลน์ร้าน';
     goLine(el('msg').textContent);
