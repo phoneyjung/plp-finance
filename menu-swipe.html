@@ -506,7 +506,31 @@ function cutout(url,cb){
         }
       }
       x.putImageData(d,0,0);
-      res=c.toDataURL('image/png');
+
+      /* ---- จัดขนาดให้เท่ากันทุกแก้ว ----
+         หากรอบสิ่งที่เหลืออยู่ (แก้ว) แล้วย่อ/ขยายให้สูงเท่ากันทุกใบ
+         วางกึ่งกลางแนวนอน และให้ก้นแก้วอยู่ระดับเดียวกันเสมอ */
+      var x0=W, y0=H, x1=-1, y1=-1;
+      for(var yy=0;yy<H;yy++){
+        for(var xx=0;xx<W;xx++){
+          if(a[(yy*W+xx)*4+3]>12){
+            if(xx<x0)x0=xx; if(xx>x1)x1=xx;
+            if(yy<y0)y0=yy; if(yy>y1)y1=yy;
+          }
+        }
+      }
+      if(x1>x0 && y1>y0){
+        var bw=x1-x0+1, bh=y1-y0+1, S=900;
+        var k=Math.min(S*0.86/bh, S*0.90/bw);          /* สูง 86% ของกรอบ (ของกว้างๆ ใช้ความกว้างคุม) */
+        var nw=Math.round(bw*k), nh=Math.round(bh*k);
+        var c2=document.createElement('canvas'); c2.width=S; c2.height=S;
+        var x2=c2.getContext('2d');
+        x2.imageSmoothingQuality='high';
+        x2.drawImage(c, x0,y0,bw,bh, Math.round((S-nw)/2), Math.round(S*0.94-nh), nw, nh);
+        res=c2.toDataURL('image/png');
+      } else {
+        res=c.toDataURL('image/png');
+      }
     }catch(e){}
     cutCache[url]=res; cb(res);
   };
