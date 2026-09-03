@@ -81,6 +81,25 @@ textarea.f{min-height:74px;resize:vertical}
 .wb .wbBtns{display:flex;gap:8px}
 .wb .wbUse{flex:1;font-family:'Kanit';font-weight:600;font-size:14.5px;color:#fff;background:var(--gold);border:none;border-radius:12px;padding:9px}
 .wb .wbNo{font-family:'Kanit';font-size:14.5px;color:var(--muted);background:var(--soft);border:none;border-radius:12px;padding:9px 14px}
+/* --- 🫧 ฟองสบู่ลอย --- */
+header,.wrap{position:relative;z-index:1}
+.bubwrap{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
+.bub{position:absolute;bottom:-90px;border-radius:50%;
+  background:
+    radial-gradient(circle at 30% 28%, rgba(255,255,255,.95) 0 7%, rgba(255,255,255,0) 22%),
+    radial-gradient(circle at 68% 70%, rgba(255,255,255,.45) 0 5%, rgba(255,255,255,0) 16%),
+    radial-gradient(circle at 50% 50%, rgba(180,225,248,.08), rgba(91,184,232,.14) 68%, rgba(91,184,232,.30) 100%);
+  border:1px solid rgba(91,184,232,.30);
+  box-shadow:inset 0 0 6px rgba(255,255,255,.35);
+  animation:bubUp linear infinite}
+@keyframes bubUp{
+  0%{transform:translate3d(0,0,0) scale(.92);opacity:0}
+  10%{opacity:.75}
+  50%{transform:translate3d(calc(var(--sw)*.6),-55vh,0) scale(1)}
+  88%{opacity:.6}
+  100%{transform:translate3d(var(--sw),-112vh,0) scale(1.06);opacity:0}
+}
+@media (prefers-reduced-motion:reduce){.bubwrap{display:none}}
 .sumbar{background:var(--card);border-radius:20px;box-shadow:var(--sh);padding:15px;margin-bottom:12px}
 .sumbar .in{max-width:100%}
 .sumbar h2{margin-bottom:9px}
@@ -198,7 +217,7 @@ label.fl span{font-weight:600}
 </style>
 </head>
 <body>
-
+<div class="bubwrap" id="bubWrap"></div>
 <header>
   <img src="ic-hero.png" alt="" onerror="this.style.display='none'">
   <h1>Teddy Wash &amp; Dry · สาขา 1</h1>
@@ -803,6 +822,23 @@ setInterval(function(){
   if(on && row.children.length && on===row.children[0]) pkBuild();
 }, 5*60*1000);
 
+
+/* ===== 🫧 ฟองสบู่ลอย ===== */
+(function(){
+  var w=el('bubWrap'); if(!w) return;
+  var N=10;
+  for(var i=0;i<N;i++){
+    var b=document.createElement('div');
+    b.className='bub';
+    var sz=14+Math.random()*38;                    /* 14–52px */
+    b.style.width=b.style.height=sz.toFixed(0)+'px';
+    b.style.left=(2+Math.random()*94).toFixed(1)+'%';
+    b.style.setProperty('--sw',((Math.random()*80-40)).toFixed(0)+'px');  /* ส่ายซ้ายขวา */
+    b.style.animationDuration=(15+Math.random()*14).toFixed(1)+'s';
+    b.style.animationDelay=(-Math.random()*24).toFixed(1)+'s';            /* เริ่มกระจายทันที */
+    w.appendChild(b);
+  }
+})();
 
 /* ===== แถบยอดลอยล่างจอ ===== */
 (function(){
