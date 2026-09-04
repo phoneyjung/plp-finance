@@ -1,0 +1,62 @@
+<!doctype html><html lang="th"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>วาดขอบเขตในมหาลัย · Teddy</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+:root{--navy:#143A60;--gold:#C68B4A;--cream:#FBF6EC;--line:#ECE5D6}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Kanit',sans-serif;background:var(--cream)}
+header{padding:12px 16px;background:#fff;border-bottom:1.5px solid var(--line)}
+header b{color:var(--navy);font-size:17px}
+header small{display:block;color:#8A95A0;font-size:13px;margin-top:2px}
+#map{height:56vh}
+.bar{display:flex;gap:8px;padding:10px 12px}
+.bar button{flex:1;font-family:'Kanit';font-size:15px;font-weight:600;border:none;border-radius:12px;padding:12px}
+#undo{background:#fff;border:1.5px solid var(--line)!important;color:var(--navy)}
+#clear{background:#FDECEE;color:#8E2B39}
+#copy{background:var(--gold);color:#fff}
+#out{width:calc(100% - 24px);margin:0 12px 14px;height:110px;font-family:monospace;font-size:11px;border:1.5px solid var(--line);border-radius:12px;padding:8px;background:#fff}
+#stat{padding:0 14px 6px;color:#8A95A0;font-size:13.5px}
+</style></head><body>
+<header><b>🏫 วาดขอบเขต "ในมหาลัย"</b><small>แตะบนแผนที่ไล่ตามรั้วมหาลัยทีละจุด (10–25 จุด) · วนให้ครบรอบ ไม่ต้องปิดรูปเอง</small></header>
+<div id="map"></div>
+<div id="stat">ยังไม่มีจุด</div>
+<div class="bar">
+  <button id="undo">↩️ ย้อน</button>
+  <button id="clear">🗑 ล้างหมด</button>
+  <button id="copy">📋 คัดลอกพิกัด</button>
+</div>
+<textarea id="out" readonly placeholder="พิกัดจะขึ้นที่นี่ — กดคัดลอกแล้วส่งกลับมาในแชตได้เลย"></textarea>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+var map=L.map('map').setView([13.8199,100.0410],15);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OSM'}).addTo(map);
+var pts=[], layer=L.polygon([], {color:'#C68B4A',weight:3,fillColor:'#C68B4A',fillOpacity:0.15}).addTo(map);
+var dots=[];
+function redraw(){
+  layer.setLatLngs(pts);
+  document.getElementById('stat').textContent = pts.length? ('จุดที่วาง: '+pts.length+' จุด'):'ยังไม่มีจุด';
+  document.getElementById('out').value = pts.length>=3
+    ? JSON.stringify(pts.map(function(p){ return [ +p[0].toFixed(6), +p[1].toFixed(6) ]; }))
+    : '';
+}
+map.on('click',function(e){
+  pts.push([e.latlng.lat, e.latlng.lng]);
+  dots.push(L.circleMarker(e.latlng,{radius:5,color:'#143A60',fillColor:'#fff',fillOpacity:1,weight:2}).addTo(map));
+  redraw();
+});
+document.getElementById('undo').onclick=function(){
+  pts.pop(); var d=dots.pop(); if(d) map.removeLayer(d); redraw();
+};
+document.getElementById('clear').onclick=function(){
+  pts=[]; dots.forEach(function(d){ map.removeLayer(d); }); dots=[]; redraw();
+};
+document.getElementById('copy').onclick=function(){
+  var t=document.getElementById('out');
+  if(!t.value){ alert('วาดอย่างน้อย 3 จุดก่อนนะครับ'); return; }
+  t.select(); t.setSelectionRange(0,999999);
+  try{ document.execCommand('copy'); alert('คัดลอกแล้ว ✅ เอาไปวางส่งในแชตได้เลย'); }
+  catch(e){ alert('กดค้างในกล่องข้อความเพื่อคัดลอกเองได้เลยครับ'); }
+  if(navigator.clipboard) navigator.clipboard.writeText(t.value).catch(function(){});
+};
+</script></body></html>
