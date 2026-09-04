@@ -97,7 +97,7 @@ header{padding:calc(10px + env(safe-area-inset-top)) 16px 6px;display:flex;align
 .stage .art.pop{animation:pop .5s cubic-bezier(.2,.8,.2,1)}
 @keyframes pop{0%{opacity:0;transform:translateY(16px) scale(.93)}100%{opacity:1;transform:none}}
 .stage svg{height:100%;max-height:100%;width:auto;max-width:100%;filter:drop-shadow(0 22px 26px rgba(50,30,16,.28))}
-.stage img.photo{width:auto;height:100%;max-width:100%;object-fit:contain;
+.stage img.photo{width:auto;height:136%;max-width:none;object-fit:contain;
   opacity:0;transition:opacity .3s ease}
 .stage img.photo.rdy{opacity:1}
 
@@ -148,7 +148,7 @@ header{padding:calc(10px + env(safe-area-inset-top)) 16px 6px;display:flex;align
   display:grid;place-items:center;box-shadow:0 0 0 2px rgba(255,255,255,.28);
   transition:transform .34s cubic-bezier(.2,.8,.2,1),box-shadow .3s}
 .item .box svg{height:88%;width:auto}
-.item .box img.photo{width:118%;height:118%;max-width:none;object-fit:contain;opacity:0;transition:opacity .3s ease}
+.item .box img.photo{width:134%;height:134%;max-width:none;object-fit:contain;opacity:0;transition:opacity .3s ease}
 .item .box img.photo.rdy{opacity:1}
 .item .cap{margin-top:26px;font-size:10px;line-height:1.25;text-align:center;max-width:100%;padding:0 4px;
   color:rgba(246,236,217,.6);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:.3s}
@@ -487,33 +487,69 @@ function prepPhoto(url,cb){
       var c=document.createElement('canvas'); c.width=W; c.height=H;
       var x=c.getContext('2d'); x.drawImage(im,0,0);
       var d=x.getImageData(0,0,W,H), a=d.data;
-      var isBg=function(i){                     /* ขาว/เทาอ่อนมาก = ขอบว่างของรูป */
+      var isBg=function(i){                     /* ขาวจัดมาก = พื้นหลังของรูป */
         var o=i*4, r=a[o], g=a[o+1], bl=a[o+2];
         var mx=r>g?(r>bl?r:bl):(g>bl?g:bl), mn=r<g?(r<bl?r:bl):(g<bl?g:bl);
-        return mx>=244 && mx-mn<10;
+        return mx>=246 && mx-mn<=10;
       };
-      /* ---- ตัดเฉพาะ "แถวและคอลัมน์ริมนอกที่ว่างทั้งแถว" เท่านั้น → ไม่มีทางกินเนื้อรูป ---- */
-      var top=0,bot=H-1,left=0,right=W-1, i,j,blank;
-      for(;top<bot;top++){ blank=true; for(i=0;i<W;i++){ if(!isBg(top*W+i)){blank=false;break} } if(!blank)break }
-      for(;bot>top;bot--){ blank=true; for(i=0;i<W;i++){ if(!isBg(bot*W+i)){blank=false;break} } if(!blank)break }
-      for(;left<right;left++){ blank=true; for(j=top;j<=bot;j++){ if(!isBg(j*W+left)){blank=false;break} } if(!blank)break }
-      for(;right>left;right--){ blank=true; for(j=top;j<=bot;j++){ if(!isBg(j*W+right)){blank=false;break} } if(!blank)break }
+      /* ---- เปลี่ยนสีพื้นขาวรอบนอกให้เป็นสีครีมของหน้าเว็บ (ไม่ลบ → ไม่มีทางทำรูปแหว่ง) ---- */
+      var n=W*H, seen=new Uint8Array(n), q=new Int32Array(n), head=0, tail=0;
+      var CR=parseInt(PHOTO_BG.substr(1,2),16), CG=parseInt(PHOTO_BG.substr(3,2),16), CB=parseInt(PHOTO_BG.substr(5,2),16);
+      function push(i){ if(i>=0&&i<n&&!seen[i]&&isBg(i)){ seen[i]=1; q[tail++]=i } }
+      for(var xx=0;xx<W;xx++){ push(xx); push((H-1)*W+xx) }
+      for(var yy=0;yy<H;yy++){ push(yy*W); push(yy*W+W-1) }
+      while(head<tail){
+        var pp=q[head++], px=pp%W;
+        if(px>0) push(pp-1);
+        if(px<W-1) push(pp+1);
+        push(pp-W); push(pp+W);
+      }
+      for(var i3=0;i3<n;i3++){
+        if(!seen[i3]) continue;
+        var o3=i3*4;
+        a[o3]=CR; a[o3+1]=CG; a[o3+2]=CB;
+      }
+      /* ไล่ขอบรอยต่อให้เนียน */
+      for(var i4=0;i4<n;i4++){
+        if(seen[i4]) continue;
+        var xq=i4%W;
+        var nb=(xq>0&&seen[i4-1])||(xq<W-1&&seen[i4+1])||(i4>=W&&seen[i4-W])||(i4<n-W&&seen[i4+W]);
+        if(!nb) continue;
+        var o4=i4*4, mx4=Math.max(a[o4],a[o4+1],a[o4+2]);
+        if(mx4>238){ var t=(mx4-238)/17; if(t>1)t=1;
+          a[o4]=Math.round(a[o4]*(1-t)+CR*t); a[o4+1]=Math.round(a[o4+1]*(1-t)+CG*t); a[o4+2]=Math.round(a[o4+2]*(1-t)+CB*t); }
+      }
+      x.putImageData(d,0,0);
+
+      /* หากรอบของ "ตัวแก้ว" = พิกเซลที่ไม่ใช่พื้นหลัง */
+      var left=W, top=H, right=-1, bot=-1;
+      for(var yy2=0;yy2<H;yy2++){
+        for(var xx2=0;xx2<W;xx2++){
+          if(!seen[yy2*W+xx2]){
+            if(xx2<left)left=xx2; if(xx2>right)right=xx2;
+            if(yy2<top)top=yy2; if(yy2>bot)bot=yy2;
+          }
+        }
+      }
       var bw=right-left+1, bh=bot-top+1;
       if(bw>10 && bh>10){
-        var S=900, k=Math.min(S*0.66/bh, S*0.66/bw);   /* เว้นที่ให้ขอบวงกลมไล่จางได้ */
+        var S=900, k=Math.min(S*0.52/bh, S*0.52/bw);   /* ทุกแก้วขนาดเท่ากัน + เว้นที่ไล่ขอบ */
         var nw=Math.round(bw*k), nh=Math.round(bh*k);
         var c2=document.createElement('canvas'); c2.width=S; c2.height=S;
         var x2=c2.getContext('2d');
-        x2.fillStyle=PHOTO_BG; x2.fillRect(0,0,S,S);   /* พื้นในวงกลม (ครีมอ่อน = กลืนกับหน้าเว็บ) */
         x2.imageSmoothingQuality='high';
         x2.drawImage(c, left,top,bw,bh, Math.round((S-nw)/2), Math.round((S-nh)/2), nw, nh);
-        /* ตัดเป็นวงกลมแล้วไล่ขอบให้จางออก */
-        var g=x2.createRadialGradient(S/2,S/2,S*0.38, S/2,S/2,S*0.50);
-        g.addColorStop(0,'rgba(0,0,0,1)');
-        g.addColorStop(0.5,'rgba(0,0,0,.8)');
-        g.addColorStop(1,'rgba(0,0,0,0)');
+
+        x2.globalCompositeOperation='destination-over';
+        x2.fillStyle=PHOTO_BG; x2.fillRect(0,0,S,S);     /* พื้นครีมเต็มผืน */
+        x2.globalCompositeOperation='source-over';
+
+        /* ตัดเป็นวงกลมแล้วไล่ให้จางหายไปกับพื้นหลัง */
+        var g2=x2.createRadialGradient(S/2,S/2,S*0.30, S/2,S/2,S*0.47);
+        g2.addColorStop(0,'rgba(0,0,0,1)');
+        g2.addColorStop(1,'rgba(0,0,0,0)');
         x2.globalCompositeOperation='destination-in';
-        x2.fillStyle=g; x2.fillRect(0,0,S,S);
+        x2.fillStyle=g2; x2.fillRect(0,0,S,S);
         x2.globalCompositeOperation='source-over';
         res=c2.toDataURL('image/png');
       }
