@@ -89,16 +89,16 @@ header{padding:calc(10px + env(safe-area-inset-top)) 16px 6px;display:flex;align
   padding:2px 16px 0;position:relative}
 .count{position:absolute;right:4px;top:0;font-size:10.5px;color:var(--muted);letter-spacing:.08em;z-index:5}
 .stage{position:relative;flex:1 1 auto;min-height:0;width:100%;display:grid;place-items:center;overflow:hidden}
-.stage .halo{position:absolute;width:64%;aspect-ratio:1;border-radius:50%;background:rgba(255,255,255,.5);
-  filter:blur(2px);box-shadow:0 30px 62px -30px rgba(60,38,22,.5)}
+.stage .halo{position:absolute;width:60%;aspect-ratio:1;border-radius:50%;background:rgba(255,255,255,.22);
+  filter:blur(6px)}
 .stage .shadow{position:absolute;bottom:5%;width:42%;height:22px;border-radius:50%;
   background:rgba(70,45,25,.22);filter:blur(11px)}
 .stage .art{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;overflow:hidden}
 .stage .art.pop{animation:pop .5s cubic-bezier(.2,.8,.2,1)}
 @keyframes pop{0%{opacity:0;transform:translateY(16px) scale(.93)}100%{opacity:1;transform:none}}
 .stage svg{height:100%;max-height:100%;width:auto;max-width:100%;filter:drop-shadow(0 22px 26px rgba(50,30,16,.28))}
-.stage img.photo{width:100%;height:100%;object-fit:contain;
-  opacity:0;transition:opacity .3s ease;filter:drop-shadow(0 16px 18px rgba(50,30,16,.22))}
+.stage img.photo{width:auto;height:100%;max-width:100%;object-fit:contain;
+  opacity:0;transition:opacity .3s ease}
 .stage img.photo.rdy{opacity:1}
 
 .info{flex:0 0 auto;width:100%;transition:opacity .2s ease;
@@ -148,7 +148,7 @@ header{padding:calc(10px + env(safe-area-inset-top)) 16px 6px;display:flex;align
   display:grid;place-items:center;box-shadow:0 0 0 2px rgba(255,255,255,.28);
   transition:transform .34s cubic-bezier(.2,.8,.2,1),box-shadow .3s}
 .item .box svg{height:88%;width:auto}
-.item .box img.photo{width:100%;height:100%;object-fit:contain;opacity:0;transition:opacity .3s ease}
+.item .box img.photo{width:118%;height:118%;max-width:none;object-fit:contain;opacity:0;transition:opacity .3s ease}
 .item .box img.photo.rdy{opacity:1}
 .item .cap{margin-top:26px;font-size:10px;line-height:1.25;text-align:center;max-width:100%;padding:0 4px;
   color:rgba(246,236,217,.6);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:.3s}
@@ -177,7 +177,10 @@ header{padding:calc(10px + env(safe-area-inset-top)) 16px 6px;display:flex;align
 .count{position:absolute;right:16px;top:6px;font-size:11px;color:var(--muted);letter-spacing:.08em;z-index:5}
 
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
-@media (min-width:520px){body{max-width:520px;margin:0 auto;box-shadow:0 0 60px rgba(60,40,25,.12)}}
+@media (min-width:470px){
+  body{max-width:430px;margin:0 auto;box-shadow:0 0 0 1px rgba(76,51,36,.08),0 30px 70px -30px rgba(60,40,25,.45)}
+  .bg{left:50%;transform:translateX(-50%);width:430px;max-width:100vw}
+}
 </style>
 </head>
 <body>
@@ -230,8 +233,12 @@ header{padding:calc(10px + env(safe-area-inset-top)) 16px 6px;display:flex;align
 </div>
 
 <div class="dock">
-  <a class="dk main" id="dkOrder" target="_blank" rel="noopener">🧋 พรีออเดอร์</a>
-  <a class="dk alt" id="dkDeli" target="_blank" rel="noopener">🛵 เดลิเวอรี</a>
+  <a class="dk main" id="dkOrder" target="_blank" rel="noopener">
+    <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8h12l-1.2 11.2A2 2 0 0 1 14.8 21H9.2a2 2 0 0 1-2-1.8Z"/><path d="M5 8h14"/><path d="M14 3l-1.5 5"/><circle cx="10" cy="16.5" r="1.1" fill="currentColor" stroke="none"/><circle cx="13.5" cy="17.5" r="1.1" fill="currentColor" stroke="none"/></svg>
+    พรีออเดอร์</a>
+  <a class="dk alt" id="dkDeli" target="_blank" rel="noopener">
+    <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="17" r="2.6"/><circle cx="18" cy="17" r="2.6"/><path d="M8.6 17h6.8"/><path d="M6 17V9h5l3.4 5.2"/><path d="M14 7h3l2 6"/></svg>
+    เดลิเวอรี</a>
 </div>
 
 <script>
@@ -252,6 +259,7 @@ var BG_MAP={                              /* จะสลับพื้นห�
   'โซดา':'owl-img/bg-paper.jpg',
   'ท็อปปิ้ง':'owl-img/bg-paper.jpg'
 };
+var PHOTO_BG='#FBF5EA';   /* สีพื้นในวงกลมของรูปสินค้า — ให้ตรงกับสีครีมของหน้าเว็บ */
 var USE_PHOTO=true;   /* true = ใช้รูปถ่ายถ้ามี, false = ใช้ภาพวาดทั้งหมด */
 var SHOP_OPEN='07:00';   /* เวลาเปิด */
 var SHOP_CLOSE='21:00';  /* เวลาปิด */
@@ -466,9 +474,9 @@ function grad(cat){
 function gradOf(it){ var g=styleOf(it).bg; return 'linear-gradient(150deg,'+g[0]+','+g[1]+')' }
 /* ลบพื้นขาวของรูปสินค้าออกจริงๆ ในเครื่องลูกค้า → ไม่มีกล่องขาวแวบ */
 var cutCache={};
-/* ลบ "พื้นหลัง" ออกด้วยการไล่จากขอบภาพเข้ามา (flood fill)
-   → ฟองนม ฝาขาว ชีสข้างในแก้วจะไม่หายไปด้วย */
-function cutout(url,cb){
+/* CUT_BG=false (ค่าเริ่มต้น) = ไม่ตัดพื้นหลังในเครื่องลูกค้า — ปลอดภัยกับฟองชีส/วิปสีขาว
+   ตั้ง true ได้เมื่อเปลี่ยนไปใช้รูป PNG พื้นโปร่งแล้ว */
+function prepPhoto(url,cb){
   if(cutCache[url]!==undefined) return cb(cutCache[url]);
   var im=new Image();
   try{ im.crossOrigin='anonymous' }catch(e){}
@@ -478,58 +486,36 @@ function cutout(url,cb){
       var W=im.naturalWidth, H=im.naturalHeight;
       var c=document.createElement('canvas'); c.width=W; c.height=H;
       var x=c.getContext('2d'); x.drawImage(im,0,0);
-      var d=x.getImageData(0,0,W,H), a=d.data, n=W*H;
-      var pale=new Uint8Array(n), out=new Uint8Array(n);
-      for(var i=0;i<n;i++){
+      var d=x.getImageData(0,0,W,H), a=d.data;
+      var isBg=function(i){                     /* ขาว/เทาอ่อนมาก = ขอบว่างของรูป */
         var o=i*4, r=a[o], g=a[o+1], bl=a[o+2];
         var mx=r>g?(r>bl?r:bl):(g>bl?g:bl), mn=r<g?(r<bl?r:bl):(g<bl?g:bl);
-        pale[i]=(mx>=228 && mx-mn<18)?1:0;      /* ขาว/เทาอ่อน = พื้นหลังที่เป็นไปได้ */
-      }
-      var q=new Int32Array(n), head=0, tail=0;
-      function push(i){ if(i>=0&&i<n&&pale[i]&&!out[i]){ out[i]=1; q[tail++]=i } }
-      for(var xx=0;xx<W;xx++){ push(xx); push((H-1)*W+xx) }
-      for(var yy=0;yy<H;yy++){ push(yy*W); push(yy*W+W-1) }
-      while(head<tail){
-        var p=q[head++], px=p%W;
-        if(px>0) push(p-1);
-        if(px<W-1) push(p+1);
-        push(p-W); push(p+W);
-      }
-      for(var i2=0;i2<n;i2++){
-        if(out[i2]) a[i2*4+3]=0;
-        else{                                   /* ไล่ขอบให้เนียน ไม่เป็นฟันเลื่อย */
-          var edge=(i2%W>0&&out[i2-1])||(i2%W<W-1&&out[i2+1])||(i2>=W&&out[i2-W])||(i2<n-W&&out[i2+W]);
-          if(edge){
-            var o2=i2*4, m2=Math.max(a[o2],a[o2+1],a[o2+2]);
-            if(m2>226) a[o2+3]=Math.round(Math.max(0,(246-m2))/20*255);
-          }
-        }
-      }
-      x.putImageData(d,0,0);
-
-      /* ---- จัดขนาดให้เท่ากันทุกแก้ว ----
-         หากรอบสิ่งที่เหลืออยู่ (แก้ว) แล้วย่อ/ขยายให้สูงเท่ากันทุกใบ
-         วางกึ่งกลางแนวนอน และให้ก้นแก้วอยู่ระดับเดียวกันเสมอ */
-      var x0=W, y0=H, x1=-1, y1=-1;
-      for(var yy=0;yy<H;yy++){
-        for(var xx=0;xx<W;xx++){
-          if(a[(yy*W+xx)*4+3]>12){
-            if(xx<x0)x0=xx; if(xx>x1)x1=xx;
-            if(yy<y0)y0=yy; if(yy>y1)y1=yy;
-          }
-        }
-      }
-      if(x1>x0 && y1>y0){
-        var bw=x1-x0+1, bh=y1-y0+1, S=900;
-        var k=Math.min(S*0.86/bh, S*0.90/bw);          /* สูง 86% ของกรอบ (ของกว้างๆ ใช้ความกว้างคุม) */
+        return mx>=244 && mx-mn<10;
+      };
+      /* ---- ตัดเฉพาะ "แถวและคอลัมน์ริมนอกที่ว่างทั้งแถว" เท่านั้น → ไม่มีทางกินเนื้อรูป ---- */
+      var top=0,bot=H-1,left=0,right=W-1, i,j,blank;
+      for(;top<bot;top++){ blank=true; for(i=0;i<W;i++){ if(!isBg(top*W+i)){blank=false;break} } if(!blank)break }
+      for(;bot>top;bot--){ blank=true; for(i=0;i<W;i++){ if(!isBg(bot*W+i)){blank=false;break} } if(!blank)break }
+      for(;left<right;left++){ blank=true; for(j=top;j<=bot;j++){ if(!isBg(j*W+left)){blank=false;break} } if(!blank)break }
+      for(;right>left;right--){ blank=true; for(j=top;j<=bot;j++){ if(!isBg(j*W+right)){blank=false;break} } if(!blank)break }
+      var bw=right-left+1, bh=bot-top+1;
+      if(bw>10 && bh>10){
+        var S=900, k=Math.min(S*0.66/bh, S*0.66/bw);   /* เว้นที่ให้ขอบวงกลมไล่จางได้ */
         var nw=Math.round(bw*k), nh=Math.round(bh*k);
         var c2=document.createElement('canvas'); c2.width=S; c2.height=S;
         var x2=c2.getContext('2d');
+        x2.fillStyle=PHOTO_BG; x2.fillRect(0,0,S,S);   /* พื้นในวงกลม (ครีมอ่อน = กลืนกับหน้าเว็บ) */
         x2.imageSmoothingQuality='high';
-        x2.drawImage(c, x0,y0,bw,bh, Math.round((S-nw)/2), Math.round(S*0.94-nh), nw, nh);
+        x2.drawImage(c, left,top,bw,bh, Math.round((S-nw)/2), Math.round((S-nh)/2), nw, nh);
+        /* ตัดเป็นวงกลมแล้วไล่ขอบให้จางออก */
+        var g=x2.createRadialGradient(S/2,S/2,S*0.38, S/2,S/2,S*0.50);
+        g.addColorStop(0,'rgba(0,0,0,1)');
+        g.addColorStop(0.5,'rgba(0,0,0,.8)');
+        g.addColorStop(1,'rgba(0,0,0,0)');
+        x2.globalCompositeOperation='destination-in';
+        x2.fillStyle=g; x2.fillRect(0,0,S,S);
+        x2.globalCompositeOperation='source-over';
         res=c2.toDataURL('image/png');
-      } else {
-        res=c.toDataURL('image/png');
       }
     }catch(e){}
     cutCache[url]=res; cb(res);
@@ -542,7 +528,7 @@ function setPhoto(box,it,i){
   if(!u){ box.innerHTML=drinkSVG(it); return }
   box.innerHTML='<img class="photo" alt="'+esc(it.n)+'">';
   var img=box.querySelector('img');
-  cutout(u,function(src){
+  prepPhoto(u,function(src){
     if(!src){ box.innerHTML=drinkSVG(it); return }   /* รูปเสีย → ใช้ภาพวาดแทน */
     img.onload=function(){ img.classList.add('rdy') };
     img.src=src;
