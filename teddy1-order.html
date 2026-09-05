@@ -63,6 +63,12 @@ textarea.f{min-height:74px;resize:vertical}
 .pk.on{background:var(--gold);border-color:var(--gold);color:#fff;font-weight:600;box-shadow:0 3px 10px rgba(198,139,74,.35)}
 .pknote{display:none;font-size:14px;color:#8a6d3b;background:#FFF6E5;border:1px solid #F2E3C4;border-radius:12px;padding:8px 11px;margin:2px 0 4px}
 .pknote.show{display:block}
+/* --- คำแนะนำอุณหภูมิอบ --- */
+.ttip{margin:-2px 0 10px;border-radius:12px;padding:9px 13px;font-size:14.5px;line-height:1.5;font-weight:400}
+.ttip b{font-weight:600}
+.ttip-cool{background:#EAF4FB;color:#2E6E96}
+.ttip-warm{background:#FFF6E5;color:#8a6d3b}
+.ttip-hot{background:#FDEDEA;color:#A34833}
 /* --- แถบยอดลอยล่างจอ --- */
 .stky{position:fixed;left:0;right:0;bottom:0;z-index:55;display:flex;align-items:center;gap:12px;
   padding:10px 14px calc(10px + env(safe-area-inset-bottom));background:rgba(255,255,255,.96);
@@ -401,6 +407,11 @@ var DRY  = [
 ];
 var TEMPW = [['cold','เย็น','ผ้าสีทั่วไป'],['warm','อุ่น','ผ้าขาว'],['hot','ร้อน','ผ้าปู ฆ่าไรฝุ่น']];
 var TEMPD = [['cool','เย็น','ผ้ายืด บอบบาง'],['warm','อุ่น','ผ้าทั่วไป'],['hot','ร้อน','ผ้าหนา']];
+var DTIP = {
+  cool:'💨 <b>ลมเย็น ถนอมผ้าสุด</b> · แต่แห้งช้าสุด เหมาะผ้าบอบบางจริงๆ',
+  warm:'🌤️ <b>อุ่น ถนอมผ้า</b> · ผ้าหนาหรือใส่เยอะอาจไม่แห้งสนิท เผื่อเวลาอบเพิ่มนะคะ',
+  hot:'🔥 <b>ร้อน แห้งไวสุด</b> · เลี่ยงผ้ายืด สกรีน ชุดชั้นใน อาจหด/เสียทรงได้'
+};
 var st = { wash:{}, dry:{}, wt:{}, dt:{}, gw:{}, gd:{} };
 
 function el(id){ return document.getElementById(id); }
@@ -461,6 +472,7 @@ function renderDry(){
           +'<b>'+tt[1]+'</b><i>'+tt[2]+'</i></button>';
       });
       h+='</div>';
+      h+='<div class="ttip ttip-'+t+'">'+DTIP[t]+'</div>';
     }
   });
   el('dryList').innerHTML=h;
