@@ -2357,6 +2357,53 @@ function PrintPanel({ user }){
               style={{ background:'var(--primary)', color:'#fff', border:'none' }} onClick={bNew}>+ สร้างใบสั่ง</button>
           </div>
 
+          {showForm && (
+        <div className="card p-3 mb-3" style={{ border:'2px solid var(--primary)' }}>
+          <div className="kanit text-[14px] mb-2" style={{ fontWeight:600, color:'var(--primary)' }}>
+            {editId?'✏️ แก้ไขใบสั่ง':'📝 ใบสั่งใหม่'}
+          </div>
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-[12px]" style={{ color:'var(--muted)' }}>วันที่</span>
+            <input type="date" value={dateStr} onChange={e=>setDateStr(e.target.value)} style={{ ...selSt, flex:1 }}/>
+          </div>
+          {plines.map((l,i)=>(
+            <div key={i} className="flex items-center gap-1.5 mb-2">
+              <select value={l.base} onChange={e=>updLine(i,{base:e.target.value})} style={{ ...selSt, flex:1, minWidth:0 }}>
+                {OP_BASES.map(b=><option key={b} value={b}>{b}</option>)}
+              </select>
+              <select value={l.size} onChange={e=>updLine(i,{size:e.target.value})} style={{ ...selSt, width:92 }}>
+                {OP_SIZES.map(s=><option key={s} value={s}>{s} แก้ว</option>)}
+              </select>
+              <div className="flex items-center" style={{ border:'1px solid var(--line)', borderRadius:10, overflow:'hidden', background:'#fff', flexShrink:0 }}>
+                <button className="press" style={{ border:'none', background:'var(--soft)', color:'var(--primary)', width:32, height:36, fontSize:18, fontWeight:700 }}
+                  onClick={()=>updLine(i,{qty:Math.max(1,(l.qty||1)-1)})}>−</button>
+                <div className="num" style={{ width:34, textAlign:'center', fontSize:15, fontWeight:600 }}>{l.qty||1}</div>
+                <button className="press" style={{ border:'none', background:'var(--soft)', color:'var(--primary)', width:32, height:36, fontSize:18, fontWeight:700 }}
+                  onClick={()=>updLine(i,{qty:(l.qty||1)+1})}>＋</button>
+              </div>
+              <button className="press" style={{ border:'none', background:'none', color:'var(--neg)', fontSize:14 }}
+                onClick={()=>setPlines(plines.filter((_,j)=>j!==i))}>✕</button>
+            </div>
+          ))}
+          <button className="press kanit text-[12px] px-2 py-1 rounded-lg" style={{ background:'var(--soft)', color:'var(--primary)', border:'none' }}
+            onClick={()=>setPlines([...plines,{ base:'เบสชานม', size:'45', qty:1 }])}>+ เพิ่มรายการ</button>
+          <label className="flex items-center gap-1.5 mt-2 text-[12px]" style={{ color:'var(--muted)' }}>
+            <input type="checkbox" checked={boxes} onChange={e=>setBoxes(e.target.checked)}/> พิมพ์ช่อง ☐ ให้ติ๊กตอนใช้ถุง
+          </label>
+          <label className="flex items-center gap-1.5 mt-1 text-[12px]" style={{ color:'var(--muted)' }}>
+            <input type="checkbox" checked={showRecipe} onChange={e=>setShowRecipe(e.target.checked)}/> พิมพ์สูตร (วัตถุดิบ+ปริมาณ) ใต้แต่ละรายการ
+          </label>
+          <div className="flex gap-2 mt-3">
+            <button className="press kanit text-[14px] py-2.5 rounded-xl"
+              style={{ flex:1, background:'var(--primary)', color:'#fff', border:'none', fontWeight:600 }}
+              onClick={bCommit}>{editId?'💾 บันทึกการแก้ไข':'💾 บันทึกใบสั่ง'}</button>
+            <button className="press kanit text-[14px] py-2.5 px-4 rounded-xl"
+              style={{ background:'var(--soft)', color:'var(--muted)', border:'none' }}
+              onClick={()=>{ setShowForm(false); setEditId(null); }}>ยกเลิก</button>
+          </div>
+        </div>
+      )}
+
           {brews===null && <div className="card p-3 text-[13px]" style={{ color:'var(--muted)' }}>กำลังโหลด…</div>}
 
           {brews && brews.filter(b=>showDel||!b.del).length===0 && (
@@ -2417,53 +2464,6 @@ function PrintPanel({ user }){
           <label className="flex items-center gap-1.5 mt-2 text-[11.5px]" style={{ color:'var(--muted)' }}>
             <input type="checkbox" checked={showDel} onChange={e=>setShowDel(e.target.checked)}/> แสดงใบที่ลบแล้ว
           </label>
-        </div>
-      )}
-
-      {mode==='form' && showForm && (
-        <div className="card p-3 mb-3" style={{ border:'2px solid var(--primary)' }}>
-          <div className="kanit text-[14px] mb-2" style={{ fontWeight:600, color:'var(--primary)' }}>
-            {editId?'✏️ แก้ไขใบสั่ง':'📝 ใบสั่งใหม่'}
-          </div>
-          <div className="flex items-center gap-2 mb-2">
-            <span className="text-[12px]" style={{ color:'var(--muted)' }}>วันที่</span>
-            <input type="date" value={dateStr} onChange={e=>setDateStr(e.target.value)} style={{ ...selSt, flex:1 }}/>
-          </div>
-          {plines.map((l,i)=>(
-            <div key={i} className="flex items-center gap-1.5 mb-2">
-              <select value={l.base} onChange={e=>updLine(i,{base:e.target.value})} style={{ ...selSt, flex:1, minWidth:0 }}>
-                {OP_BASES.map(b=><option key={b} value={b}>{b}</option>)}
-              </select>
-              <select value={l.size} onChange={e=>updLine(i,{size:e.target.value})} style={{ ...selSt, width:92 }}>
-                {OP_SIZES.map(s=><option key={s} value={s}>{s} แก้ว</option>)}
-              </select>
-              <div className="flex items-center" style={{ border:'1px solid var(--line)', borderRadius:10, overflow:'hidden', background:'#fff', flexShrink:0 }}>
-                <button className="press" style={{ border:'none', background:'var(--soft)', color:'var(--primary)', width:32, height:36, fontSize:18, fontWeight:700 }}
-                  onClick={()=>updLine(i,{qty:Math.max(1,(l.qty||1)-1)})}>−</button>
-                <div className="num" style={{ width:34, textAlign:'center', fontSize:15, fontWeight:600 }}>{l.qty||1}</div>
-                <button className="press" style={{ border:'none', background:'var(--soft)', color:'var(--primary)', width:32, height:36, fontSize:18, fontWeight:700 }}
-                  onClick={()=>updLine(i,{qty:(l.qty||1)+1})}>＋</button>
-              </div>
-              <button className="press" style={{ border:'none', background:'none', color:'var(--neg)', fontSize:14 }}
-                onClick={()=>setPlines(plines.filter((_,j)=>j!==i))}>✕</button>
-            </div>
-          ))}
-          <button className="press kanit text-[12px] px-2 py-1 rounded-lg" style={{ background:'var(--soft)', color:'var(--primary)', border:'none' }}
-            onClick={()=>setPlines([...plines,{ base:'เบสชานม', size:'45', qty:1 }])}>+ เพิ่มรายการ</button>
-          <label className="flex items-center gap-1.5 mt-2 text-[12px]" style={{ color:'var(--muted)' }}>
-            <input type="checkbox" checked={boxes} onChange={e=>setBoxes(e.target.checked)}/> พิมพ์ช่อง ☐ ให้ติ๊กตอนใช้ถุง
-          </label>
-          <label className="flex items-center gap-1.5 mt-1 text-[12px]" style={{ color:'var(--muted)' }}>
-            <input type="checkbox" checked={showRecipe} onChange={e=>setShowRecipe(e.target.checked)}/> พิมพ์สูตร (วัตถุดิบ+ปริมาณ) ใต้แต่ละรายการ
-          </label>
-          <div className="flex gap-2 mt-3">
-            <button className="press kanit text-[14px] py-2.5 rounded-xl"
-              style={{ flex:1, background:'var(--primary)', color:'#fff', border:'none', fontWeight:600 }}
-              onClick={bCommit}>{editId?'💾 บันทึกการแก้ไข':'💾 บันทึกใบสั่ง'}</button>
-            <button className="press kanit text-[14px] py-2.5 px-4 rounded-xl"
-              style={{ background:'var(--soft)', color:'var(--muted)', border:'none' }}
-              onClick={()=>{ setShowForm(false); setEditId(null); }}>ยกเลิก</button>
-          </div>
         </div>
       )}
 
