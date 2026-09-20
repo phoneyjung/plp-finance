@@ -7713,12 +7713,64 @@ function ottParse(XLSX,wb){
       const y=Math.round(Math.abs(xAmt(r[cD])||0));
       const o=cO>=0?Math.round(Math.abs(xAmt(r[cO])||0)):0;
       if(w+y+o<=0) return;
-      out.push({date:`${year}-${pad(mi)}-${pad(d)}`, ym:`${year}-${pad(mi)}`, wash:w, dry:y, other:o});
+      const items=[];
+      if(w>0) items.push({cat:'เครื่องซัก',method:null,amt:w});
+      if(y>0) items.push({cat:'เครื่องอบ',method:null,amt:y});
+      if(o>0) items.push({cat:'ขายสินค้า',method:null,amt:o});
+      out.push({date:`${year}-${pad(mi)}-${pad(d)}`, ym:`${year}-${pad(mi)}`, items});
     });
   });
   if(!year||hit<1||!out.length) return null;
   out.sort((a,b)=>a.date<b.date?-1:1);
-  return {year, rows:out};
+  return {mode:'daily', year, rows:out};
+}
+
+/* ---- รายงานรายธุรกรรม Otteri (abb) : แยกเงินสด/โอนได้ ---- */
+function ottIsCash(app){
+  const t=String(app||'').toLowerCase();
+  return t.startsWith('coin') || t.trim()==='offline';
+}
+function ottParseTxn(XLSX,wb){
+  for(const name of wb.SheetNames){
+    const ws=wb.Sheets[name]; if(!ws) continue;
+    const raw=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:''});
+    if(raw.length<3) continue;
+    let hr=-1;
+    for(let i=0;i<Math.min(6,raw.length);i++){
+      const hs=(raw[i]||[]).map(x=>String(x||'').toLowerCase().trim());
+      if(hs.includes('application type') && hs.includes('payment amount') && hs.includes('created at')){ hr=i; break; }
+    }
+    if(hr<0) continue;
+    const hs=(raw[hr]||[]).map(x=>String(x||'').toLowerCase().trim());
+    const iApp=hs.indexOf('application type'), iCat=hs.indexOf('category'),
+          iPay=hs.indexOf('payment amount'), iOth=hs.indexOf('other income'),
+          iSt=hs.indexOf('status'), iAt=hs.indexOf('created at');
+    const map={}; let year=null;
+    raw.slice(hr+1).forEach(r=>{
+      const at=r[iAt]; if(!at) return;
+      let ds=null;
+      if(at instanceof Date && !isNaN(at.getTime())) ds=`${at.getFullYear()}-${pad(at.getMonth()+1)}-${pad(at.getDate())}`;
+      else { const m=String(at).trim().match(/^(\d{4})-(\d{2})-(\d{2})/); if(m) ds=`${m[1]}-${m[2]}-${m[3]}`; else ds=xDate(at); }
+      if(!ds) return;
+      if(iSt>=0 && String(r[iSt]||'').toLowerCase().trim()!=='success') return;
+      const pay=Math.round(Math.abs(xAmt(r[iPay])||0));
+      const oth=iOth>=0?Math.round(Math.abs(xAmt(r[iOth])||0)):0;
+      if(pay+oth<=0) return;
+      year=+ds.slice(0,4);
+      const meth=ottIsCash(r[iApp])?'cash':'bank';
+      const c=String(r[iCat]||'').toUpperCase();
+      const cat=c.indexOf('WASH')>=0?'เครื่องซัก':c.indexOf('DRY')>=0?'เครื่องอบ':'ขายสินค้า';
+      const day=(map[ds]=map[ds]||{});
+      if(pay>0){ const k=cat+'|'+meth; day[k]=(day[k]||0)+pay; }
+      if(oth>0){ const k='ขายสินค้า|'+meth; day[k]=(day[k]||0)+oth; }
+    });
+    const dates=Object.keys(map).sort();
+    if(!dates.length) continue;
+    const out=dates.map(ds=>({ date:ds, ym:ds.slice(0,7),
+      items:Object.keys(map[ds]).map(k=>({cat:k.split('|')[0],method:k.split('|')[1],amt:map[ds][k]})) }));
+    return {mode:'txn', year, rows:out};
+  }
+  return null;
 }
 
 function Import({shop,user,toast,onClose,onDone}){
@@ -7736,7 +7788,10 @@ function Import({shop,user,toast,onClose,onDone}){
   const [prog,setProg]=useState(0);
   const [ott,setOtt]=useState(null);
   const [ottDone,setOttDone]=useState(null);
+  const [ottIds,setOttIds]=useState([]);
   const [ottBusy,setOttBusy]=useState(false);
+  const [ottMethod,setOttMethod]=useState('cash');
+  const [ottUndo,setOttUndo]=useState(false);
   const fileRef=useRef();
 
   const guessMap=(hs)=>{
@@ -7754,18 +7809,18 @@ function Import({shop,user,toast,onClose,onDone}){
       const XLSX=await loadXLSX();
       const buf=await f.arrayBuffer();
       const wb=XLSX.read(buf,{type:'array',cellDates:true});
-      const o=ottParse(XLSX,wb);
+      const o=ottParseTxn(XLSX,wb)||ottParse(XLSX,wb);
       if(o){
         setOtt(o);
         setStep('ott');
         const yms=[...new Set(o.rows.map(r=>r.ym))];
-        const done={};
+        const done={}; const ids=[];
         for(const ym of yms){
           try{ const ex=await monthTxns(shop.id,ym);
-            ex.filter(t=>t.source==='ottRep').forEach(t=>{ done[t.date]=1; });
+            ex.filter(t=>t.source==='ottRep').forEach(t=>{ done[t.date]=1; ids.push(t.id); });
           }catch(e){ console.error(e); }
         }
-        setOttDone(done);
+        setOttDone(done); setOttIds(ids);
         return;
       }
       const ws=wb.Sheets[wb.SheetNames[0]];
@@ -7804,9 +7859,14 @@ function Import({shop,user,toast,onClose,onDone}){
 
   const ottNew=(ott&&ottDone)? ott.rows.filter(r=>!ottDone[r.date]) : [];
   const ottDup=(ott&&ottDone)? ott.rows.length-ottNew.length : 0;
-  const ottSum=(list)=>list.reduce((a,r)=>a+r.wash+r.dry+r.other,0);
+  const rowSum=(r)=>r.items.reduce((a,i)=>a+i.amt,0);
+  const rowSumM=(r,mt)=>r.items.reduce((a,i)=>a+((i.method||ottMethod)===mt?i.amt:0),0);
+  const ottSum=(list)=>list.reduce((a,r)=>a+rowSum(r),0);
+  const ottCash=ottNew.reduce((a,r)=>a+rowSumM(r,'cash'),0);
+  const ottBank=ottNew.reduce((a,r)=>a+rowSumM(r,'bank'),0);
   const ottByMonth=(()=>{ const m={};
-    ottNew.forEach(r=>{ (m[r.ym]=m[r.ym]||{days:0,sum:0}); m[r.ym].days++; m[r.ym].sum+=r.wash+r.dry+r.other; });
+    ottNew.forEach(r=>{ (m[r.ym]=m[r.ym]||{days:0,sum:0,cash:0,bank:0}); const x=m[r.ym];
+      x.days++; x.sum+=rowSum(r); x.cash+=rowSumM(r,'cash'); x.bank+=rowSumM(r,'bank'); });
     return Object.keys(m).sort().map(k=>({ym:k,...m[k]}));
   })();
 
@@ -7816,11 +7876,10 @@ function Import({shop,user,toast,onClose,onDone}){
     try{
       const docs=[];
       ottNew.forEach(r=>{
-        const base={shopId:shop.id,kind:'income',method:'cash',date:r.date,ym:r.ym,
+        const base={shopId:shop.id,kind:'income',date:r.date,ym:r.ym,
           skey:`${shop.id}_${r.ym}`,by:{id:user.id,name:user.name},source:'ottRep'};
-        if(r.wash>0) docs.push({...base,category:'เครื่องซัก',amount:r.wash,note:'รายงาน Otteri'});
-        if(r.dry>0)  docs.push({...base,category:'เครื่องอบ',amount:r.dry,note:'รายงาน Otteri'});
-        if(r.other>0)docs.push({...base,category:'ขายสินค้า',amount:r.other,note:'รายงาน Otteri · รายได้อื่น'});
+        r.items.forEach(it=>{ if(it.amt>0) docs.push({...base,category:it.cat,amount:it.amt,
+          method:it.method||ottMethod, note:ott.mode==='txn'?'รายงาน Otteri (แยกช่องทาง)':'รายงาน Otteri'}); });
       });
       const ids=[]; const chunk=400;
       for(let i=0;i<docs.length;i+=chunk){
@@ -7837,6 +7896,24 @@ function Import({shop,user,toast,onClose,onDone}){
     }catch(e){ console.error(e); toast('นำเข้าไม่สำเร็จ: '+(e.message||''),'err'); setOttBusy(false); }
   };
 
+  const doUndoOtt=async()=>{
+    if(!ottIds.length) return;
+    setOttBusy(true); setProg(0);
+    try{
+      const chunk=400;
+      for(let i=0;i<ottIds.length;i+=chunk){
+        const batch=db.batch();
+        ottIds.slice(i,i+chunk).forEach(id=>batch.delete(db.collection('transactions').doc(id)));
+        await batch.commit(); setProg(Math.min(ottIds.length,i+chunk));
+      }
+      await writeLog(shop.id,{id:user.id,name:user.name},'import',
+        `ถอนรายการที่นำเข้าจากรายงาน Otteri ${ottIds.length} รายการ`,
+        ottIds.map(id=>({id,before:null,after:null})));
+      toast(`ถอนแล้ว ${ottIds.length} รายการ · นำเข้าใหม่ได้เลย`);
+      setOttDone({}); setOttIds([]); setOttUndo(false); setOttBusy(false);
+    }catch(e){ console.error(e); toast('ถอนไม่สำเร็จ: '+(e.message||''),'err'); setOttBusy(false); }
+  };
+
   const sel={width:'100%',padding:'11px 12px',border:'1.5px solid var(--line)',borderRadius:11,fontSize:14,background:'#fff',marginBottom:12,color:'var(--ink)'};
   const opts=[<option key="-1" value={-1}>— ไม่ใช้ —</option>,...headers.map((h,i)=><option key={i} value={i}>{h}</option>)];
 
@@ -7846,7 +7923,9 @@ function Import({shop,user,toast,onClose,onDone}){
         <div style={{textAlign:'center',padding:'10px 0 20px'}}>
           <div style={{fontSize:13,color:'var(--muted)',marginBottom:14,lineHeight:1.6}}>เลือกไฟล์ .xlsx / .csv แล้วจับคู่คอลัมน์เอง · รองรับทุกรูปแบบ</div>
           <div style={{background:'var(--tint)',border:'1px solid var(--soft)',borderRadius:12,padding:'10px 12px',marginBottom:16,fontSize:12.5,lineHeight:1.6,textAlign:'left',color:'var(--ink)'}}>
-            <b>🧺 รายงานรายได้ Otteri</b> — ถ้าเป็นไฟล์ที่มีชีตรายเดือน (January…December) ระบบจะอ่านให้เองทั้งปี แยกเครื่องซัก/เครื่องอบ และข้ามวันที่ลงบัญชีไปแล้ว
+            <b>🧺 รายงาน Otteri</b> — ระบบอ่านให้เองทั้งปี แยกเครื่องซัก/เครื่องอบ และข้ามวันที่ลงบัญชีแล้ว<br/>
+            • <b>ไฟล์รายธุรกรรม (abb)</b> — แยกเงินสด/โอนอัตโนมัติ <b style={{color:'var(--pos)'}}>แนะนำ</b><br/>
+            • ไฟล์สรุปรายเดือน (January…December) — เลือกช่องทางเอง
           </div>
           <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" onChange={onFile} style={{display:'none'}}/>
           <button onClick={()=>fileRef.current.click()} className="press kanit" style={{padding:'14px 24px',border:'2px dashed var(--accent)',borderRadius:14,background:'var(--tint)',color:'var(--primary)',fontWeight:600,fontSize:15,display:'inline-flex',alignItems:'center',gap:8}}><I.table/> เลือกไฟล์ Excel</button>
@@ -7857,8 +7936,8 @@ function Import({shop,user,toast,onClose,onDone}){
       {step==='ott' && (<>
         <div style={{fontSize:12.5,color:'var(--muted)',marginBottom:12,display:'flex',alignItems:'center',gap:6}}><I.table/> {fileName}</div>
         <div style={{background:'var(--tint)',borderRadius:12,padding:'12px 14px',marginBottom:14}}>
-          <div style={{fontSize:14,fontWeight:700,color:'var(--primary)',marginBottom:4}}>🧺 รายงานรายได้ Otteri ปี {ott&&ott.year}</div>
-          <div style={{fontSize:12.5,color:'var(--muted)',lineHeight:1.6}}>ลงเป็นรายรับของร้าน <b style={{color:'var(--ink)'}}>{shop.name}</b> · แยกหมวดเครื่องซัก / เครื่องอบ / รายได้อื่น · ช่องทางเงินสด</div>
+          <div style={{fontSize:14,fontWeight:700,color:'var(--primary)',marginBottom:4}}>🧺 รายงาน{ott&&ott.mode==='txn'?'รายธุรกรรม':'รายได้'} Otteri ปี {ott&&ott.year}</div>
+          <div style={{fontSize:12.5,color:'var(--muted)',lineHeight:1.6}}>ลงเป็นรายรับของร้าน <b style={{color:'var(--ink)'}}>{shop.name}</b> · แยกหมวดเครื่องซัก / เครื่องอบ / รายได้อื่น{ott&&ott.mode==='txn'?<> · <b style={{color:'var(--pos)'}}>แยกเงินสด/โอนอัตโนมัติ</b> จากช่องทางจ่ายจริง</>:' · เลือกช่องทางเองด้านล่าง'}</div>
         </div>
         {!ottDone && <div style={{padding:'20px 0'}}><Loading label="กำลังตรวจรายการที่ลงบัญชีแล้ว..."/></div>}
         {ottDone && (<>
@@ -7876,14 +7955,51 @@ function Import({shop,user,toast,onClose,onDone}){
               <div className="num" style={{fontSize:18,fontWeight:800,color:'var(--primary)'}}>{baht(ottSum(ottNew))}</div>
             </div>
           </div>
+          {ott&&ott.mode==='txn' ? (
+            <div style={{display:'flex',gap:8,marginBottom:14}}>
+              <div style={{flex:1,background:'#F0FDF4',border:'1px solid #BBF7D0',borderRadius:12,padding:'10px 12px'}}>
+                <div style={{fontSize:11,color:'#15803D'}}>💵 เงินสด (เหรียญ)</div>
+                <div className="num" style={{fontSize:17,fontWeight:800,color:'#15803D'}}>{baht(ottCash)}</div>
+              </div>
+              <div style={{flex:1,background:'#EFF6FF',border:'1px solid #BFDBFE',borderRadius:12,padding:'10px 12px'}}>
+                <div style={{fontSize:11,color:'#1D4ED8'}}>🏦 โอน / e-wallet</div>
+                <div className="num" style={{fontSize:17,fontWeight:800,color:'#1D4ED8'}}>{baht(ottBank)}</div>
+              </div>
+            </div>
+          ) : (<>
+            <label style={lbl}>ลงเป็นช่องทาง</label>
+            <div style={{display:'flex',gap:8,marginBottom:6}}>
+              {[['cash','💵 เงินสด'],['bank','🏦 โอน']].map(([k,l])=>(
+                <button key={k} onClick={()=>setOttMethod(k)} className="press kanit" style={{flex:1,padding:'11px 2px',borderRadius:11,fontSize:14,fontWeight:600,border:`1.5px solid ${ottMethod===k?'var(--primary)':'var(--line)'}`,background:ottMethod===k?'var(--primary)':'#fff',color:ottMethod===k?'#fff':'var(--ink)'}}>{l}</button>
+              ))}
+            </div>
+            <div style={{fontSize:11.5,color:'var(--muted)',marginBottom:14,lineHeight:1.6}}>ไฟล์นี้ไม่มีข้อมูลแยกช่องทาง · ถ้าต้องการแยกเงินสด/โอน ให้ใช้ไฟล์รายงานรายธุรกรรม (abb)</div>
+          </>)}
+
+          {ottIds.length>0 && (
+            <div style={{background:'#FEF2F2',border:'1px solid #FECACA',borderRadius:12,padding:'11px 13px',marginBottom:14}}>
+              <div style={{fontSize:13,fontWeight:700,color:'#B91C1C',marginBottom:3}}>มีรายการจากรายงานนี้ลงบัญชีไว้แล้ว {ottIds.length} รายการ</div>
+              <div style={{fontSize:11.5,color:'#7F1D1D',lineHeight:1.6,marginBottom:9}}>ถ้าลงผิดช่องทาง ถอนออกแล้วนำเข้าใหม่ได้ (ลบเฉพาะรายการที่มาจากรายงาน Otteri เท่านั้น รายการที่คีย์เองไม่ถูกแตะ)</div>
+              {!ottUndo ? (
+                <button onClick={()=>setOttUndo(true)} className="press kanit" style={{width:'100%',padding:'10px',border:'1.5px solid #DC2626',borderRadius:11,background:'#fff',color:'#B91C1C',fontSize:13.5,fontWeight:600}}>ถอนรายการที่นำเข้าทั้งหมด</button>
+              ) : (
+                <div style={{display:'flex',gap:8}}>
+                  <button onClick={()=>setOttUndo(false)} disabled={ottBusy} className="press kanit" style={{flex:1,padding:'10px',border:'1px solid var(--line)',borderRadius:11,background:'#fff',fontSize:13.5,color:'var(--muted)'}}>ยกเลิก</button>
+                  <button onClick={doUndoOtt} disabled={ottBusy} className="press kanit" style={{flex:1.4,padding:'10px',border:'none',borderRadius:11,background:'#DC2626',color:'#fff',fontSize:13.5,fontWeight:700,opacity:ottBusy?.5:1}}>{ottBusy?`กำลังถอน ${prog}...`:`ยืนยันถอน ${ottIds.length} รายการ`}</button>
+                </div>
+              )}
+            </div>
+          )}
+
           {ottByMonth.length>0 && (
             <div style={{border:'1px solid var(--line)',borderRadius:12,overflow:'hidden',marginBottom:14}}>
-              <div style={{display:'flex',fontSize:11,fontWeight:700,color:'var(--muted)',background:'var(--bg)',padding:'7px 10px'}}><span style={{flex:1}}>เดือน</span><span style={{width:60,textAlign:'center'}}>วัน</span><span style={{width:90,textAlign:'right'}}>รายได้</span></div>
+              <div style={{display:'flex',fontSize:11,fontWeight:700,color:'var(--muted)',background:'var(--bg)',padding:'7px 10px'}}><span style={{flex:1}}>เดือน</span><span style={{width:38,textAlign:'center'}}>วัน</span>{ott&&ott.mode==='txn'&&<><span style={{width:74,textAlign:'right'}}>เงินสด</span><span style={{width:74,textAlign:'right'}}>โอน</span></>}<span style={{width:84,textAlign:'right'}}>รวม</span></div>
               {ottByMonth.map(m=>(
-                <div key={m.ym} style={{display:'flex',fontSize:13,padding:'8px 10px',borderTop:'1px solid var(--line)'}}>
+                <div key={m.ym} style={{display:'flex',fontSize:12.5,padding:'8px 10px',borderTop:'1px solid var(--line)'}}>
                   <span style={{flex:1}}>{m.ym}</span>
-                  <span className="num" style={{width:60,textAlign:'center',color:'var(--muted)'}}>{m.days}</span>
-                  <span className="num" style={{width:90,textAlign:'right',fontWeight:600}}>{baht(m.sum)}</span>
+                  <span className="num" style={{width:38,textAlign:'center',color:'var(--muted)'}}>{m.days}</span>
+                  {ott&&ott.mode==='txn'&&<><span className="num" style={{width:74,textAlign:'right',color:'#15803D'}}>{baht(m.cash)}</span><span className="num" style={{width:74,textAlign:'right',color:'#1D4ED8'}}>{baht(m.bank)}</span></>}
+                  <span className="num" style={{width:84,textAlign:'right',fontWeight:700}}>{baht(m.sum)}</span>
                 </div>
               ))}
             </div>
