@@ -776,6 +776,7 @@ function StampPanel({shop,user,toast}){
 /* ---------- MAIN SHELL ---------- */
 function TxnBrowser({shop, user, toast}){
   const [ym,setYm]=useState(ymOf(today()));
+  const [showReport,setShowReport]=useState(false);
   const [kind,setKind]=useState('income');
   const [load,setLoad]=useState(true);
   const [rows,setRows]=useState([]);
@@ -822,6 +823,9 @@ function TxnBrowser({shop, user, toast}){
         <div><div style={{fontSize:12.5,opacity:.88}}>{isInc?'รายรับรวมเดือนนี้':'รายจ่ายรวมเดือนนี้'}</div><div className="num" style={{fontSize:26,fontWeight:800,lineHeight:1.1}}>{baht(total)}</div></div>
         <div style={{textAlign:'right',fontSize:12.5,opacity:.88}}>{rows.length} รายการ</div>
       </div>
+
+      <button onClick={()=>setShowReport(true)} className="press kanit" style={{width:'100%',padding:'12px',marginBottom:14,border:'1.5px solid var(--line)',borderRadius:13,background:'#fff',color:'var(--primary)',fontWeight:600,fontSize:14,display:'flex',justifyContent:'center',alignItems:'center',gap:8}}><I.table/> ออกรายงาน (PDF / JPG / Excel)</button>
+      {showReport && <Report shop={shop} ym={ym} onClose={()=>setShowReport(false)} toast={toast}/>}
 
       <div className="card" style={{padding:'6px 0'}}>
         {load ? <Loading label="กำลังโหลด…"/> :
