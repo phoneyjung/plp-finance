@@ -788,7 +788,7 @@ function TxnBrowser({shop, user, toast}){
     try{
       await loadCatMeta(shop.id);
       const t=await monthTxns(shop.id, ym);
-      const flat=t.filter(x=>x.kind===kind && (x.source==='manual'||x.source==='import'));
+      const flat=t.filter(x=>x.kind===kind && x.source!=='payout');
       flat.sort((a,b)=>{ if(a.date!==b.date) return a.date<b.date?1:-1; return ((b.ts&&b.ts.seconds)||0)-((a.ts&&a.ts.seconds)||0); });
       setRows(flat);
     }catch(e){ console.error(e); setRows([]); }
@@ -7792,10 +7792,10 @@ function Import({shop,user,toast,onClose,onDone}){
   const [prog,setProg]=useState(0);
   const [ott,setOtt]=useState(null);
   const [ottDone,setOttDone]=useState(null);
-  const [ottIds,setOttIds]=useState([]);
+  const [ottOld,setOttOld]=useState({ott:{ids:[],sum:0},imp:{ids:[],sum:0}});
   const [ottBusy,setOttBusy]=useState(false);
   const [ottMethod,setOttMethod]=useState('cash');
-  const [ottUndo,setOttUndo]=useState(false);
+  const [ottUndo,setOttUndo]=useState(false);   /* false | 'ott' | 'imp' */
   const fileRef=useRef();
 
   const guessMap=(hs)=>{
@@ -7818,13 +7818,18 @@ function Import({shop,user,toast,onClose,onDone}){
         setOtt(o);
         setStep('ott');
         const yms=[...new Set(o.rows.map(r=>r.ym))];
-        const done={}; const ids=[];
+        const done={}; const grp={ott:{ids:[],sum:0}, imp:{ids:[],sum:0}};
         for(const ym of yms){
           try{ const ex=await monthTxns(shop.id,ym);
-            ex.filter(t=>t.source==='ottRep').forEach(t=>{ done[t.date]=1; ids.push(t.id); });
+            ex.forEach(t=>{
+              if(t.kind!=='income') return;
+              const g = t.source==='ottRep' ? 'ott' : (t.source==='import' ? 'imp' : null);
+              if(!g) return;
+              done[t.date]=1; grp[g].ids.push(t.id); grp[g].sum+=Number(t.amount)||0;
+            });
           }catch(e){ console.error(e); }
         }
-        setOttDone(done); setOttIds(ids);
+        setOttDone(done); setOttOld(grp);
         return;
       }
       const ws=wb.Sheets[wb.SheetNames[0]];
@@ -7900,21 +7905,32 @@ function Import({shop,user,toast,onClose,onDone}){
     }catch(e){ console.error(e); toast('นำเข้าไม่สำเร็จ: '+(e.message||''),'err'); setOttBusy(false); }
   };
 
-  const doUndoOtt=async()=>{
-    if(!ottIds.length) return;
+  const doUndoOtt=async(g)=>{
+    const ids=(ottOld[g]||{}).ids||[];
+    if(!ids.length) return;
     setOttBusy(true); setProg(0);
     try{
       const chunk=400;
-      for(let i=0;i<ottIds.length;i+=chunk){
+      for(let i=0;i<ids.length;i+=chunk){
         const batch=db.batch();
-        ottIds.slice(i,i+chunk).forEach(id=>batch.delete(db.collection('transactions').doc(id)));
-        await batch.commit(); setProg(Math.min(ottIds.length,i+chunk));
+        ids.slice(i,i+chunk).forEach(id=>batch.delete(db.collection('transactions').doc(id)));
+        await batch.commit(); setProg(Math.min(ids.length,i+chunk));
       }
       await writeLog(shop.id,{id:user.id,name:user.name},'import',
-        `ถอนรายการที่นำเข้าจากรายงาน Otteri ${ottIds.length} รายการ`,
-        ottIds.map(id=>({id,before:null,after:null})));
-      toast(`ถอนแล้ว ${ottIds.length} รายการ · นำเข้าใหม่ได้เลย`);
-      setOttDone({}); setOttIds([]); setOttUndo(false); setOttBusy(false);
+        `ถอนรายรับที่นำเข้า (${g==='ott'?'รายงาน Otteri':'นำเข้า Excel'}) ${ids.length} รายการ`,
+        ids.map(id=>({id,before:null,after:null})));
+      toast(`ถอนแล้ว ${ids.length} รายการ`);
+      /* คำนวณวันที่ลงแล้วใหม่ */
+      const yms=[...new Set(ott.rows.map(r=>r.ym))];
+      const done={}; const grp={ott:{ids:[],sum:0}, imp:{ids:[],sum:0}};
+      for(const ym of yms){
+        try{ const ex=await monthTxns(shop.id,ym);
+          ex.forEach(t=>{ if(t.kind!=='income') return;
+            const k = t.source==='ottRep' ? 'ott' : (t.source==='import' ? 'imp' : null);
+            if(!k) return; done[t.date]=1; grp[k].ids.push(t.id); grp[k].sum+=Number(t.amount)||0; });
+        }catch(e){ console.error(e); }
+      }
+      setOttDone(done); setOttOld(grp); setOttUndo(false); setOttBusy(false);
     }catch(e){ console.error(e); toast('ถอนไม่สำเร็จ: '+(e.message||''),'err'); setOttBusy(false); }
   };
 
@@ -7980,18 +7996,18 @@ function Import({shop,user,toast,onClose,onDone}){
             <div style={{fontSize:11.5,color:'var(--muted)',marginBottom:14,lineHeight:1.6}}>ไฟล์นี้ไม่มีข้อมูลแยกช่องทาง · ถ้าต้องการแยกเงินสด/โอน ให้ใช้ไฟล์รายงานรายธุรกรรม (abb)</div>
           </>)}
 
-          {ottIds.length>0 && (
+          {(ottOld.ott.ids.length>0||ottOld.imp.ids.length>0) && (
             <div style={{background:'#FEF2F2',border:'1px solid #FECACA',borderRadius:12,padding:'11px 13px',marginBottom:14}}>
-              <div style={{fontSize:13,fontWeight:700,color:'#B91C1C',marginBottom:3}}>มีรายการจากรายงานนี้ลงบัญชีไว้แล้ว {ottIds.length} รายการ</div>
-              <div style={{fontSize:11.5,color:'#7F1D1D',lineHeight:1.6,marginBottom:9}}>ถ้าลงผิดช่องทาง ถอนออกแล้วนำเข้าใหม่ได้ (ลบเฉพาะรายการที่มาจากรายงาน Otteri เท่านั้น รายการที่คีย์เองไม่ถูกแตะ)</div>
-              {!ottUndo ? (
-                <button onClick={()=>setOttUndo(true)} className="press kanit" style={{width:'100%',padding:'10px',border:'1.5px solid #DC2626',borderRadius:11,background:'#fff',color:'#B91C1C',fontSize:13.5,fontWeight:600}}>ถอนรายการที่นำเข้าทั้งหมด</button>
-              ) : (
-                <div style={{display:'flex',gap:8}}>
-                  <button onClick={()=>setOttUndo(false)} disabled={ottBusy} className="press kanit" style={{flex:1,padding:'10px',border:'1px solid var(--line)',borderRadius:11,background:'#fff',fontSize:13.5,color:'var(--muted)'}}>ยกเลิก</button>
-                  <button onClick={doUndoOtt} disabled={ottBusy} className="press kanit" style={{flex:1.4,padding:'10px',border:'none',borderRadius:11,background:'#DC2626',color:'#fff',fontSize:13.5,fontWeight:700,opacity:ottBusy?.5:1}}>{ottBusy?`กำลังถอน ${prog}...`:`ยืนยันถอน ${ottIds.length} รายการ`}</button>
+              <div style={{fontSize:13,fontWeight:700,color:'#B91C1C',marginBottom:3}}>มีรายรับที่นำเข้าไว้แล้วในช่วงเดือนนี้</div>
+              <div style={{fontSize:11.5,color:'#7F1D1D',lineHeight:1.6,marginBottom:9}}>ถ้าไม่ถอนออกก่อน ยอดวันเดิมจะถูกนับซ้ำ · ลบเฉพาะรายรับที่มาจากการนำเข้า รายการที่คีย์เองไม่ถูกแตะ</div>
+              {[['ott','จากรายงาน Otteri'],['imp','จากนำเข้า Excel']].map(([g,lab])=> ottOld[g].ids.length>0 && (
+                <div key={g} style={{display:'flex',alignItems:'center',gap:8,marginTop:7}}>
+                  <div style={{flex:1,fontSize:12.5,color:'#7F1D1D'}}>{lab}<br/><b style={{fontSize:13.5}}>{ottOld[g].ids.length} รายการ · {baht(ottOld[g].sum)}</b></div>
+                  <button onClick={()=>{ if(ottUndo===g) doUndoOtt(g); else setOttUndo(g); }} disabled={ottBusy} className="press kanit" style={{padding:'9px 13px',border:ottUndo===g?'none':'1.5px solid #DC2626',borderRadius:11,background:ottUndo===g?'#DC2626':'#fff',color:ottUndo===g?'#fff':'#B91C1C',fontSize:13,fontWeight:700,opacity:ottBusy?.5:1,whiteSpace:'nowrap'}}>
+                    {ottBusy&&ottUndo===g? `กำลังถอน ${prog}...` : ottUndo===g? 'ยืนยันถอน' : 'ถอนออก'}</button>
                 </div>
-              )}
+              ))}
+              {ottUndo && <button onClick={()=>setOttUndo(false)} className="press kanit" style={{width:'100%',marginTop:9,padding:'8px',border:'1px solid var(--line)',borderRadius:10,background:'#fff',fontSize:12.5,color:'var(--muted)'}}>ยกเลิก</button>}
             </div>
           )}
 
@@ -8010,7 +8026,7 @@ function Import({shop,user,toast,onClose,onDone}){
           )}
           <button onClick={doImportOtt} disabled={ottBusy||!ottNew.length} className="press kanit" style={{width:'100%',padding:'15px',border:'none',borderRadius:14,background:'var(--primary)',color:'#fff',fontSize:16,fontWeight:600,opacity:(ottBusy||!ottNew.length)?.5:1}}>
             {ottBusy? `กำลังลงบัญชี ${prog}...` : ottNew.length? `ลงบัญชี ${ottNew.length} วัน` : 'ลงบัญชีครบแล้ว'}</button>
-          <div style={{fontSize:11,color:'var(--muted)',textAlign:'center',marginTop:8}}>นำเข้าไฟล์เดิมซ้ำได้ ระบบข้ามวันที่ลงแล้วให้อัตโนมัติ</div>
+          <div style={{fontSize:11,color:'var(--muted)',textAlign:'center',marginTop:8,lineHeight:1.6}}>นำเข้าไฟล์เดิมซ้ำได้ ระบบข้ามวันที่ลงแล้วให้อัตโนมัติ<br/>ถ้าวันไหนมีรายรับที่นำเข้าไว้แล้ว จะไม่ลงซ้ำจนกว่าจะถอนออก</div>
           <button onClick={()=>{ setOtt(null); setOttDone(null); setStep('upload'); }} className="press kanit" style={{width:'100%',marginTop:10,padding:'11px',border:'1px solid var(--line)',borderRadius:12,background:'#fff',fontSize:13.5,color:'var(--muted)'}}>เลือกไฟล์อื่น</button>
         </>)}
       </>)}
