@@ -8337,12 +8337,37 @@ function Report({shop,ym,onClose,toast}){
   const [load,setLoad]=useState(true);
   const [txns,setTxns]=useState([]);
   const [busy,setBusy]=useState(false);
+  const [scope,setScope]=useState('month');
+  const [yrTxns,setYrTxns]=useState(null);
+  const [yrLoad,setYrLoad]=useState(false);
   useEffect(()=>{ (async()=>{ setLoad(true); try{ setTxns(await monthTxns(shop.id,ym)); }catch(e){ console.error(e); } setLoad(false); })(); },[shop.id,ym]);
-
-  const list=[...txns].sort((a,b)=> a.date<b.date?-1:a.date>b.date?1:((a.ts?.seconds||0)-(b.ts?.seconds||0)));
-  const income=sumBy(txns,x=>x.kind==='income'), expense=sumBy(txns,x=>x.kind==='expense'), profit=income-expense;
   const [yy,mm]=ym.split('-').map(Number);
+  useEffect(()=>{ if(scope!=='year'||yrTxns) return;
+    (async()=>{ setYrLoad(true);
+      try{ const all=[];
+        for(let i=1;i<=12;i++){ const r=await monthTxns(shop.id,`${yy}-${pad(i)}`); all.push(...r); }
+        setYrTxns(all);
+      }catch(e){ console.error(e); toast('โหลดข้อมูลทั้งปีไม่สำเร็จ','err'); setScope('month'); }
+      setYrLoad(false);
+    })();
+  },[scope,yy,shop.id]);
+
+  const src=(scope==='year'&&yrTxns)?yrTxns:txns;
+  const list=[...src].sort((a,b)=> a.date<b.date?-1:a.date>b.date?1:((a.ts?.seconds||0)-(b.ts?.seconds||0)));
+  const income=sumBy(src,x=>x.kind==='income'), expense=sumBy(src,x=>x.kind==='expense'), profit=income-expense;
   const monthLabel=`${TM[mm-1]} ${yy+543}`; const gen=today();
+  const periodLabel=(scope==='year')?`ปีภาษี ${yy+543}`:`เดือน ${monthLabel}`;
+  /* สรุปรายเดือน แยกเงินสด/โอน (ใช้ในรายงานภาษี) */
+  const byMonth=(()=>{ const m={};
+    for(let i=1;i<=12;i++) m[i]={inC:0,inB:0,exp:0};
+    src.forEach(t=>{ const k=+String(t.date||'').slice(5,7); if(!m[k]) return;
+      const v=Number(t.amount)||0;
+      if(t.kind==='income'){ if(t.method==='bank') m[k].inB+=v; else m[k].inC+=v; }
+      else if(t.kind==='expense') m[k].exp+=v;
+    });
+    return Object.keys(m).map(k=>({m:+k,...m[k]})).filter(r=>r.inC||r.inB||r.exp);
+  })();
+  const inCash=sumBy(src,x=>x.kind==='income'&&x.method!=='bank'), inBank=sumBy(src,x=>x.kind==='income'&&x.method==='bank');
   const aggCat=(k)=>{ const m={}; txns.filter(t=>t.kind===k).forEach(t=>{ const c=t.category||'อื่นๆ'; m[c]=(m[c]||0)+(Number(t.amount)||0); }); return Object.entries(m).sort((a,b)=>b[1]-a[1]); };
   const expCat=aggCat('expense'), incCat=aggCat('income');
 
@@ -8352,24 +8377,100 @@ function Report({shop,ym,onClose,toast}){
       list.forEach(t=>rows.push([t.date,t.kind==='income'?'รายรับ':'รายจ่าย',t.category,t.method==='cash'?'เงินสด':'โอน',Number(t.amount)||0,t.note||'']));
       rows.push([],['','','','','รวมรายรับ',income],['','','','','รวมรายจ่าย',expense],['','','','','กำไรสุทธิ',profit]);
       const ws=XLSX.utils.aoa_to_sheet(rows); ws['!cols']=[{wch:12},{wch:9},{wch:22},{wch:9},{wch:12},{wch:26}];
-      const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'รายงาน');
-      XLSX.writeFile(wb,`รายงาน_${shop.name}_${ym}.xlsx`);
+      const wb=XLSX.utils.book_new();
+      if(scope==='year'){
+        const sm=[['สรุปรายเดือน',shop.name],['ปีภาษี',yy+543],['ออกรายงาน',gen],[],
+                  ['เดือน','รายรับเงินสด','รายรับโอน','รายรับรวม','รายจ่าย','คงเหลือ']];
+        byMonth.forEach(r=>sm.push([TM[r.m-1],r.inC,r.inB,r.inC+r.inB,r.exp,r.inC+r.inB-r.exp]));
+        sm.push(['รวมทั้งปี',inCash,inBank,income,expense,profit]);
+        const ws2=XLSX.utils.aoa_to_sheet(sm); ws2['!cols']=[{wch:12},{wch:14},{wch:14},{wch:14},{wch:14},{wch:14}];
+        XLSX.utils.book_append_sheet(wb,ws2,'สรุปรายเดือน');
+      }
+      XLSX.utils.book_append_sheet(wb,ws,'รายการ');
+      XLSX.writeFile(wb,`รายงาน_${shop.name}_${scope==='year'?yy:ym}.xlsx`);
     }catch(e){ console.error(e); toast('ส่งออก Excel ไม่สำเร็จ','err'); }
     setBusy(false);
   };
   const pdf=()=>{
     const esc=(s)=>String(s==null?'':s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+    const smH = scope==='year'
+      ? ('<table><thead><tr><th>เดือน</th><th>รายรับเงินสด</th><th>รายรับโอน</th><th>รายรับรวม</th><th>รายจ่าย</th><th>คงเหลือ</th></tr></thead><tbody>'
+        + byMonth.map(r=>'<tr><td>'+TM[r.m-1]+' '+(yy+543)+'</td><td class="r">'+r.inC.toLocaleString('en-US')+'</td><td class="r">'+r.inB.toLocaleString('en-US')+'</td><td class="r g">'+(r.inC+r.inB).toLocaleString('en-US')+'</td><td class="r rd">'+r.exp.toLocaleString('en-US')+'</td><td class="r">'+(r.inC+r.inB-r.exp).toLocaleString('en-US')+'</td></tr>').join('')
+        + '<tr style="font-weight:700;background:#f5f5f5"><td>รวมทั้งปี</td><td class="r">'+inCash.toLocaleString('en-US')+'</td><td class="r">'+inBank.toLocaleString('en-US')+'</td><td class="r g">'+income.toLocaleString('en-US')+'</td><td class="r rd">'+expense.toLocaleString('en-US')+'</td><td class="r">'+profit.toLocaleString('en-US')+'</td></tr></tbody></table>')
+      : '';
     const rowsH=list.map(t=>'<tr><td>'+esc(t.date)+'</td><td>'+(t.kind==='income'?'รายรับ':'รายจ่าย')+'</td><td>'+esc(t.category)+'</td><td>'+(t.method==='cash'?'เงินสด':'โอน')+'</td><td class="r '+(t.kind==='income'?'g':'rd')+'">'+(Number(t.amount)||0).toLocaleString('en-US')+'</td><td>'+esc(t.note)+'</td></tr>').join('');
-    const html='<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>รายงาน '+esc(shop.name)+' '+monthLabel+'</title><style>*{font-family:Sarabun,"Noto Sans Thai",Tahoma,sans-serif}body{padding:22px;color:#1a1a1a;font-size:13px}h1{font-size:18px;margin:0 0 2px}.sub{color:#666;font-size:12px;margin-bottom:14px}.sum{display:flex;gap:10px;margin:14px 0}.box{flex:1;border:1px solid #e3e3e3;border-radius:8px;padding:10px 12px}.box .l{font-size:11px;color:#777}.box .v{font-size:16px;font-weight:700;margin-top:3px}table{border-collapse:collapse;width:100%;font-size:12px;margin-top:6px}th,td{border:1px solid #e3e3e3;padding:6px 8px;text-align:left}th{background:#f5f5f5;font-size:11px}td.r{text-align:right}.g{color:#16A34A}.rd{color:#DC2626}.ft{margin-top:18px;font-size:11px;color:#999;text-align:center}@media print{body{padding:6px}}</style></head><body><h1>รายงานการเงิน · '+esc(shop.name)+'</h1><div class="sub">ประจำเดือน '+monthLabel+' · ออกรายงาน '+gen+'</div><div class="sum"><div class="box"><div class="l">รายรับรวม</div><div class="v g">'+income.toLocaleString('en-US')+' ฿</div></div><div class="box"><div class="l">รายจ่ายรวม</div><div class="v rd">'+expense.toLocaleString('en-US')+' ฿</div></div><div class="box"><div class="l">กำไรสุทธิ</div><div class="v">'+profit.toLocaleString('en-US')+' ฿</div></div></div><table><thead><tr><th>วันที่</th><th>ประเภท</th><th>หมวด</th><th>ช่องทาง</th><th>จำนวนเงิน</th><th>หมายเหตุ</th></tr></thead><tbody>'+(rowsH||'<tr><td colspan="6" style="text-align:center;color:#999">ไม่มีรายการ</td></tr>')+'</tbody></table><div class="ft">PLP Finance · สร้างอัตโนมัติ</div><scr'+'ipt>window.onload=function(){setTimeout(function(){window.print()},350)}<\/scr'+'ipt></body></html>';
+    const html='<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>รายงาน '+esc(shop.name)+' '+monthLabel+'</title><style>*{font-family:Sarabun,"Noto Sans Thai",Tahoma,sans-serif}body{padding:22px;color:#1a1a1a;font-size:13px}h1{font-size:18px;margin:0 0 2px}.sub{color:#666;font-size:12px;margin-bottom:14px}.sum{display:flex;gap:10px;margin:14px 0}.box{flex:1;border:1px solid #e3e3e3;border-radius:8px;padding:10px 12px}.box .l{font-size:11px;color:#777}.box .v{font-size:16px;font-weight:700;margin-top:3px}table{border-collapse:collapse;width:100%;font-size:12px;margin-top:6px}th,td{border:1px solid #e3e3e3;padding:6px 8px;text-align:left}th{background:#f5f5f5;font-size:11px}td.r{text-align:right}.g{color:#16A34A}.rd{color:#DC2626}.ft{margin-top:18px;font-size:11px;color:#999;text-align:center}@media print{body{padding:6px}}</style></head><body><h1>รายงานการเงิน · '+esc(shop.name)+'</h1><div class="sub">'+periodLabel+' · ออกรายงาน '+gen+'</div>'+smH+'<div class="sum"><div class="box"><div class="l">รายรับรวม</div><div class="v g">'+income.toLocaleString('en-US')+' ฿</div></div><div class="box"><div class="l">รายจ่ายรวม</div><div class="v rd">'+expense.toLocaleString('en-US')+' ฿</div></div><div class="box"><div class="l">กำไรสุทธิ</div><div class="v">'+profit.toLocaleString('en-US')+' ฿</div></div></div><table><thead><tr><th>วันที่</th><th>ประเภท</th><th>หมวด</th><th>ช่องทาง</th><th>จำนวนเงิน</th><th>หมายเหตุ</th></tr></thead><tbody>'+(rowsH||'<tr><td colspan="6" style="text-align:center;color:#999">ไม่มีรายการ</td></tr>')+'</tbody></table><div class="ft">PLP Finance · สร้างอัตโนมัติ</div><scr'+'ipt>window.onload=function(){setTimeout(function(){window.print()},350)}<\/scr'+'ipt></body></html>';
     const w=window.open('','_blank');
     if(!w){ toast('เปิดหน้าต่างไม่ได้ — โปรดอนุญาต popup แล้วลองใหม่','err'); return; }
     w.document.open(); w.document.write(html); w.document.close();
   };
 
+  const jpg=async()=>{
+    try{ if(document.fonts&&document.fonts.ready) await document.fonts.ready; }catch(e){}
+    const rows=(scope==='year')?byMonth:[{m:mm,inC:inCash,inB:inBank,exp:expense}];
+    const W=1000, HEAD=210, RH=46, FOOT=150;
+    const cv=document.createElement('canvas');
+    cv.width=W; cv.height=HEAD+RH*(rows.length+2)+FOOT;
+    const g=cv.getContext('2d');
+    const F=(w,sz)=>w+' '+sz+'px Kanit, "Noto Sans Thai", Tahoma, sans-serif';
+    const num=(n)=>(Number(n)||0).toLocaleString('en-US');
+    g.fillStyle='#FFFFFF'; g.fillRect(0,0,W,cv.height);
+    g.fillStyle='#13294B'; g.fillRect(0,0,W,120);
+    g.fillStyle='#FFFFFF'; g.font=F(700,30); g.textAlign='left';
+    g.fillText('รายงานรายรับ-รายจ่าย',36,52);
+    g.font=F(400,18); g.fillStyle='#C7D4E6';
+    g.fillText(shop.name+' · '+periodLabel,36,86);
+    g.textAlign='right'; g.font=F(400,15);
+    g.fillText('ออกรายงาน '+gen,W-36,86);
+    const CX=[36,300,470,640,810,W-36];
+    let y=150;
+    g.fillStyle='#EEF2F7'; g.fillRect(0,y-28,W,40);
+    g.fillStyle='#13294B'; g.font=F(600,16);
+    g.textAlign='left'; g.fillText('เดือน',CX[0],y);
+    g.textAlign='right';
+    ['รายรับเงินสด','รายรับโอน','รายรับรวม','รายจ่าย','คงเหลือ'].forEach((t,i)=>g.fillText(t,CX[i+1],y));
+    y+=34;
+    rows.forEach((r,i)=>{
+      const tot=r.inC+r.inB, net=tot-r.exp;
+      g.fillStyle= i%2? '#FAFBFD':'#FFFFFF'; g.fillRect(0,y-24,W,RH);
+      g.fillStyle='#1F2933'; g.font=F(400,17); g.textAlign='left';
+      g.fillText(TM[r.m-1]+' '+(yy+543),CX[0],y+2);
+      g.textAlign='right';
+      g.fillText(num(r.inC),CX[1],y+2);
+      g.fillText(num(r.inB),CX[2],y+2);
+      g.fillStyle='#16A34A'; g.font=F(600,17); g.fillText(num(tot),CX[3],y+2);
+      g.fillStyle='#DC2626'; g.font=F(400,17); g.fillText(num(r.exp),CX[4],y+2);
+      g.fillStyle= net>=0?'#13294B':'#DC2626'; g.font=F(600,17); g.fillText(num(net),CX[5],y+2);
+      y+=RH;
+    });
+    g.fillStyle='#13294B'; g.fillRect(0,y-24,W,RH+6);
+    g.fillStyle='#FFFFFF'; g.font=F(700,19); g.textAlign='left';
+    g.fillText(scope==='year'?'รวมทั้งปี':'รวมทั้งเดือน',CX[0],y+4);
+    g.textAlign='right';
+    g.fillText(num(inCash),CX[1],y+4); g.fillText(num(inBank),CX[2],y+4);
+    g.fillText(num(income),CX[3],y+4); g.fillText(num(expense),CX[4],y+4); g.fillText(num(profit),CX[5],y+4);
+    y+=RH+40;
+    g.fillStyle='#5B6470'; g.font=F(400,15); g.textAlign='left';
+    g.fillText('รายรับรวม '+num(income)+' บาท  (เงินสด '+num(inCash)+' · โอน '+num(inBank)+')',36,y);
+    g.fillText('รายจ่ายรวม '+num(expense)+' บาท  ·  คงเหลือ '+num(profit)+' บาท  ·  '+list.length+' รายการ',36,y+26);
+    g.fillStyle='#9AA4B2'; g.font=F(400,13);
+    g.fillText('PLP Finance · สร้างอัตโนมัติจากข้อมูลในระบบ',36,y+62);
+    const a=document.createElement('a');
+    a.download='รายงาน_'+shop.name+'_'+(scope==='year'?yy:ym)+'.jpg';
+    a.href=cv.toDataURL('image/jpeg',0.95);
+    document.body.appendChild(a); a.click(); a.remove();
+    toast('บันทึกรูปแล้ว');
+  };
+
   return (
     <Sheet title="ออกรายงาน" onClose={onClose} z={70}>
-      <div style={{fontSize:13,color:'var(--muted)'}}>{shop.name} · เดือน {monthLabel}</div>
-      {load? <div style={{padding:'30px 0'}}><Loading/></div> : (<>
+      <div style={{fontSize:13,color:'var(--muted)'}}>{shop.name} · {periodLabel}</div>
+      <div style={{display:'flex',gap:8,margin:'10px 0 2px'}}>
+        {[['month','เดือนนี้'],['year','ทั้งปี '+(yy+543)]].map(([k,l])=>(
+          <button key={k} onClick={()=>setScope(k)} className="press kanit" style={{flex:1,padding:'9px 2px',borderRadius:11,fontSize:13.5,fontWeight:600,border:`1.5px solid ${scope===k?'var(--primary)':'var(--line)'}`,background:scope===k?'var(--primary)':'#fff',color:scope===k?'#fff':'var(--ink)'}}>{l}</button>
+        ))}
+      </div>
+      {(load||yrLoad)? <div style={{padding:'30px 0'}}><Loading label={yrLoad?'กำลังรวมข้อมูลทั้งปี...':undefined}/></div> : (<>
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8,margin:'12px 0 16px'}}>
           {[['รายรับ',income,'var(--pos)'],['รายจ่าย',expense,'var(--neg)'],['กำไร',profit,profit>=0?'var(--primary)':'var(--neg)']].map(([l,v,c])=>(
             <div key={l} style={{border:'1px solid var(--line)',borderRadius:12,padding:'10px 6px',textAlign:'center'}}>
@@ -8381,8 +8482,9 @@ function Report({shop,ym,onClose,toast}){
         <div style={{display:'flex',gap:10,marginBottom:10}}>
           <button onClick={excel} disabled={busy} className="press kanit" style={{flex:1,padding:'13px',border:'none',borderRadius:13,background:'#1D6F42',color:'#fff',fontWeight:600,fontSize:14.5,opacity:busy?.6:1,display:'flex',justifyContent:'center',alignItems:'center',gap:7}}><I.table/> {busy?'กำลังสร้าง...':'Excel'}</button>
           <button onClick={pdf} className="press kanit" style={{flex:1,padding:'13px',border:'none',borderRadius:13,background:'#C0392B',color:'#fff',fontWeight:600,fontSize:14.5,display:'flex',justifyContent:'center',alignItems:'center',gap:7}}><I.receipt/> PDF</button>
+          <button onClick={jpg} className="press kanit" style={{flex:1,padding:'13px',border:'none',borderRadius:13,background:'#7C3AED',color:'#fff',fontWeight:600,fontSize:14.5,display:'flex',justifyContent:'center',alignItems:'center',gap:7}}>🖼 JPG</button>
         </div>
-        <div style={{fontSize:11.5,color:'var(--muted)',marginBottom:18,textAlign:'center',lineHeight:1.5}}>{list.length} รายการในเดือนนี้ · PDF จะเปิดหน้าใหม่ให้กด “บันทึกเป็น PDF”</div>
+        <div style={{fontSize:11.5,color:'var(--muted)',marginBottom:18,textAlign:'center',lineHeight:1.5}}>{list.length} รายการ{scope==='year'?' ทั้งปี':'ในเดือนนี้'} · PDF เปิดหน้าใหม่ให้กด “บันทึกเป็น PDF” · JPG บันทึกเป็นรูปสรุปทันที</div>
 
         {expCat.length>0 && (<div style={{marginBottom:14}}>
           <div className="kanit" style={{fontWeight:600,fontSize:14,marginBottom:6}}>รายจ่ายแยกหมวด</div>
