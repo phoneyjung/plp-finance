@@ -7734,6 +7734,43 @@ function ottIsCash(app){
   const t=String(app||'').toLowerCase();
   return t.startsWith('coin') || t.trim()==='offline';
 }
+/* ชีต CN-DN : ใบลดหนี้/เพิ่มหนี้ (คืนเงินลูกค้า, ปรับยอดโดยแอดมิน) */
+function ottApplyCN(XLSX,wb,map){
+  let cnt=0, sum=0;
+  for(const name of wb.SheetNames){
+    const ws=wb.Sheets[name]; if(!ws) continue;
+    const raw=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:''});
+    if(raw.length<2) continue;
+    let hr=-1;
+    for(let i=0;i<Math.min(6,raw.length);i++){
+      const hs=(raw[i]||[]).map(x=>String(x||'').toLowerCase().trim());
+      if(hs.includes('adjust amount') && hs.some(h=>h.indexOf('create at')>=0)){ hr=i; break; }
+    }
+    if(hr<0) continue;
+    const hs=(raw[hr]||[]).map(x=>String(x||'').toLowerCase().trim());
+    const iAdj=hs.indexOf('adjust amount'), iCat=hs.indexOf('category'),
+          iApp=hs.indexOf('application type'), iAt=hs.findIndex(h=>h.indexOf('create at')>=0);
+    raw.slice(hr+1).forEach(r=>{
+      const at=r[iAt]; if(!at) return;
+      let ds=null;
+      if(at instanceof Date && !isNaN(at.getTime())) ds=`${at.getFullYear()}-${pad(at.getMonth()+1)}-${pad(at.getDate())}`;
+      else { const m=String(at).trim().match(/^(\d{4})-(\d{2})-(\d{2})/); if(m) ds=`${m[1]}-${m[2]}-${m[3]}`; else ds=xDate(at); }
+      if(!ds) return;
+      const adj=Math.round(xAmt(r[iAdj])||0);
+      if(!adj) return;
+      const meth=ottIsCash(r[iApp])?'cash':'bank';
+      const c=String(r[iCat]||'').toUpperCase();
+      const cat=c.indexOf('WASH')>=0?'เครื่องซัก':c.indexOf('DRY')>=0?'เครื่องอบ':'ขายสินค้า';
+      const day=(map[ds]=map[ds]||{});
+      const k=cat+'|'+meth;
+      day[k]=(day[k]||0)+adj;
+      cnt++; sum+=adj;
+    });
+    break;
+  }
+  return {cnt,sum};
+}
+
 function ottParseTxn(XLSX,wb){
   for(const name of wb.SheetNames){
     const ws=wb.Sheets[name]; if(!ws) continue;
@@ -7768,11 +7805,13 @@ function ottParseTxn(XLSX,wb){
       if(pay>0){ const k=cat+'|'+meth; day[k]=(day[k]||0)+pay; }
       if(oth>0){ const k='ขายสินค้า|'+meth; day[k]=(day[k]||0)+oth; }
     });
+    const cn=ottApplyCN(XLSX,wb,map);
     const dates=Object.keys(map).sort();
     if(!dates.length) continue;
     const out=dates.map(ds=>({ date:ds, ym:ds.slice(0,7),
-      items:Object.keys(map[ds]).map(k=>({cat:k.split('|')[0],method:k.split('|')[1],amt:map[ds][k]})) }));
-    return {mode:'txn', year, rows:out};
+      items:Object.keys(map[ds]).map(k=>({cat:k.split('|')[0],method:k.split('|')[1],amt:map[ds][k]})).filter(i=>i.amt!==0) }))
+      .filter(r=>r.items.length);
+    return {mode:'txn', year, rows:out, cn};
   }
   return null;
 }
@@ -7887,8 +7926,9 @@ function Import({shop,user,toast,onClose,onDone}){
       ottNew.forEach(r=>{
         const base={shopId:shop.id,kind:'income',date:r.date,ym:r.ym,
           skey:`${shop.id}_${r.ym}`,by:{id:user.id,name:user.name},source:'ottRep'};
-        r.items.forEach(it=>{ if(it.amt>0) docs.push({...base,category:it.cat,amount:it.amt,
-          method:it.method||ottMethod, note:ott.mode==='txn'?'รายงาน Otteri (แยกช่องทาง)':'รายงาน Otteri'}); });
+        r.items.forEach(it=>{ if(it.amt!==0) docs.push({...base,category:it.cat,amount:it.amt,
+          method:it.method||ottMethod,
+          note: it.amt<0 ? 'รายงาน Otteri · คืนเงิน/ปรับยอด (CN)' : (ott.mode==='txn'?'รายงาน Otteri (แยกช่องทาง)':'รายงาน Otteri')}); });
       });
       const ids=[]; const chunk=400;
       for(let i=0;i<docs.length;i+=chunk){
@@ -7975,6 +8015,11 @@ function Import({shop,user,toast,onClose,onDone}){
               <div className="num" style={{fontSize:18,fontWeight:800,color:'var(--primary)'}}>{baht(ottSum(ottNew))}</div>
             </div>
           </div>
+          {ott&&ott.cn&&ott.cn.cnt>0 && (
+            <div style={{background:'#FFFBEB',border:'1px solid #FDE68A',borderRadius:12,padding:'10px 12px',marginBottom:12,fontSize:12.5,color:'#92400E',lineHeight:1.6}}>
+              ↩️ พบใบลดหนี้/คืนเงิน (CN-DN) {ott.cn.cnt} รายการ รวม {baht(ott.cn.sum)} — หักออกจากยอดให้แล้ว
+            </div>
+          )}
           {ott&&ott.mode==='txn' ? (
             <div style={{display:'flex',gap:8,marginBottom:14}}>
               <div style={{flex:1,background:'#F0FDF4',border:'1px solid #BBF7D0',borderRadius:12,padding:'10px 12px'}}>
