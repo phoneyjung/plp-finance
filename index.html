@@ -7911,13 +7911,16 @@ function Import({shop,user,toast,onClose,onDone}){
         }
         setPos(p); setStep('pos');
         const yms=[...new Set(p.rows.map(r=>r.ym))];
+        /* ex[date] = { pos:{id,amount}|null, posDup:[id], man:[{id,amount}] } */
         const ex={};
         for(const ym of yms){
           try{ const list=await monthTxns(shop.id,ym);
-            list.filter(t=>t.source==='posOwl').forEach(t=>{
-              const cur=ex[t.date];
-              if(!cur) ex[t.date]={id:t.id, amount:Number(t.amount)||0, dup:[]};
-              else cur.dup.push(t.id);                 /* กันเผื่อเคยลงซ้ำ */
+            list.forEach(t=>{
+              if(t.kind!=='income' || t.category!=='ขายหน้าร้าน' || !t.date) return;
+              const e=(ex[t.date]=ex[t.date]||{pos:null,posDup:[],man:[]});
+              const a=Number(t.amount)||0;
+              if(t.source==='posOwl'){ if(!e.pos) e.pos={id:t.id,amount:a}; else e.posDup.push(t.id); }
+              else e.man.push({id:t.id,amount:a});
             });
           }catch(e){ console.error(e); }
         }
@@ -8018,14 +8021,22 @@ function Import({shop,user,toast,onClose,onDone}){
   };
 
   /* ---- POS Owl Cha ---- */
-  const posSame=[], posNew=[], posChg=[]; let posDup=0;
+  const posSame=[], posNew=[], posChg=[], posRep=[]; let posDup=0; const posDel=[];
   if(pos&&posEx){
     pos.rows.forEach(r=>{
       const e=posEx[r.date];
-      if(!e) posNew.push(r);
-      else if(Math.round(e.amount*100)!==Math.round(r.amt*100)) posChg.push({...r, old:e.amount, id:e.id, dup:e.dup});
-      else { posSame.push(r); }
-      if(e&&e.dup.length) posDup+=e.dup.length;
+      if(!e){ posNew.push(r); return; }
+      if(e.pos){
+        if(Math.round(e.pos.amount*100)!==Math.round(r.amt*100)) posChg.push({...r, old:e.pos.amount, id:e.pos.id});
+        else posSame.push(r);
+        /* วันที่มียอด POS แล้ว แต่ยังมีรายการคีย์มือ/ซ้ำค้าง → ลบตัวเกิน */
+        e.posDup.forEach(id=>posDel.push(id));
+        e.man.forEach(m=>posDel.push(m.id));
+        posDup+=e.posDup.length+e.man.length;
+      } else if(e.man.length){
+        /* มีแต่รายการคีย์มือ → แทนที่ด้วยยอด POS */
+        posRep.push({...r, old:e.man.reduce((a,m)=>a+m.amount,0), ids:e.man.map(m=>m.id)});
+      } else posNew.push(r);
     });
   }
   const posNewSum=posNew.reduce((a,r)=>a+r.amt,0);
@@ -8034,7 +8045,7 @@ function Import({shop,user,toast,onClose,onDone}){
   const posRef=pos? pos.rows.reduce((a,r)=>a+r.ref,0) : 0;
 
   const doImportPos=async()=>{
-    if(!posNew.length && !posChg.length && !posDup){ toast('ยอดตรงกับที่ลงไว้แล้วทุกวัน'); return; }
+    if(!posNew.length && !posChg.length && !posRep.length && !posDup){ toast('ยอดตรงกับที่ลงไว้แล้วทุกวัน'); return; }
     setPosBusy(true); setProg(0);
     try{
       const chunk=350; let done=0;
@@ -8059,17 +8070,30 @@ function Import({shop,user,toast,onClose,onDone}){
         });
         await batch.commit(); done+=Math.min(chunk,posChg.length-i); setProg(done);
       }
-      /* 3) ลบตัวซ้ำที่เคยหลุดเข้าไป */
-      const dups=[]; Object.keys(posEx).forEach(d=>{ (posEx[d].dup||[]).forEach(id=>dups.push(id)); });
+      /* 3) แทนที่รายการคีย์มือด้วยยอด POS (ลบของเดิม + ลงใหม่วันละ 1) */
+      for(let i=0;i<posRep.length;i+=chunk){
+        const batch=db.batch();
+        posRep.slice(i,i+chunk).forEach(r=>{
+          r.ids.forEach(id=>batch.delete(db.collection('transactions').doc(id)));
+          const ref=db.collection('transactions').doc();
+          batch.set(ref,{shopId:shop.id,kind:'income',category:'ขายหน้าร้าน',amount:r.amt,
+            method:ottMethod,note:'POS · '+r.bills+' บิล (แทนที่ยอดคีย์มือ)',date:r.date,ym:r.ym,
+            skey:`${shop.id}_${r.ym}`,by:{id:user.id,name:user.name},source:'posOwl',
+            ts:FieldValue.serverTimestamp()});
+        });
+        await batch.commit(); done+=Math.min(chunk,posRep.length-i); setProg(done);
+      }
+      /* 4) ลบตัวซ้ำในวันที่มียอด POS อยู่แล้ว */
+      const dups=posDel;
       for(let i=0;i<dups.length;i+=chunk){
         const batch=db.batch();
         dups.slice(i,i+chunk).forEach(id=>batch.delete(db.collection('transactions').doc(id)));
         await batch.commit();
       }
       await writeLog(shop.id,{id:user.id,name:user.name},'import',
-        `นำเข้า POS Owl Cha — ใหม่ ${posNew.length} วัน · ปรับยอด ${posChg.length} วัน`+(dups.length?` · ลบซ้ำ ${dups.length}`:''),
+        `นำเข้า POS Owl Cha — ใหม่ ${posNew.length} วัน · ปรับยอด ${posChg.length} วัน · แทนที่คีย์มือ ${posRep.length} วัน`+(dups.length?` · ลบซ้ำ ${dups.length}`:''),
         posNew.map(()=>({id:'',before:null,after:null})).slice(0,0));
-      toast(`ลงบัญชีแล้ว · ใหม่ ${posNew.length} วัน · ปรับยอด ${posChg.length} วัน`);
+      toast(`ลงบัญชีแล้ว · ใหม่ ${posNew.length} · ปรับยอด ${posChg.length} · แทนที่ ${posRep.length} วัน`);
       onDone();
     }catch(e){ console.error(e); toast('นำเข้าไม่สำเร็จ: '+(e.message||''),'err'); setPosBusy(false); }
   };
@@ -8138,13 +8162,29 @@ function Import({shop,user,toast,onClose,onDone}){
             </div>
             <div style={{flex:1,background:'#fff',border:'1px solid var(--line)',borderRadius:12,padding:'10px 12px'}}>
               <div style={{fontSize:11,color:'var(--muted)'}}>ยอดเปลี่ยน</div>
-              <div className="num" style={{fontSize:20,fontWeight:800,color:posChg.length?'#C2410C':'var(--muted)'}}>{posChg.length}</div>
+              <div className="num" style={{fontSize:20,fontWeight:800,color:(posChg.length+posRep.length)?'#C2410C':'var(--muted)'}}>{posChg.length+posRep.length}</div>
             </div>
             <div style={{flex:1,background:'#fff',border:'1px solid var(--line)',borderRadius:12,padding:'10px 12px'}}>
               <div style={{fontSize:11,color:'var(--muted)'}}>เหมือนเดิม</div>
               <div className="num" style={{fontSize:20,fontWeight:800,color:'var(--muted)'}}>{posSame.length}</div>
             </div>
           </div>
+
+          {posRep.length>0 && (
+            <div style={{background:'#EFF6FF',border:'1px solid #BFDBFE',borderRadius:12,padding:'11px 13px',marginBottom:12}}>
+              <div style={{fontSize:13,fontWeight:700,color:'#1E40AF',marginBottom:7}}>🔁 มีรายการที่คีย์มือไว้แล้ว {posRep.length} วัน — จะแทนที่ด้วยยอด POS (ลบของเดิม ไม่บวกเพิ่ม)</div>
+              {posRep.slice(0,12).map(r=>(
+                <div key={r.date} style={{display:'flex',fontSize:12.5,padding:'4px 0',color:'#1E3A8A',borderTop:'1px solid #DBEAFE'}}>
+                  <span style={{flex:1}}>{r.date.slice(8)}/{r.date.slice(5,7)}{r.ids.length>1?` (${r.ids.length} รายการ)`:''}</span>
+                  <span className="num" style={{width:86,textAlign:'right',textDecoration:'line-through',opacity:.6}}>{baht(r.old)}</span>
+                  <span style={{width:18,textAlign:'center'}}>→</span>
+                  <span className="num" style={{width:86,textAlign:'right',fontWeight:700}}>{baht(r.amt)}</span>
+                  <span className="num" style={{width:76,textAlign:'right',color:(r.amt-r.old)>=0?'#15803D':'#B91C1C'}}>{(r.amt-r.old)>=0?'+':''}{baht(r.amt-r.old)}</span>
+                </div>
+              ))}
+              {posRep.length>12 && <div style={{fontSize:11.5,color:'#1E40AF',marginTop:6}}>…และอีก {posRep.length-12} วัน</div>}
+            </div>
+          )}
 
           {posChg.length>0 && (
             <div style={{background:'#FFF7ED',border:'1px solid #FED7AA',borderRadius:12,padding:'11px 13px',marginBottom:12}}>
@@ -8165,7 +8205,7 @@ function Import({shop,user,toast,onClose,onDone}){
 
           {posDup>0 && (
             <div style={{background:'#FEF2F2',border:'1px solid #FECACA',borderRadius:12,padding:'10px 12px',marginBottom:12,fontSize:12.5,color:'#B91C1C',lineHeight:1.6}}>
-              พบรายการซ้ำของวันเดียวกัน {posDup} รายการ — จะลบตัวเกินให้เหลือวันละ 1 รายการ
+              พบรายการ “ขายหน้าร้าน” ซ้ำกับยอด POS {posDup} รายการ — จะลบตัวเกินให้เหลือวันละ 1 รายการ
             </div>
           )}
 
@@ -8182,10 +8222,10 @@ function Import({shop,user,toast,onClose,onDone}){
             ))}
           </div>
 
-          <button onClick={doImportPos} disabled={posBusy||(!posNew.length&&!posChg.length&&!posDup)} className="press kanit" style={{width:'100%',padding:'15px',border:'none',borderRadius:14,background:'var(--primary)',color:'#fff',fontSize:16,fontWeight:600,opacity:(posBusy||(!posNew.length&&!posChg.length&&!posDup))?.5:1}}>
+          <button onClick={doImportPos} disabled={posBusy||(!posNew.length&&!posChg.length&&!posRep.length&&!posDup)} className="press kanit" style={{width:'100%',padding:'15px',border:'none',borderRadius:14,background:'var(--primary)',color:'#fff',fontSize:16,fontWeight:600,opacity:(posBusy||(!posNew.length&&!posChg.length&&!posRep.length&&!posDup))?.5:1}}>
             {posBusy? `กำลังลงบัญชี ${prog}...`
-              : (!posNew.length&&!posChg.length&&!posDup) ? 'ยอดตรงกันทุกวันแล้ว'
-              : `ลง ${posNew.length} วันใหม่${posChg.length?` · แก้ ${posChg.length} วัน`:''}`}</button>
+              : (!posNew.length&&!posChg.length&&!posRep.length&&!posDup) ? 'ยอดตรงกันทุกวันแล้ว'
+              : [posNew.length?`ลงใหม่ ${posNew.length}`:'', posChg.length?`ปรับ ${posChg.length}`:'', posRep.length?`แทนที่ ${posRep.length}`:'', posDup?`ลบซ้ำ ${posDup}`:''].filter(Boolean).join(' · ')}</button>
           <div style={{fontSize:11,color:'var(--muted)',textAlign:'center',marginTop:8,lineHeight:1.6}}>วันเดียวกันมีได้รายการเดียวเสมอ · นำเข้าไฟล์เดิมซ้ำกี่รอบยอดก็ไม่บวกเพิ่ม</div>
           <button onClick={()=>{ setPos(null); setPosEx(null); setStep('upload'); }} className="press kanit" style={{width:'100%',marginTop:10,padding:'11px',border:'1px solid var(--line)',borderRadius:12,background:'#fff',fontSize:13.5,color:'var(--muted)'}}>เลือกไฟล์อื่น</button>
         </>)}
@@ -8382,12 +8422,13 @@ function ShopSummary({shop}){
   const divid=S(cap,'dividend');
   const isCash=t=>t.method==='cash';
   const M=(arr,k,fn)=>arr.reduce((s,t)=>s+((t.kind===k&&fn(t))?(Number(t.amount)||0):0),0);
-  const isBank=t=>t.method==='bank';
-  /* ทุนที่ระบุช่องทางไว้ ให้เข้าไปอยู่ในกระเป๋านั้นด้วย */
+  const notCash=t=>!isCash(t);
+  const capBank=t=>t.method==='bank'||t.method==='transfer';
+  /* ทุนที่ระบุช่องทางไว้ ให้เข้าไปอยู่ในกระเป๋านั้นด้วย (ทุนที่ยังเป็น '-' แยกไว้ช่องที่ 3) */
   const capM=(fn)=>cap.reduce((s,t)=>{ if(!fn(t)) return s; const a=Number(t.amount)||0;
     return s + (t.kind==='invest'? a : (t.kind==='withdraw'||t.kind==='dividend'? -a : 0)); },0);
   const cashNet=M(io,'income',isCash)-M(io,'expense',isCash)+capM(isCash);
-  const bankNet=M(io,'income',isBank)-M(io,'expense',isBank)+capM(isBank);
+  const bankNet=M(io,'income',notCash)-M(io,'expense',notCash)+capM(capBank);
   const balance=invest+income-expense-divid;
   const investFloat=balance-cashNet-bankNet;
   const byCat=(k)=>{ const m={}; io.forEach(t=>{ if(t.kind!==k) return; const c=t.category||'อื่นๆ'; m[c]=(m[c]||0)+(Number(t.amount)||0); }); return Object.entries(m).map(([name,amt])=>({name,amt})).sort((a,b)=>b.amt-a.amt); };
