@@ -5043,7 +5043,7 @@ function OCTabPay({ toast }){
       const s=await db.collection('fpScans').doc(ym).get();
       if(!s.exists){ toast('ยังไม่มีข้อมูลสแกนเดือนนี้','err'); setFpBusy(false); return; }
       const sc=(s.data()||{}).d||{};
-      let added=0, skipped=0, nomap=0;
+      let added=0, skipped=0, nomap=0, fixed=0;
       upd(p=>{
         const map={};
         (p.staff||[]).forEach(st=>{ if(st.fpId!=null&&st.fpId!=='') map[String(st.fpId)]=st.id; });
@@ -5055,9 +5055,15 @@ function OCTabPay({ toast }){
             const sid=map[String(pin)];
             if(!sid){ nomap++; return; }
             const cur=(times[d]||{})[sid];
-            if(!force && cur && (cur.i||cur.o)){ skipped++; return; }
             const v=sc[d][pin]||{};
             const list=fpClean(v.t);
+            const incomplete = !!(cur && cur.i && !cur.o);   /* ลงเวลาเข้าไว้แล้ว แต่ยังไม่มีเวลาออก */
+            if(!force && cur && (cur.i||cur.o)){
+              /* เดิมข้ามทุกวันที่มีข้อมูลแล้ว ทำให้วันที่ยังไม่มีเวลาออกค้างตลอด
+                 ตอนนี้ถ้าเครื่องสแกนมีคู่เข้า-ออกครบแล้ว จะเติมให้ */
+              if(!(incomplete && list.length>=2)){ skipped++; return; }
+              fixed++;
+            }
             let brk=0;
             if(list.length>=4){
               const usable=list.length-(list.length%2);
@@ -5073,6 +5079,7 @@ function OCTabPay({ toast }){
         });
       });
       let msg='ดึงเวลาแล้ว '+added+' รายการ';
+      if(fixed) msg+=' · เติมเวลาออกย้อนหลัง '+fixed;
       if(skipped) msg+=' · ข้ามที่แก้มือ '+skipped;
       if(nomap) msg+=' · ยังไม่จับคู่รหัส '+nomap;
       toast(msg, added? 'ok':'err');
