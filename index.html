@@ -7823,6 +7823,47 @@ function ottParseTxn(XLSX,wb){
   return null;
 }
 
+/* ---- รายงานสรุปยอดขายรายวันแยกตามรหัสถาดเก็บเงิน (POS ร้าน Owl Cha) ---- */
+function posParse(XLSX,wb){
+  for(const name of wb.SheetNames){
+    const ws=wb.Sheets[name]; if(!ws) continue;
+    const raw=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:''});
+    if(raw.length<3) continue;
+    let hr=-1;
+    for(let i=0;i<Math.min(8,raw.length);i++){
+      const hs=(raw[i]||[]).map(x=>String(x||'').trim());
+      if(hs.some(h=>h==='วันที่') && hs.some(h=>h.indexOf('รหัสถาด')>=0) && hs.some(h=>h.indexOf('รวมสุทธิ')>=0)){ hr=i; break; }
+    }
+    if(hr<0) continue;
+    const hs=(raw[hr]||[]).map(x=>String(x||'').trim());
+    const iD=hs.findIndex(h=>h==='วันที่');
+    const iNet=hs.findIndex(h=>h.indexOf('รวมสุทธิ')>=0);
+    const iBill=hs.findIndex(h=>h.indexOf('จำนวนบิล')>=0);
+    const iRef=hs.findIndex(h=>h.indexOf('คืนเงิน')>=0);
+    const iBr=hs.findIndex(h=>h.indexOf('สาขา')>=0);
+    const map={}; let branch='';
+    raw.slice(hr+1).forEach(r=>{
+      const ds=String(r[iD]||'').trim();
+      const m=ds.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+      if(!m) return;                                   /* ข้ามแถว Total และแถวว่าง */
+      let y=+m[3]; if(y>2400) y-=543;
+      const key=`${y}-${pad(+m[2])}-${pad(+m[1])}`;
+      const amt=xAmt(r[iNet]); if(amt==null) return;
+      const o=(map[key]=map[key]||{amt:0,bills:0,ref:0,trays:0});
+      o.amt+=amt; o.trays++;
+      if(iBill>=0) o.bills+=Math.round(xAmt(r[iBill])||0);
+      if(iRef>=0) o.ref+=(xAmt(r[iRef])||0);
+      if(iBr>=0 && !branch) branch=String(r[iBr]||'').trim();
+    });
+    const dates=Object.keys(map).sort();
+    if(!dates.length) continue;
+    const rows=dates.map(d=>({ date:d, ym:d.slice(0,7),
+      amt:Math.round(map[d].amt*100)/100, bills:map[d].bills, ref:map[d].ref, trays:map[d].trays }));
+    return {mode:'pos', branch, rows};
+  }
+  return null;
+}
+
 function Import({shop,user,toast,onClose,onDone}){
   const [step,setStep]=useState('upload');
   const [fileName,setFileName]=useState('');
@@ -7841,6 +7882,9 @@ function Import({shop,user,toast,onClose,onDone}){
   const [ottOld,setOttOld]=useState({ott:{ids:[],sum:0},imp:{ids:[],sum:0}});
   const [ottBusy,setOttBusy]=useState(false);
   const [ottMethod,setOttMethod]=useState('cash');
+  const [pos,setPos]=useState(null);
+  const [posEx,setPosEx]=useState(null);
+  const [posBusy,setPosBusy]=useState(false);
   const [ottUndo,setOttUndo]=useState(false);   /* false | 'ott' | 'imp' */
   const fileRef=useRef();
 
@@ -7859,6 +7903,27 @@ function Import({shop,user,toast,onClose,onDone}){
       const XLSX=await loadXLSX();
       const buf=await f.arrayBuffer();
       const wb=XLSX.read(buf,{type:'array',cellDates:true});
+      const p=posParse(XLSX,wb);
+      if(p){
+        if(shop.id!=='owlcha'){
+          toast('ไฟล์ POS นี้ใช้ได้เฉพาะร้าน Owl Cha — สลับร้านก่อนนะคะ','err');
+          setStep('upload'); return;
+        }
+        setPos(p); setStep('pos');
+        const yms=[...new Set(p.rows.map(r=>r.ym))];
+        const ex={};
+        for(const ym of yms){
+          try{ const list=await monthTxns(shop.id,ym);
+            list.filter(t=>t.source==='posOwl').forEach(t=>{
+              const cur=ex[t.date];
+              if(!cur) ex[t.date]={id:t.id, amount:Number(t.amount)||0, dup:[]};
+              else cur.dup.push(t.id);                 /* กันเผื่อเคยลงซ้ำ */
+            });
+          }catch(e){ console.error(e); }
+        }
+        setPosEx(ex);
+        return;
+      }
       const o=ottParseTxn(XLSX,wb)||ottParse(XLSX,wb);
       if(o){
         setOtt(o);
@@ -7952,6 +8017,63 @@ function Import({shop,user,toast,onClose,onDone}){
     }catch(e){ console.error(e); toast('นำเข้าไม่สำเร็จ: '+(e.message||''),'err'); setOttBusy(false); }
   };
 
+  /* ---- POS Owl Cha ---- */
+  const posSame=[], posNew=[], posChg=[]; let posDup=0;
+  if(pos&&posEx){
+    pos.rows.forEach(r=>{
+      const e=posEx[r.date];
+      if(!e) posNew.push(r);
+      else if(Math.round(e.amount*100)!==Math.round(r.amt*100)) posChg.push({...r, old:e.amount, id:e.id, dup:e.dup});
+      else { posSame.push(r); }
+      if(e&&e.dup.length) posDup+=e.dup.length;
+    });
+  }
+  const posNewSum=posNew.reduce((a,r)=>a+r.amt,0);
+  const posChgDiff=posChg.reduce((a,r)=>a+(r.amt-r.old),0);
+  const posTotal=pos? pos.rows.reduce((a,r)=>a+r.amt,0) : 0;
+  const posRef=pos? pos.rows.reduce((a,r)=>a+r.ref,0) : 0;
+
+  const doImportPos=async()=>{
+    if(!posNew.length && !posChg.length && !posDup){ toast('ยอดตรงกับที่ลงไว้แล้วทุกวัน'); return; }
+    setPosBusy(true); setProg(0);
+    try{
+      const chunk=350; let done=0;
+      /* 1) วันใหม่ — เพิ่ม */
+      for(let i=0;i<posNew.length;i+=chunk){
+        const batch=db.batch();
+        posNew.slice(i,i+chunk).forEach(r=>{
+          const ref=db.collection('transactions').doc();
+          batch.set(ref,{shopId:shop.id,kind:'income',category:'ขายหน้าร้าน',amount:r.amt,
+            method:ottMethod,note:'POS · '+r.bills+' บิล',date:r.date,ym:r.ym,
+            skey:`${shop.id}_${r.ym}`,by:{id:user.id,name:user.name},source:'posOwl',
+            ts:FieldValue.serverTimestamp()});
+        });
+        await batch.commit(); done+=Math.min(chunk,posNew.length-i); setProg(done);
+      }
+      /* 2) ยอดเปลี่ยน — แก้ของเดิม ไม่เพิ่มใหม่ */
+      for(let i=0;i<posChg.length;i+=chunk){
+        const batch=db.batch();
+        posChg.slice(i,i+chunk).forEach(r=>{
+          batch.update(db.collection('transactions').doc(r.id),
+            {amount:r.amt, note:'POS · '+r.bills+' บิล (ปรับยอด)', ts:FieldValue.serverTimestamp()});
+        });
+        await batch.commit(); done+=Math.min(chunk,posChg.length-i); setProg(done);
+      }
+      /* 3) ลบตัวซ้ำที่เคยหลุดเข้าไป */
+      const dups=[]; Object.keys(posEx).forEach(d=>{ (posEx[d].dup||[]).forEach(id=>dups.push(id)); });
+      for(let i=0;i<dups.length;i+=chunk){
+        const batch=db.batch();
+        dups.slice(i,i+chunk).forEach(id=>batch.delete(db.collection('transactions').doc(id)));
+        await batch.commit();
+      }
+      await writeLog(shop.id,{id:user.id,name:user.name},'import',
+        `นำเข้า POS Owl Cha — ใหม่ ${posNew.length} วัน · ปรับยอด ${posChg.length} วัน`+(dups.length?` · ลบซ้ำ ${dups.length}`:''),
+        posNew.map(()=>({id:'',before:null,after:null})).slice(0,0));
+      toast(`ลงบัญชีแล้ว · ใหม่ ${posNew.length} วัน · ปรับยอด ${posChg.length} วัน`);
+      onDone();
+    }catch(e){ console.error(e); toast('นำเข้าไม่สำเร็จ: '+(e.message||''),'err'); setPosBusy(false); }
+  };
+
   const doUndoOtt=async(g)=>{
     const ids=(ottOld[g]||{}).ids||[];
     if(!ids.length) return;
@@ -7992,13 +8114,82 @@ function Import({shop,user,toast,onClose,onDone}){
           <div style={{background:'var(--tint)',border:'1px solid var(--soft)',borderRadius:12,padding:'10px 12px',marginBottom:16,fontSize:12.5,lineHeight:1.6,textAlign:'left',color:'var(--ink)'}}>
             <b>🧺 รายงาน Otteri</b> — ระบบอ่านให้เองทั้งปี แยกเครื่องซัก/เครื่องอบ และข้ามวันที่ลงบัญชีแล้ว<br/>
             • <b>ไฟล์รายธุรกรรม (abb)</b> — แยกเงินสด/โอนอัตโนมัติ <b style={{color:'var(--pos)'}}>แนะนำ</b><br/>
-            • ไฟล์สรุปรายเดือน (January…December) — เลือกช่องทางเอง
+            • ไฟล์สรุปรายเดือน (January…December) — เลือกช่องทางเอง<br/>
+            <b>🧋 รายงานยอดขาย POS (Owl Cha)</b> — รวมยอดรายวันให้เอง ลงซ้ำได้ ยอดไม่บวกเพิ่ม
           </div>
           <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" onChange={onFile} style={{display:'none'}}/>
           <button onClick={()=>fileRef.current.click()} className="press kanit" style={{padding:'14px 24px',border:'2px dashed var(--accent)',borderRadius:14,background:'var(--tint)',color:'var(--primary)',fontWeight:600,fontSize:15,display:'inline-flex',alignItems:'center',gap:8}}><I.table/> เลือกไฟล์ Excel</button>
         </div>
       )}
       {step==='loading' && <div style={{padding:'30px 0'}}><Loading label="กำลังอ่านไฟล์..."/></div>}
+
+      {step==='pos' && (<>
+        <div style={{fontSize:12.5,color:'var(--muted)',marginBottom:12,display:'flex',alignItems:'center',gap:6}}><I.table/> {fileName}</div>
+        <div style={{background:'var(--tint)',borderRadius:12,padding:'12px 14px',marginBottom:14}}>
+          <div style={{fontSize:14,fontWeight:700,color:'var(--primary)',marginBottom:4}}>🧋 รายงานยอดขาย POS</div>
+          <div style={{fontSize:12.5,color:'var(--muted)',lineHeight:1.6}}>{pos&&pos.branch? pos.branch+' · ':''}{pos&&pos.rows.length} วัน · รวม {baht(posTotal)} — ลงเป็นรายรับ <b style={{color:'var(--ink)'}}>ขายหน้าร้าน</b> ของ {shop.name}</div>
+        </div>
+        {!posEx && <div style={{padding:'20px 0'}}><Loading label="กำลังตรวจยอดที่ลงไว้แล้ว..."/></div>}
+        {posEx && (<>
+          <div style={{display:'flex',gap:8,marginBottom:12}}>
+            <div style={{flex:1,background:'#fff',border:'1px solid var(--line)',borderRadius:12,padding:'10px 12px'}}>
+              <div style={{fontSize:11,color:'var(--muted)'}}>วันใหม่</div>
+              <div className="num" style={{fontSize:20,fontWeight:800,color:'var(--pos)'}}>{posNew.length}</div>
+            </div>
+            <div style={{flex:1,background:'#fff',border:'1px solid var(--line)',borderRadius:12,padding:'10px 12px'}}>
+              <div style={{fontSize:11,color:'var(--muted)'}}>ยอดเปลี่ยน</div>
+              <div className="num" style={{fontSize:20,fontWeight:800,color:posChg.length?'#C2410C':'var(--muted)'}}>{posChg.length}</div>
+            </div>
+            <div style={{flex:1,background:'#fff',border:'1px solid var(--line)',borderRadius:12,padding:'10px 12px'}}>
+              <div style={{fontSize:11,color:'var(--muted)'}}>เหมือนเดิม</div>
+              <div className="num" style={{fontSize:20,fontWeight:800,color:'var(--muted)'}}>{posSame.length}</div>
+            </div>
+          </div>
+
+          {posChg.length>0 && (
+            <div style={{background:'#FFF7ED',border:'1px solid #FED7AA',borderRadius:12,padding:'11px 13px',marginBottom:12}}>
+              <div style={{fontSize:13,fontWeight:700,color:'#9A3412',marginBottom:7}}>⚠️ POS ปรับยอด {posChg.length} วัน — จะแก้ยอดเดิมให้เป็นยอดล่าสุด (ไม่เพิ่มรายการใหม่)</div>
+              {posChg.slice(0,12).map(r=>(
+                <div key={r.date} style={{display:'flex',fontSize:12.5,padding:'4px 0',color:'#7C2D12',borderTop:'1px solid #FFEDD5'}}>
+                  <span style={{flex:1}}>{r.date.slice(8)}/{r.date.slice(5,7)}</span>
+                  <span className="num" style={{width:86,textAlign:'right',textDecoration:'line-through',opacity:.6}}>{baht(r.old)}</span>
+                  <span style={{width:18,textAlign:'center'}}>→</span>
+                  <span className="num" style={{width:86,textAlign:'right',fontWeight:700}}>{baht(r.amt)}</span>
+                  <span className="num" style={{width:76,textAlign:'right',color:(r.amt-r.old)>=0?'#15803D':'#B91C1C'}}>{(r.amt-r.old)>=0?'+':''}{baht(r.amt-r.old)}</span>
+                </div>
+              ))}
+              {posChg.length>12 && <div style={{fontSize:11.5,color:'#9A3412',marginTop:6}}>…และอีก {posChg.length-12} วัน</div>}
+              <div style={{fontSize:12,color:'#9A3412',marginTop:8,fontWeight:600}}>ผลต่างรวม {posChgDiff>=0?'+':''}{baht(posChgDiff)}</div>
+            </div>
+          )}
+
+          {posDup>0 && (
+            <div style={{background:'#FEF2F2',border:'1px solid #FECACA',borderRadius:12,padding:'10px 12px',marginBottom:12,fontSize:12.5,color:'#B91C1C',lineHeight:1.6}}>
+              พบรายการซ้ำของวันเดียวกัน {posDup} รายการ — จะลบตัวเกินให้เหลือวันละ 1 รายการ
+            </div>
+          )}
+
+          {posRef>0 && (
+            <div style={{background:'var(--soft)',borderRadius:12,padding:'10px 12px',marginBottom:12,fontSize:12,color:'var(--muted)',lineHeight:1.6}}>
+              ℹ️ ไฟล์นี้มียอด “คืนเงิน” รวม {baht(posRef)} — ยอดที่ลงใช้ช่อง <b>รวมสุทธิ</b> ของ POS ตรงๆ ยังไม่ได้หักส่วนนี้ออก
+            </div>
+          )}
+
+          <label style={lbl}>ช่องทางของวันใหม่</label>
+          <div style={{display:'flex',gap:8,marginBottom:14}}>
+            {[['cash','💵 เงินสด'],['bank','🏦 โอน']].map(([k,l])=>(
+              <button key={k} onClick={()=>setOttMethod(k)} className="press kanit" style={{flex:1,padding:'10px 2px',borderRadius:11,fontSize:13.5,fontWeight:600,border:`1.5px solid ${ottMethod===k?'var(--primary)':'var(--line)'}`,background:ottMethod===k?'var(--primary)':'#fff',color:ottMethod===k?'#fff':'var(--ink)'}}>{l}</button>
+            ))}
+          </div>
+
+          <button onClick={doImportPos} disabled={posBusy||(!posNew.length&&!posChg.length&&!posDup)} className="press kanit" style={{width:'100%',padding:'15px',border:'none',borderRadius:14,background:'var(--primary)',color:'#fff',fontSize:16,fontWeight:600,opacity:(posBusy||(!posNew.length&&!posChg.length&&!posDup))?.5:1}}>
+            {posBusy? `กำลังลงบัญชี ${prog}...`
+              : (!posNew.length&&!posChg.length&&!posDup) ? 'ยอดตรงกันทุกวันแล้ว'
+              : `ลง ${posNew.length} วันใหม่${posChg.length?` · แก้ ${posChg.length} วัน`:''}`}</button>
+          <div style={{fontSize:11,color:'var(--muted)',textAlign:'center',marginTop:8,lineHeight:1.6}}>วันเดียวกันมีได้รายการเดียวเสมอ · นำเข้าไฟล์เดิมซ้ำกี่รอบยอดก็ไม่บวกเพิ่ม</div>
+          <button onClick={()=>{ setPos(null); setPosEx(null); setStep('upload'); }} className="press kanit" style={{width:'100%',marginTop:10,padding:'11px',border:'1px solid var(--line)',borderRadius:12,background:'#fff',fontSize:13.5,color:'var(--muted)'}}>เลือกไฟล์อื่น</button>
+        </>)}
+      </>)}
 
       {step==='ott' && (<>
         <div style={{fontSize:12.5,color:'var(--muted)',marginBottom:12,display:'flex',alignItems:'center',gap:6}}><I.table/> {fileName}</div>
