@@ -8866,19 +8866,12 @@ function Analyze({shop,user,toast}){
           <MiniBars data={dowData} color="var(--primary)"/>
         </div>
 
-        <div style={card}>
-          <div className="kanit" style={ttl}>รายรับตามช่วงเวลา</div>
-          <div style={sub}>ตามเวลาที่บันทึก (น.) — ช่วงคึกไว้เน้นคน/เตรียมของ</div>
-          {hasTime? <MiniBars data={timeData} color="var(--accent)"/>
-            : <div style={{fontSize:12.5,color:'var(--muted)',padding:'18px 0',textAlign:'center'}}>ยังไม่มีข้อมูลเวลา (บันทึกออเดอร์ตามเวลาจริงเพื่อดูช่วงคึก)</div>}
-        </div>
-
         {income>0 && (
           <div style={{background:'var(--tint)',border:'1px solid var(--line)',borderRadius:14,padding:'13px 15px',marginBottom:14,display:'flex',gap:11}}>
             <span style={{color:'var(--accent)',flexShrink:0,marginTop:1}}><I.spark/></span>
             <div style={{fontSize:13,lineHeight:1.55}}>
-              วันยอดสูงสุด <b>{dowFull[peakDowIdx]}</b>{hasTime && <> · ช่วงคึกสุด <b>{blocks[peakTimeIdx].l} น.</b></>}
-              <div style={{color:'var(--muted)',marginTop:2}}>แนะนำเน้นจัดคนและเตรียมวัตถุดิบ/น้ำยาช่วงนี้</div>
+              วันยอดสูงสุด <b>{dowFull[peakDowIdx]}</b>
+              <div style={{color:'var(--muted)',marginTop:2}}>แนะนำเน้นจัดคนและเตรียมวัตถุดิบ/น้ำยาวันนี้</div>
             </div>
           </div>
         )}
