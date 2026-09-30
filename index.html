@@ -8339,6 +8339,12 @@ async function capitalEntries(shopId){
   const s=await db.collection('transactions').where('skey','==',`${shopId}_CAP`).get();
   return s.docs.map(d=>({id:d.id,...d.data()}));
 }
+async function allShopIO(shopId){
+  /* รายรับ-รายจ่ายทุกแหล่งที่มาของร้าน (คีย์เอง / นำเข้า Excel / รายงาน Otteri / POS) */
+  const s=await db.collection('transactions').where('shopId','==',shopId).get();
+  return s.docs.map(d=>({id:d.id,...d.data()}))
+    .filter(t=>!t._log && (t.kind==='income'||t.kind==='expense'));
+}
 async function txnsBySource(src){
   const s=await db.collection('transactions').where('source','==',src).get();
   return s.docs.map(d=>({id:d.id,...d.data()}));
@@ -8360,9 +8366,8 @@ function ShopSummary({shop}){
   useEffect(()=>{ let live=true; (async()=>{
     setLoad(true);
     try{
-      const [man,imp,cap]=await Promise.all([txnsBySource('manual'),txnsBySource('import'),capitalEntries(shop.id),loadCatMeta(shop.id)]);
+      const [io,cap]=await Promise.all([allShopIO(shop.id),capitalEntries(shop.id),loadCatMeta(shop.id)]);
       if(!live) return;
-      const io=[...man,...imp].filter(t=>t.shopId===shop.id);
       setD({io,cap});
     }catch(e){ console.error(e); if(live) setD({io:[],cap:[]}); }
     if(live) setLoad(false);
