@@ -8343,9 +8343,9 @@ async function txnsBySource(src){
   const s=await db.collection('transactions').where('source','==',src).get();
   return s.docs.map(d=>({id:d.id,...d.data()}));
 }
-async function addCapital({shopId,shareholder,type,amount,note,by,actor}){
+async function addCapital({shopId,shareholder,type,amount,note,by,actor,method}){
   const ref=await db.collection('transactions').add({
-    shopId, kind:type, category:shareholder, amount:Number(amount), method:'-', note:note||'',
+    shopId, kind:type, category:shareholder, amount:Number(amount), method:method||'-', note:note||'',
     date:today(), ym:ymOf(today()), skey:`${shopId}_CAP`, by:by||'', source:'capital', ts:FieldValue.serverTimestamp()
   });
   await writeLog(shopId, actor||(by?{id:'',name:by}:null), type==='dividend'?'capital.dividend':'capital.add',
@@ -8377,8 +8377,12 @@ function ShopSummary({shop}){
   const divid=S(cap,'dividend');
   const isCash=t=>t.method==='cash';
   const M=(arr,k,fn)=>arr.reduce((s,t)=>s+((t.kind===k&&fn(t))?(Number(t.amount)||0):0),0);
-  const cashNet=M(io,'income',isCash)-M(io,'expense',isCash);
-  const bankNet=M(io,'income',t=>!isCash(t))-M(io,'expense',t=>!isCash(t));
+  const isBank=t=>t.method==='bank';
+  /* ทุนที่ระบุช่องทางไว้ ให้เข้าไปอยู่ในกระเป๋านั้นด้วย */
+  const capM=(fn)=>cap.reduce((s,t)=>{ if(!fn(t)) return s; const a=Number(t.amount)||0;
+    return s + (t.kind==='invest'? a : (t.kind==='withdraw'||t.kind==='dividend'? -a : 0)); },0);
+  const cashNet=M(io,'income',isCash)-M(io,'expense',isCash)+capM(isCash);
+  const bankNet=M(io,'income',isBank)-M(io,'expense',isBank)+capM(isBank);
   const balance=invest+income-expense-divid;
   const investFloat=balance-cashNet-bankNet;
   const byCat=(k)=>{ const m={}; io.forEach(t=>{ if(t.kind!==k) return; const c=t.category||'อื่นๆ'; m[c]=(m[c]||0)+(Number(t.amount)||0); }); return Object.entries(m).map(([name,amt])=>({name,amt})).sort((a,b)=>b.amt-a.amt); };
@@ -8427,14 +8431,19 @@ function ShopSummary({shop}){
           <div className="num" style={{fontSize:27,fontWeight:800,lineHeight:1.2,color:balance>=0?'#7FE3A9':'#FF8A8A'}}>{balance>=0?'':'-'}{baht(Math.abs(balance))}</div>
           <div style={{fontSize:10.5,opacity:.65,marginTop:1}}>= ลงทุนสุทธิ + รายรับ − รายจ่าย{divid>0?' − ปันผล':''}</div>
           <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8,marginTop:10}}>
-            {[['💵 เงินสดสุทธิ',cashNet],['🏦 โอน/บัญชีสุทธิ',bankNet],['🧾 ทุนคงเหลือ (ไม่ระบุช่องทาง)',investFloat]].map(([l,v])=>(
+            {[['💵 เงินสดสุทธิ',cashNet],['🏦 โอน/บัญชีสุทธิ',bankNet],['🧾 ยังไม่ระบุช่องทาง',investFloat]].map(([l,v])=>(
               <div key={l} style={{background:'rgba(255,255,255,.08)',borderRadius:12,padding:'9px 10px'}}>
                 <div style={{fontSize:9.5,opacity:.7,marginBottom:3,lineHeight:1.3}}>{l}</div>
                 <div className="num" style={{fontSize:14,fontWeight:700,color:v>=0?'#CFE8FF':'#FFB4B4'}}>{v<0?'-':''}{baht(Math.abs(v)).replace('฿','')}</div>
               </div>
             ))}
           </div>
-          <div style={{fontSize:10,opacity:.55,marginTop:8,lineHeight:1.5}}>เงินสด/บัญชี นับจากรายรับ-รายจ่ายที่ระบุช่องทาง · เงินลงทุนที่เติมเข้าร้านไม่ได้ระบุช่องทาง จึงแยกแสดงไว้</div>
+          <div style={{fontSize:10,opacity:.55,marginTop:8,lineHeight:1.5}}>เงินสด/บัญชี นับจากรายรับ-รายจ่าย และรายการทุนที่ระบุช่องทางไว้</div>
+          {Math.abs(investFloat)>0.5 && (
+            <div style={{marginTop:8,background:'rgba(255,255,255,.10)',border:'1px solid rgba(255,255,255,.18)',borderRadius:10,padding:'8px 10px',fontSize:11,lineHeight:1.55}}>
+              ⚠️ มีเงินทุน <b>{baht(Math.abs(investFloat))}</b> ที่ยังไม่ได้ระบุว่าเข้าเงินสดหรือบัญชี ทำให้ช่องเงินสด/บัญชีติดลบเกินจริง — ไประบุช่องทางได้ที่แท็บ <b>ทุน</b>
+            </div>
+          )}
         </div>
       </div>
 
@@ -8513,6 +8522,16 @@ function Capital({shop,user,toast}){
                   <div style={{fontSize:14,fontWeight:500,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{r.category}</div>
                   <div style={{fontSize:11.5,color:'var(--muted)'}}>{r.date}{r.note?' · '+r.note:''}{r.by&&r.by.name?' · ✍️ '+r.by.name:''}</div>
                 </div>
+                {isAdmin && (!r.method||r.method==='-') && (
+                  <button onClick={async()=>{
+                      const c=window.confirm('เงินก้อนนี้เข้าช่องทางไหน?\n\nตกลง = 🏦 โอน/บัญชี\nยกเลิก = 💵 เงินสด');
+                      try{ await db.collection('transactions').doc(r.id).update({method:c?'bank':'cash'});
+                        toast('ระบุช่องทางแล้ว'); reload();
+                      }catch(e){ console.error(e); toast('บันทึกไม่สำเร็จ','err'); }
+                    }} className="press kanit" style={{border:'1px solid var(--line)',background:'#fff',color:'var(--accent)',borderRadius:9,padding:'4px 8px',fontSize:11,flexShrink:0,whiteSpace:'nowrap'}}>ระบุช่องทาง</button>
+                )}
+                {r.method==='cash' && <span style={{fontSize:11,color:'var(--muted)',flexShrink:0}}>💵</span>}
+                {r.method==='bank' && <span style={{fontSize:11,color:'var(--muted)',flexShrink:0}}>🏦</span>}
                 <span className="num" style={{fontWeight:600,fontSize:14,color:col,flexShrink:0}}>{sign}{baht(r.amount)}</span>
                 {isAdmin && <button onClick={async()=>{ if(window.confirm('ลบรายการนี้?')){ await delTxn(r.id, {id:user.id,name:user.name}); reload(); } }} className="press" style={{border:'none',background:'none',color:'#C0C4CC',padding:4,flexShrink:0}}><I.trash/></button>}
               </div>
