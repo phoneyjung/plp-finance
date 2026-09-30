@@ -6787,10 +6787,10 @@ function Record({shop,user,readOnly,canSwitch,onSwitch,toast}){
         <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}><span className="kanit" style={{fontWeight:600,fontSize:14.5}}>คงเหลือ</span><span className="num" style={{fontWeight:700,fontSize:19,color:net>=0?'#16A34A':'#DC2626'}}>{net>=0?'+':''}{baht(net)}</span></div>
       </div>
 
-      {shop.type==='laundry' && !readOnly && (
+      {!readOnly && (
         <button onClick={()=>setShowImport(true)} className="press" style={{width:'100%',border:'1.5px dashed var(--accent)',background:'var(--tint)',borderRadius:14,padding:'11px 14px',marginBottom:14,display:'flex',alignItems:'center',gap:11,textAlign:'left'}}>
           <span style={{width:36,height:36,borderRadius:10,background:'#fff',color:'var(--accent)',display:'grid',placeItems:'center',flexShrink:0}}><I.table/></span>
-          <div style={{flex:1}}><div className="kanit" style={{fontWeight:600,fontSize:13.5,color:'var(--primary)'}}>นำเข้ารายรับจาก Excel</div><div style={{fontSize:11,color:'var(--muted)'}}>อัปไฟล์ยอดเครื่องซัก/อบ</div></div>
+          <div style={{flex:1}}><div className="kanit" style={{fontWeight:600,fontSize:13.5,color:'var(--primary)'}}>นำเข้ารายรับจาก Excel</div><div style={{fontSize:11,color:'var(--muted)'}}>{shop.id==='owlcha'? 'อัปไฟล์รายงานยอดขาย POS' : 'อัปไฟล์ยอดเครื่องซัก/อบ'}</div></div>
           <I.chevron/>
         </button>
       )}
