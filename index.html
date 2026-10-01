@@ -5834,8 +5834,14 @@ function lnPayCalc(pay, ym, shopId, fp){
     const gr=(cfg.otGrace!=null? Number(cfg.otGrace):15);
     const dGrace=(cfg.diligGrace!=null? Number(cfg.diligGrace):0);
     let days=0,holDays=0,holPay=0,otMin=0,missMin=0,lateDays=0,lateMin=0,shortDays=0,openDays=0,sickDays=0;
-    const daily=[]; const other={};
+    const daily=[]; const other={}; const offDays=[]; const lateList=[];
+    const fsch=(fp&&fp.sched)||{};
     for(let d=1;d<=nDays;d++){
+      /* 📅 ตารางงานของวัน (ถ้ามี) แทนกะประจำ */
+      const sv= pin? (((fsch[String(d)]||{})[pin])||'') : '';
+      const sr=schedRange(sv);
+      const dIn= (sv==='off'||sv==='other')? null : (sr? attHM(sr.i) : sIn);
+      const dOut=(sv==='off'||sv==='other')? null : (sr? attHM(sr.o) : sOut);
       const effRaw= pin? ((fs[String(d)]||{})[pin]) : null;
       const effList= effRaw? String(effRaw).split(',').filter(Boolean) : [st.shop||shopId];
       const rec= pin? ((fd[String(d)]||{})[pin]) : null;
@@ -5854,8 +5860,9 @@ function lnPayCalc(pay, ym, shopId, fp){
       }
       if(netMin>0||hol) effList.forEach(function(e2){ if(e2!==shopId) other[e2]=(other[e2]||0)+1; });
       if(!(netMin>0)){
-        if(open){ openDays++; daily.push({d, open:true, tIn:list[0]||'', tOut:''}); }
+        if(open){ openDays++; daily.push({d, open:true, tIn:list[0]||'', tOut:'', sched:sv}); }
         else if(lv){ if(lv.t==='sick') sickDays++; daily.push({d, leave:lv}); }
+        else { offDays.push(d); daily.push({d, off:true, sched:sv, schedAbs: !!sr}); }   /* หยุด (ถ้าตารางว่ามีงาน → schedAbs) */
         continue;
       }
       const hrs=netMin/60;
@@ -5872,10 +5879,10 @@ function lnPayCalc(pay, ym, shopId, fp){
           const baseMin=(sIn!=null&&sOut!=null)? ((sOut-sIn+1440)%1440) : Math.round(shiftHrs*60);
           const df=Math.round(netMin-baseMin);
           dOt = df>gr? df-gr : (df<-gr? df+gr : 0);
-        } else if(sIn!=null&&sOut!=null&&aIn!=null&&aOut!=null){
-          /* เทียบกะประจำ · มาก่อนเวลาไม่บวก · ผ่อนผัน 15 น.แรก */
-          let late=Math.max(0,aIn-sIn);
-          let over=aOut-sOut; if(over>720)over-=1440; if(over<-720)over+=1440;
+        } else if(dIn!=null&&dOut!=null&&aIn!=null&&aOut!=null){
+          /* เทียบกะของวัน (ตารางงาน > กะประจำ) · มาก่อนเวลาไม่บวก · ผ่อนผัน 15 น.แรก */
+          let late=Math.max(0,aIn-dIn);
+          let over=aOut-dOut; if(over>720)over-=1440; if(over<-720)over+=1440;
           late=Math.max(0,late-gr);
           over= over>0? Math.max(0,over-gr) : Math.min(0,over+gr);
           dOt=Math.round(over-late);
@@ -5886,9 +5893,10 @@ function lnPayCalc(pay, ym, shopId, fp){
         if(!pc.ot) dOt=0;
         if(dOt>0) otMin+=dOt;
         else if(dOt<0 && pc.deduct) missMin+=(-dOt);
-        if(sIn!=null&&aIn!=null){ const lt=aIn-sIn; if(lt>dGrace){ lateDays++; lateMin+=lt; } }
+        if(dIn!=null&&aIn!=null){ const lt=aIn-dIn; if(lt>dGrace){ lateDays++; lateMin+=lt; lateList.push(d); } }
       }
-      daily.push({d, tIn, tOut, hrs, hol, ot:dOt, edited:!!(rec&&rec.m)});
+      const lateRaw=(dIn!=null&&aIn!=null&&!hol)? Math.max(0,aIn-dIn) : 0;
+      daily.push({d, tIn, tOut, hrs, hol, ot:dOt, edited:!!(rec&&rec.m), late:lateRaw, lateWarn:lateRaw>15, sched: sr? sr.i : '', schedOff: sv==='off'});
     }
     if(Object.keys(other).length) crossInfo[st.id]=other;
     const home=(st.shop===shopId);
@@ -5943,7 +5951,7 @@ function lnPayCalc(pay, ym, shopId, fp){
       otOn:!!pc.ot, otMult:(pc.otMult||2), diligOn:!!pc.diligOn, deduct:!!pc.deduct, shiftHrs,
       modeMonth, partialMonth, sickDays, offQuota:(Number(pc.offQuota)||0), extraRate:(Number(pc.extraRate)||0), offExcess, extraDays, dayRate, extraPay,
       jobOn:!!pc.jobOn, jobN, jobB, jobRate:(Number(pc.jobRate)||0), bnNote:String(bnNote[st.id]||''),
-      bn, advList, advT, net, toPay:net-advT, daily, home });
+      bn, advList, advT, net, toPay:net-advT, daily, home, offDays, lateList });
   });
   rows.sort((a,b)=> (a.home===b.home?0:(a.home?-1:1)) || String(a.st.name).localeCompare(b.st.name,'th'));
   const total=rows.reduce((s,r)=>s+r.net,0);
@@ -5972,7 +5980,7 @@ async function lnPaySlipImage(pay,ym,shopId,stId,shopName){
   g.fillText('สลิปเงินเดือน · '+r.st.name,30,42);
   g.font=FN(400,16); g.fillStyle='#CFE2F5';
   g.fillText(shopName+' · '+ocPayLabel(ym)+' · '+((r.pos.emoji||'')+' '+r.pos.name),30,72);
-  g.fillText('ทำงาน '+r.workedDays+' วัน'+(r.sickDays? (' · ลาป่วย '+r.sickDays+' วัน (ได้เงิน)') : '')+(r.modeMonth&&r.partialMonth? ' (เริ่ม/ออกงานเดือนนี้ · คิดตามวันเข้าจริง ฐาน÷'+calc.nDays+'×'+r.workedDays+')' : '')+(r.modeMonth&&!r.partialMonth?(' (โควตาหยุด '+r.offQuota+(r.extraDays?(' · ทำแทน +'+r.extraDays+'ว ×'+r.extraRate):'')+(r.offExcess?(' · หยุดเกิน '+r.offExcess+'ว −'+Math.round(r.dayRate)+'/ว'):'')+')'):(r.holDays?(' (วันหยุด×2 '+r.holDays+' วัน)'):''))+(r.shortDays?(' · ตัด '+r.shortDays+' วัน (<'+r.minHrs+'ชม.)'):''),30,100);
+  g.fillText('ทำงาน '+r.workedDays+' วัน'+((r.offDays&&r.offDays.length)? (' · หยุด '+r.offDays.length+' วัน: '+ocPayRanges(r.offDays)) : '')+(r.sickDays? (' · ลาป่วย '+r.sickDays+' วัน (ได้เงิน)') : '')+(r.modeMonth&&r.partialMonth? ' (เริ่ม/ออกงานเดือนนี้ · คิดตามวันเข้าจริง ฐาน÷'+calc.nDays+'×'+r.workedDays+')' : '')+(r.modeMonth&&!r.partialMonth?(' (โควตาหยุด '+r.offQuota+(r.extraDays?(' · ทำแทน +'+r.extraDays+'ว ×'+r.extraRate):'')+(r.offExcess?(' · หยุดเกิน '+r.offExcess+'ว −'+Math.round(r.dayRate)+'/ว'):'')+')'):(r.holDays?(' (วันหยุด×2 '+r.holDays+' วัน)'):''))+(r.shortDays?(' · ตัด '+r.shortDays+' วัน (<'+r.minHrs+'ชม.)'):''),30,100);
   const chips=[[r.modeMonth?'เหมาเดือน':'ฐาน ('+r.days+'ว)',r.base]];
   if(r.extraDays) chips.push(['ทำแทนวันหยุด +'+r.extraDays+'ว',r.extraPay]);
   if(r.jobOn) chips.push(['พับ '+r.jobN+' งาน',r.jobB]);
@@ -5988,14 +5996,21 @@ async function lnPaySlipImage(pay,ym,shopId,stId,shopName){
     g.font=FN(700,18); g.fillStyle= c[1]<0? '#B0483C':'#1E2A38';
     g.fillText((c[1]<0?'−':'')+num(Math.abs(c[1])),x,headH+58);
   });
-  const cols=[['วัน',80,'right'],['เข้า',320,'center'],['ออก',540,'center'],['หมายเหตุ',830,'right']];
+  const cols=[['วัน',80,'right'],['เข้า',290,'center'],['ออก',440,'center'],['ชม.',560,'center'],['หมายเหตุ',830,'right']];
   const ty0=headH+sumH;
   g.fillStyle='#E3ECF6'; g.fillRect(0,ty0,W,colH);
   g.font=FN(600,14.5); g.fillStyle='#113D6C';
   cols.forEach(c=>{ g.textAlign=c[2]; g.fillText(c[0],c[1],ty0+27); });
   let y=ty0+colH;
   daysRows.forEach((o,i)=>{
-    g.fillStyle= i%2? '#F2EDE2':'#FAF6ED'; g.fillRect(0,y,W,rowH);
+    if(o.off){
+      g.fillStyle= i%2? '#ECE7DB':'#F3EFE6'; g.fillRect(0,y,W,rowH);
+      g.font=FN(400,14); g.fillStyle= o.schedAbs? '#B0483C' : '#B7A88F';
+      g.textAlign='right'; g.fillText(String(o.d),cols[0][1],y+24);
+      g.fillText(o.schedAbs? '⚠ ตารางว่ามีงาน แต่ไม่มา' : (o.sched==='off'? 'หยุดตามตาราง' : 'หยุด'),cols[4][1],y+24);
+      y+=rowH; return;
+    }
+    g.fillStyle= o.lateWarn? '#FDE4E4' : (i%2? '#F2EDE2':'#FAF6ED'); g.fillRect(0,y,W,rowH);
     g.font=FN(400,14); g.fillStyle='#3B3B33';
     g.textAlign='right'; g.fillText(String(o.d),cols[0][1],y+24);
     if(o.leave){
@@ -6003,10 +6018,14 @@ async function lnPaySlipImage(pay,ym,shopId,stId,shopName){
       g.textAlign='left'; g.fillStyle='#8A8072';
       g.fillText(li.emoji+' '+li.label+(o.leave.n?(' · '+o.leave.n):''),150,y+24);
     } else {
-      g.textAlign='center'; g.fillText(o.tIn||'–',cols[1][1],y+24); g.fillText(o.tOut||'–',cols[2][1],y+24);
-      g.textAlign='right'; g.fillStyle='#8A8072';
-      const nts=[]; if(o.hol)nts.push(r.modeMonth?'ทำงานวันหยุด':'วันหยุด×2'); if(o.short)nts.push('ไม่ถึงขั้นต่ำ'); if(o.open)nts.push('เวลาไม่ครบคู่');
-      g.fillText(nts.join(' · '),cols[3][1],y+24);
+      g.textAlign='center';
+      g.fillStyle= o.lateWarn? '#B0483C':'#3B3B33'; g.font=FN(o.lateWarn?600:400,14); g.fillText(o.tIn||'–',cols[1][1],y+24);
+      g.fillStyle='#3B3B33'; g.font=FN(400,14); g.fillText(o.tOut||'–',cols[2][1],y+24);
+      g.fillText(o.hrs!=null? (Math.round(o.hrs*10)/10).toString() : '–',cols[3][1],y+24);
+      g.textAlign='right';
+      const nts=[]; if(o.lateWarn)nts.push('⚠ สาย '+o.late+' น.'+(o.sched?' (กะ '+o.sched+')':'')); if(o.hol)nts.push(r.modeMonth?'ทำงานวันหยุด':'วันหยุด×2'); if(o.short)nts.push('ไม่ถึงขั้นต่ำ'); if(o.open)nts.push('เวลาไม่ครบคู่');
+      g.fillStyle= o.lateWarn? '#B0483C':'#8A8072'; g.font=FN(o.lateWarn?600:400,14);
+      g.fillText(nts.join(' · '),cols[4][1],y+24);
     }
     y+=rowH;
   });
@@ -6939,14 +6958,16 @@ function LnPayPanel({ shop, user, toast }){
                       {r.daily.map((o,i)=>(
                         <tr key={i} style={{textAlign:'right',borderTop:'1px solid var(--line)'}}>
                           <td style={{textAlign:'left',padding:'3px 4px'}}>{o.d}</td>
-                          {o.leave
+                          {o.off
+                            ? <td colSpan={5} style={{textAlign:'left',padding:'3px 4px',color: o.schedAbs?'#B0483C':'var(--muted)'}}>{o.schedAbs? '⚠️ ตารางว่ามีงาน แต่ไม่มา' : (o.sched==='off'? 'หยุดตามตาราง' : 'หยุด')}</td>
+                            : o.leave
                             ? <td colSpan={5} style={{textAlign:'left',padding:'3px 4px',color:'var(--muted)'}}>{leaveInfo(o.leave.t).emoji} {leaveInfo(o.leave.t).label}{o.leave.n? ' · '+o.leave.n:''}</td>
                             : <React.Fragment>
                                 <td style={{padding:'3px 4px'}}>{o.tIn||'–'}</td>
                                 <td style={{padding:'3px 4px'}}>{o.tOut||'–'}</td>
                                 <td style={{padding:'3px 4px'}}>{o.hrs!=null? (Math.round(o.hrs*10)/10).toFixed(1):'–'}</td>
                                 <td style={{padding:'3px 4px',color:(o.ot||0)>0?'#0E7A5F':((o.ot||0)<0?'#B0483C':'var(--muted)')}}>{o.hol?'—':lnMinTxt(o.ot||0)}</td>
-                                <td style={{textAlign:'left',padding:'3px 4px',color:'var(--muted)'}}>{[o.hol?'หยุด×2':'',o.short?'ไม่ถึงขั้นต่ำ':'',o.open?'⚠️ไม่ครบคู่':'',o.edited?'แก้มือ':''].filter(Boolean).join(' · ')}</td>
+                                <td style={{textAlign:'left',padding:'3px 4px',color: o.lateWarn?'#B0483C':'var(--muted)',fontWeight:o.lateWarn?700:400}}>{[o.lateWarn?('⚠️ สาย '+o.late+' น.'+(o.sched?' (กะ '+o.sched+')':'')):'',o.hol?'หยุด×2':'',o.short?'ไม่ถึงขั้นต่ำ':'',o.open?'⚠️ไม่ครบคู่':'',o.edited?'แก้มือ':''].filter(Boolean).join(' · ')}</td>
                               </React.Fragment>}
                         </tr>
                       ))}
