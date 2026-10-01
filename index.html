@@ -5679,15 +5679,20 @@ function OCTabPay({ toast }){
             {advOpen===r.st.id && (
               <div className="mt-2 rounded-xl p-2.5" style={{background:'var(--soft)'}}>
                 <div className="kanit text-[12px] mb-1.5">💸 รายการเบิกเงิน / หักเงิน · เดือนนี้</div>
-                {r.advList.map((e,i)=>(
-                  <div key={i} className="flex items-center gap-1.5 mb-1.5 flex-wrap">
-                    <span className="text-[11px]" style={{color:'var(--muted)'}}>วันที่</span>
-                    <OCPayIn value={e.d} onChange={v=>updAdv(r.st.id,i,'d',v)} w="40px" ph="-"/>
-                    <OCPayIn value={e.amt} onChange={v=>updAdv(r.st.id,i,'amt',v)} w="64px" ph="บาท"/>
-                    <div className="flex-1" style={{minWidth:90}}><OCTextIn value={e.note||''} onChange={v=>updAdv(r.st.id,i,'note',v)} placeholder="เช่น เบิกล่วงหน้า / หักค่าแก้วแตก"/></div>
-                    <button className="press" style={{border:'none',background:'none',color:'var(--neg)',fontSize:13}} onClick={()=>delAdv(r.st.id,i)}>✕</button>
-                  </div>
-                ))}
+                {r.advList.map((e,i)=>{
+                  const amtOk = parseFloat(e.amt)>0;
+                  const lab=(t)=><div className="text-[10px]" style={{color:'var(--muted)',marginBottom:1,lineHeight:1}}>{t}</div>;
+                  return (
+                  <div key={i} className="rounded-lg p-1.5 mb-1.5" style={{background:'#fff',border:'1px solid '+(amtOk?'var(--line)':'#F0A3A3')}}>
+                    <div className="flex items-end gap-1.5 flex-wrap">
+                      <div>{lab('วันที่')}<OCPayIn value={e.d} onChange={v=>updAdv(r.st.id,i,'d',v)} w="44px" ph="-"/></div>
+                      <div>{lab('💵 จำนวนเงิน (บาท)')}<div style={{outline: amtOk?'none':'2px solid #E57373',borderRadius:8}}><OCPayIn value={e.amt} onChange={v=>updAdv(r.st.id,i,'amt',v)} w="84px" ph="ใส่ยอด"/></div></div>
+                      <div className="flex-1" style={{minWidth:110}}>{lab('📝 เหตุผล')}<OCTextIn value={e.note||''} onChange={v=>updAdv(r.st.id,i,'note',v)} placeholder="เช่น เบิกล่วงหน้า / หักค่าแก้วแตก"/></div>
+                      <button className="press" style={{border:'none',background:'none',color:'var(--neg)',fontSize:14,paddingBottom:6}} onClick={()=>{ if(amtOk && !window.confirm('ลบรายการ '+(e.amt||'')+' บาท?')) return; delAdv(r.st.id,i); }}>✕</button>
+                    </div>
+                    {!amtOk && <div className="text-[11px] mt-1" style={{color:'#C62828',fontWeight:600}}>⚠️ ใส่จำนวนเงินมากกว่า 0 ในช่อง "จำนวนเงิน" — รายการนี้ยังไม่ถูกหัก</div>}
+                  </div>);
+                })}
                 <div className="flex items-center justify-between">
                   <button className="press kanit text-[12px] px-3 py-1 rounded-lg" style={{background:'var(--card)',border:'1px solid var(--line)'}} onClick={()=>addAdv(r.st.id)}>+ เพิ่มรายการ</button>
                   <span className="text-[12px]" style={{color:'var(--neg)'}}>รวมหัก <b className="num">−{ocFmt(r.advT,0)}</b> ฿</span>
