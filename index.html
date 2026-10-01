@@ -2678,7 +2678,8 @@ const SCHED_PRESETS=['06:00-16:00','06:00-21:00','09:00-19:00','09:00-21:00','10
 function schedParseVal(raw){
   const s=String(raw||'').replace(/\s+/g,' ').trim();
   if(!s) return '';
-  if(/^(หยุด|off|x)(?![a-z0-9])/i.test(s)) return 'off';
+  if(/^x$/i.test(s)) return '';                         /* X = ไม่ได้ลงกะ (มาตามสะดวก) ไม่ใช่หยุด */
+  if(/^(หยุด|off)(?![a-z0-9])/i.test(s)) return 'off';
   const owl=/owl/i.test(s);
   const elsewhere=/\b(GS|YS|Spa|Teddy ?\d?|Tik)\b|เทดดี้|สปา|เกอิชา|โยชิ/i.test(s);
   if(elsewhere && !owl) return 'other';
@@ -2727,8 +2728,9 @@ function schedMatchName(name, staff, saved){
   if(saved && saved[name]) return saved[name];
   const norm=(x)=>String(x||'').replace(/^(พี่|น้อง|ป๋า|คุณ)/,'').replace(/\s+/g,'').replace(/ต์$/,'').toLowerCase();
   const n=norm(name);
+  if(!n) return '';                                                   /* ชื่อที่ตัดคำนำหน้าแล้วว่าง (เช่น "ป๋า") ไม่เดา */
   let hit=(staff||[]).find(x=>norm(x.name)===n);
-  if(!hit) hit=(staff||[]).find(x=>norm(x.name).startsWith(n)||n.startsWith(norm(x.name)));
+  if(!hit && n.length>=2) hit=(staff||[]).find(x=>{ const m=norm(x.name); return m.length>=2 && (m.startsWith(n)||n.startsWith(m)); });
   return hit? hit.id : '';
 }
 
