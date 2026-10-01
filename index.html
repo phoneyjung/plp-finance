@@ -5138,6 +5138,129 @@ class TabErrorBoundary extends React.Component{
     );
   }
 }
+/* ---- 💸 เช็กลิสต์ก่อนจ่ายเงินเดือน ---- */
+function OCPayCheckSheet({ pay, ym, calc, onClose, onConfirm, onUndo, toast }){
+  const mo=pay.months[ym]||{}; const cfg=pay.cfg||{};
+  const times=mo.times||{}, sched=mo.sched||{}, sick=mo.sick||{}, els=mo.els||{};
+  const rows=(calc.rows||[]).filter(r=>r.st.active!==false);
+  const paid=mo.paid||null;
+  const [chk,setChk]=useState({});
+  const [book,setBook]=useState(true);
+  const [method,setMethod]=useState('bank');
+  const [amt,setAmt]=useState(()=>Math.round(rows.reduce((a,r)=>a+(r.toPay||0),0)));
+  const [busy,setBusy]=useState(false);
+  const nm=(r)=>(r.isMaid?'🧹 ':'')+r.st.name;
+  const dayList=(arr)=>arr.length? arr.join(', ') : '-';
+
+  /* 1) ลา/ขาด/ยังไม่ลงออก */
+  const item1=rows.map(r=>{
+    const id=r.st.id; const openD=[], schedAbs=[], abs=[];
+    for(let d=1;d<=calc.nDays;d++){
+      const tt=(times[d]||{})[id];
+      const worked=(calc.perDay[d]&&calc.perDay[d].ids.indexOf(id)>=0);
+      if(tt&&tt.i&&!tt.o) openD.push(d);
+      if(!worked && !((els[d]||{})[id]) && !((sick[d]||[]).indexOf(id)>=0)){
+        abs.push(d);
+        const sv=((sched[d]||{})[id])||''; if(schedRange(sv)) schedAbs.push(d);
+      }
+    }
+    return { r, openD, schedAbs, abs, sickN:Object.keys(sick).filter(d=>(sick[d]||[]).indexOf(id)>=0).length };
+  });
+  const warn1=item1.filter(x=>x.openD.length||x.schedAbs.length).length;
+  /* 2) ฐาน */
+  const item2=rows.map(r=>({ r, base:r.baseUsed, how: r.st.custom>0? ('ฐานเอง'+(r.st.customFrom===ym?' · ปรับใหม่เดือนนี้':'')) : ('เฟส '+(r.st.phase||1)) }));
+  const warn2=item2.filter(x=>x.r.st.customFrom===ym).length;
+  /* 3) หัก */
+  const item3=rows.filter(r=>(r.missB||0)>0 || (r.bn||0)<0 || (r.offExcess||0)>0);
+  /* 4) เบิก */
+  const item4=rows.filter(r=>(r.advT||0)>0 || (r.advList||[]).length);
+  const advBad=rows.some(r=>(r.advList||[]).some(a=>!(parseFloat(a.amt)>0)));
+  /* 5) โบนัส/พิเศษ */
+  const item5=rows.filter(r=>(r.bn||0)>0 || r.diligForced || (r.holPay||0)>0 || (r.extraDays||0)>0);
+  const toPaySum=Math.round(rows.reduce((a,r)=>a+(r.toPay||0),0));
+  const advSum=Math.round(rows.reduce((a,r)=>a+(r.advT||0),0));
+
+  const items=[
+    { k:'leave', t:'1. ลงลา / ขาด / เวลาออก ครบ', warn:warn1>0,
+      body:(<div>
+        {item1.map(x=>(<div key={x.r.st.id} className="text-[12px] py-0.5" style={{borderTop:'1px solid var(--line)'}}>
+          <b>{nm(x.r)}</b> · ทำงาน {x.r.workedDays} วัน · หยุด {x.abs.length} ({dayList(x.abs)}){x.sickN? ' · ป่วย '+x.sickN:''}
+          {x.openD.length>0 && <div style={{color:'#CE4A5A',fontWeight:600}}>⚠️ ยังไม่มีเวลาออก: {dayList(x.openD)} → ชั่วโมง/OT วันนั้นไม่ถูกคิด</div>}
+          {x.schedAbs.length>0 && <div style={{color:'#C2410C',fontWeight:600}}>⚠️ ตารางว่ามีงานแต่ไม่มา: {dayList(x.schedAbs)} → ลงลา/ป่วย หรือแก้ตาราง</div>}
+        </div>))}
+      </div>) },
+    { k:'base', t:'2. ฐานเงินเดือนถูกต้อง', warn:warn2>0,
+      body:(<div>{item2.map(x=>(<div key={x.r.st.id} className="text-[12px] py-0.5 flex justify-between" style={{borderTop:'1px solid var(--line)'}}>
+        <span><b>{nm(x.r)}</b> <span style={{color:'var(--muted)'}}>· {x.how}</span></span><b className="num" style={{color:x.r.st.customFrom===ym?'#C2410C':'var(--ink)'}}>{ocFmt(x.base,0)}</b></div>))}
+        <div className="text-[11px] mt-1" style={{color:'var(--muted)'}}>แก้ที่แท็บพนักงาน → ฐานเอง + เดือนที่มีผล</div></div>) },
+    { k:'deduct', t:'3. รายการหักเงิน', warn:false,
+      body:(<div>{item3.length? item3.map(r=>(<div key={r.st.id} className="text-[12px] py-0.5" style={{borderTop:'1px solid var(--line)'}}>
+        <b>{nm(r)}</b>{(r.missB||0)>0 && <span style={{color:'#CE4A5A'}}> · หักขาด {r.missH} ชม. −{ocFmt(r.missB,0)}</span>}{(r.bn||0)<0 && <span style={{color:'#CE4A5A'}}> · หัก {ocFmt(-r.bn,0)}</span>}{(r.offExcess||0)>0 && <span style={{color:'#CE4A5A'}}> · หยุดเกินโควตา {r.offExcess} วัน</span>}
+      </div>)) : <div className="text-[12px]" style={{color:'var(--muted)'}}>ไม่มีรายการหักเดือนนี้</div>}</div>) },
+    { k:'adv', t:'4. เงินเบิกครบถูกต้อง', warn:advBad,
+      body:(<div>{item4.length? item4.map(r=>(<div key={r.st.id} className="text-[12px] py-0.5" style={{borderTop:'1px solid var(--line)'}}>
+        <div className="flex justify-between"><b>{nm(r)}</b><b className="num">−{ocFmt(r.advT||0,0)}</b></div>
+        {(r.advList||[]).map((a,i)=><div key={i} style={{color:(parseFloat(a.amt)>0)?'var(--muted)':'#CE4A5A',paddingLeft:8}}>{a.d||'ไม่ระบุวัน'} · {a.amt||'ไม่ระบุยอด ⚠️'}{a.note?' · '+a.note:''}</div>)}
+      </div>)) : <div className="text-[12px]" style={{color:'var(--muted)'}}>ไม่มีเบิกเดือนนี้</div>}
+      <div className="text-[11.5px] mt-1" style={{color:'var(--muted)'}}>เบิกรวม {ocFmt(advSum,0)} ฿ (หักจากยอดจ่ายสิ้นเดือนแล้ว)</div></div>) },
+    { k:'bonus', t:'5. โบนัส / เบี้ยขยัน / วันหยุด ×2', warn:false,
+      body:(<div>{rows.map(r=>(<div key={r.st.id} className="text-[12px] py-0.5 flex justify-between" style={{borderTop:'1px solid var(--line)'}}>
+        <span><b>{nm(r)}</b>{(r.bn||0)>0 && <span style={{color:'#3E7D3E'}}> · โบนัส +{ocFmt(r.bn,0)}</span>}{r.dl>0 && <span style={{color:'#3E7D3E'}}> · เบี้ยขยัน {ocFmt(r.dl,0)}{r.diligForced?' ✋ยกเว้นให้':''}</span>}{(r.holPay||0)>0 && <span style={{color:'#C68B4A'}}> · หยุด×2 {ocFmt(r.holPay,0)}</span>}{(r.extraDays||0)>0 && <span style={{color:'#C68B4A'}}> · ทำแทนวันหยุด {r.extraDays} วัน</span>}{!(r.bn>0||r.dl>0||r.holPay>0||r.extraDays>0) && <span style={{color:'var(--muted)'}}> · ไม่มี{r.lateDays>0?' (สาย '+r.lateDays+'ว)':''}</span>}</span>
+      </div>))}</div>) },
+  ];
+  const allOk=items.every(it=>chk[it.k]);
+  const confirm=async()=>{
+    setBusy(true);
+    try{ await onConfirm({ book, method, amount:Math.round(parseFloat(amt)||0), toPay:toPaySum, total:Math.round(calc.total||0) }); onClose(); }
+    catch(e){ console.error(e); toast&&toast('บันทึกไม่สำเร็จ','err'); }
+    setBusy(false);
+  };
+  return (
+    <Sheet title={'💸 จ่ายเงินเดือน · '+ocPayLabel(ym)} onClose={onClose} z={70}>
+      {paid && (
+        <div className="rounded-xl p-3 mb-3" style={{background:'#E8F5E9',border:'1px solid #A5D6A7'}}>
+          <div className="kanit text-[13.5px]" style={{fontWeight:700,color:'#1B5E20'}}>✓ จ่ายแล้ว {paid.at} · {ocFmt(paid.amount||paid.toPay||0,0)} ฿</div>
+          <div className="text-[11.5px] mt-1" style={{color:'#2E7D32'}}>{paid.txnId? 'ลงบัญชีรายจ่าย "เงินเดือนพนักงาน" แล้ว' : 'ยังไม่ได้ลงบัญชีรายจ่าย'}</div>
+          <button className="press kanit text-[12px] mt-2" onClick={async()=>{ if(window.confirm('ยกเลิกสถานะจ่ายแล้ว? (รายการรายจ่ายที่ลงไว้จะถูกลบด้วย)')){ setBusy(true); try{ await onUndo(paid); onClose(); }catch(e){ toast&&toast('ยกเลิกไม่สำเร็จ','err'); } setBusy(false); } }} style={{border:'1px solid #A5D6A7',borderRadius:9,padding:'5px 12px',background:'#fff',color:'#2E7D32'}}>ยกเลิกสถานะจ่ายแล้ว</button>
+        </div>
+      )}
+      <div className="text-[12px] mb-2" style={{color:'var(--muted)'}}>ไล่เช็กทีละข้อ ติ๊กเมื่อตรวจแล้ว · ข้อที่มี ⚠️ ควรแก้ก่อนจ่าย</div>
+      {items.map(it=>(
+        <div key={it.k} className="rounded-xl mb-2" style={{border:'1.5px solid '+(chk[it.k]?'#A5D6A7':(it.warn?'#FECACA':'var(--line)')),background:chk[it.k]?'#F1F8F1':'#fff'}}>
+          <label className="flex items-center gap-2 p-2.5" style={{cursor:'pointer'}}>
+            <input type="checkbox" checked={!!chk[it.k]} onChange={e=>setChk({...chk,[it.k]:e.target.checked})} style={{width:20,height:20}}/>
+            <span className="kanit text-[13.5px]" style={{fontWeight:700,flex:1}}>{it.t}</span>
+            {it.warn && !chk[it.k] && <span className="text-[11px]" style={{color:'#CE4A5A',fontWeight:700}}>⚠️ มีจุดต้องดู</span>}
+          </label>
+          <div className="px-3 pb-2.5">{it.body}</div>
+        </div>
+      ))}
+
+      <div className="rounded-xl p-3 mt-3" style={{background:'var(--soft)'}}>
+        <div className="flex justify-between text-[13px] mb-1"><span>ค่าจ้างรวมเดือนนี้</span><b className="num">{ocFmt(calc.total||0,0)} ฿</b></div>
+        <div className="flex justify-between text-[13px] mb-1"><span>หักเบิกแล้ว</span><b className="num" style={{color:'#CE4A5A'}}>−{ocFmt(advSum,0)} ฿</b></div>
+        <div className="flex justify-between text-[15px] kanit" style={{fontWeight:700,borderTop:'1px solid var(--line)',paddingTop:6}}><span>ต้องจ่ายสิ้นเดือน</span><b className="num" style={{color:'var(--primary)'}}>{ocFmt(toPaySum,0)} ฿</b></div>
+        {!paid && (<>
+          <label className="flex items-center gap-2 mt-3 text-[12.5px]"><input type="checkbox" checked={book} onChange={e=>setBook(e.target.checked)} style={{width:18,height:18}}/> ลงบัญชีรายจ่าย "เงินเดือนพนักงาน" ให้ด้วย</label>
+          {book && (
+            <div className="flex items-center gap-2 mt-2">
+              <input className="num" inputMode="numeric" value={amt} onChange={e=>setAmt(e.target.value)} style={{flex:1,padding:'8px 10px',border:'1px solid var(--line)',borderRadius:9,fontSize:14}}/>
+              {[['cash','💵 สด'],['bank','🏦 โอน']].map(([k,l])=>(
+                <button key={k} className="press kanit" onClick={()=>setMethod(k)} style={{padding:'8px 10px',borderRadius:9,fontSize:12.5,border:'1.5px solid '+(method===k?'var(--primary)':'var(--line)'),background:method===k?'var(--primary)':'#fff',color:method===k?'#fff':'var(--ink)'}}>{l}</button>
+              ))}
+            </div>
+          )}
+        </>)}
+      </div>
+      {!paid && (
+        <button className="press kanit" disabled={!allOk||busy} onClick={confirm} style={{width:'100%',marginTop:12,padding:'14px',border:'none',borderRadius:14,background:allOk?'#3E7D3E':'var(--line)',color:'#fff',fontSize:15.5,fontWeight:700,opacity:busy?.6:1}}>
+          {busy? 'กำลังบันทึก…' : allOk? ('✓ ยืนยันจ่ายเงินเดือน '+ocFmt(toPaySum,0)+' ฿') : ('ติ๊กให้ครบ 5 ข้อก่อน ('+items.filter(it=>chk[it.k]).length+'/5)')}
+        </button>
+      )}
+    </Sheet>
+  );
+}
+
 function OCTabPay({ toast }){
   const [pay,setPay]=useState(null);
   const [ym,setYm]=useState(ymOf(today()));
@@ -5147,6 +5270,7 @@ function OCTabPay({ toast }){
   const [advOpen,setAdvOpen]=useState(null);
   const [fpBusy,setFpBusy]=useState(false);
   const [slipBusy,setSlipBusy]=useState(false);
+  const [showPayChk,setShowPayChk]=useState(false);
   const fpMergedRef=useRef('');
   useEffect(()=>{
     if(!db || !pay) return;
@@ -5405,6 +5529,24 @@ function OCTabPay({ toast }){
     }catch(e){ console.error(e); toast('ดึงข้อมูลไม่สำเร็จ','err'); }
   };
 
+  /* 💸 ยืนยันจ่าย: บันทึกสถานะลงเดือน + (ถ้าเลือก) ลงรายจ่าย "เงินเดือนพนักงาน" */
+  const confirmPaid=async(o)=>{
+    let txnId='';
+    if(o.book && o.amount>0){
+      const ref=await db.collection('transactions').add({ shopId:'owlcha', kind:'expense', category:'เงินเดือนพนักงาน', amount:o.amount, method:o.method,
+        note:'เงินเดือน '+ocPayLabel(ym)+' (จ่ายสิ้นเดือน หักเบิกแล้ว)', date:today(), ym:ymOf(today()), skey:'owlcha_'+ymOf(today()),
+        by:{id:'admin',name:'แอดมิน'}, source:'payroll', payYm:ym, ts:FieldValue.serverTimestamp() });
+      txnId=ref.id;
+    }
+    setMon(m=>{ m.paid={ at:today(), amount:o.amount||0, toPay:o.toPay, total:o.total, txnId, method:o.method }; });
+    toast('บันทึกจ่ายเงินเดือน '+ocPayLabel(ym)+' แล้ว'+(txnId?' · ลงบัญชีรายจ่ายแล้ว':''));
+  };
+  const undoPaid=async(paid)=>{
+    if(paid&&paid.txnId){ try{ await db.collection('transactions').doc(paid.txnId).delete(); }catch(e){ console.error(e); } }
+    setMon(m=>{ delete m.paid; });
+    toast('ยกเลิกสถานะจ่ายแล้ว');
+  };
+
   const saveLabel={ idle:'', dirty:'· แก้ไข', saving:'· กำลังบันทึก…', saved:'· ✓ บันทึกแล้ว', error:'· ⚠️ บันทึกไม่ได้' }[saveState];
   const chipS=(on)=>({ fontSize:10.5, padding:'3px 7px', borderRadius:8, border:'none', background:on?'var(--primary)':'var(--soft)', color:on?'#fff':'var(--muted)' });
 
@@ -5430,6 +5572,10 @@ function OCTabPay({ toast }){
             {slipBusy? 'กำลังสร้าง…' : '🧾 สลิปรายคน'}
           </button>
         </div>
+        <button className="press kanit text-[13.5px] w-full py-2.5 mt-2 rounded-xl" style={{border:'none',background: mo.paid? '#E8F5E9':'#3E7D3E',color: mo.paid?'#1B5E20':'#fff',fontWeight:700}} onClick={()=>setShowPayChk(true)}>
+          {mo.paid? ('✓ จ่ายแล้ว '+mo.paid.at+' · '+ocFmt(mo.paid.amount||mo.paid.toPay||0,0)+' ฿ · ดูรายละเอียด') : '💸 จ่ายเงินเดือน · เช็กลิสต์ 5 ข้อ'}
+        </button>
+        {showPayChk && <OCPayCheckSheet pay={pay} ym={ym} calc={calc} toast={toast} onClose={()=>setShowPayChk(false)} onConfirm={confirmPaid} onUndo={undoPaid}/>}
         <div className="flex gap-2 mt-2">
           <button className="press kanit text-[12px] flex-1 py-1.5 rounded-lg" style={{background:'var(--soft)',color:'var(--primary)',border:'none',opacity:fpBusy?0.6:1}} disabled={fpBusy} onClick={()=>pullFp(false)}>🖐 ดึงเวลาสแกนนิ้ว</button>
           <button className="press kanit text-[12px] py-1.5 px-3 rounded-lg" style={{background:'var(--card)',color:'var(--muted)',border:'1px solid var(--line)',opacity:fpBusy?0.6:1}} disabled={fpBusy} onClick={()=>{ if(window.confirm('ทับเวลาที่แก้มือไว้ทั้งหมดด้วยข้อมูลจากเครื่องสแกน?')) pullFp(true); }}>ทับทั้งหมด</button>
