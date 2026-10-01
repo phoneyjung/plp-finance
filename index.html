@@ -3059,7 +3059,9 @@ function ocPayPersonDays(pay,ym,stId){
     const dGr=(cfg.diligGrace!=null? Number(cfg.diligGrace) : 0);
     let late=0; const mi=ocPayMin(tt.i);
     if(!isMd && !isHol && sIn!=null && mi!=null){ late=mi-sIn; if(late<=dGr) late=0; }
-    out.push({ d, cups:Number(cups[d])||0, com: pd.comIds.indexOf(stId)>=0? pd.each:0, tin:tt.i||'', tout:tt.o||'', brk:Number(tt.b)||0, hrs, otM, missM, isHol, late, sched: sr? sr.i : '' });
+    /* แสดงเตือนในสลิปเฉพาะสายเกิน 15 นาที — สายไม่กี่นาทีไม่ขึ้นแดง แค่ไม่ได้เบี้ยขยัน */
+    const lateWarn = late>15;
+    out.push({ d, cups:Number(cups[d])||0, com: pd.comIds.indexOf(stId)>=0? pd.each:0, tin:tt.i||'', tout:tt.o||'', brk:Number(tt.b)||0, hrs, otM, missM, isHol, late, lateWarn, sched: sr? sr.i : '' });
   }
   return out;
 }
@@ -3108,19 +3110,19 @@ async function ocPayPersonImage(pay,ym,stId){
       g.textAlign='right'; g.fillText(o.els? ('ไปช่วย '+(o.els==='teddy1'?'Teddy 1': o.els==='teddy2'?'Teddy 2': o.els)) : 'หยุด',cols[7][1],y+26);
       y+=rowH; return;
     }
-    g.fillStyle= o.isHol? '#FBE9E5' : (o.late? '#FDE4E4' : (i%2? '#F5EEDD':'#FFFFFF')); g.fillRect(0,y,W,rowH);
+    g.fillStyle= o.isHol? '#FBE9E5' : (o.lateWarn? '#FDE4E4' : (i%2? '#F5EEDD':'#FFFFFF')); g.fillRect(0,y,W,rowH);
     g.fillStyle='#3B2F24'; g.font=F(400,15.5);
     const vals=[String(o.d), o.cups?num(o.cups):'–', o.com?num(Math.round(o.com)):'–', o.tin||'–', o.tout||'–',
       o.hrs!=null?(Math.round(o.hrs*10)/10).toString():'–',
       o.otM? ('+'+o.otM+'น.') : (o.missM? ('−'+o.missM+'น.') : '–'),
-      o.isHol?'🆘 ×2':(o.late? ('⚠ สาย '+o.late+' น.'+(o.sched? ' (กะ '+o.sched+')':'')) : (o.brk?('พัก '+o.brk+' น.'):(o.otM?'ทำเกินเวลา':(o.missM?'ทำไม่ครบกะ':''))))];
+      o.isHol?'🆘 ×2':(o.lateWarn? ('⚠ สาย '+o.late+' น.'+(o.sched? ' (กะ '+o.sched+')':'')) : (o.brk?('พัก '+o.brk+' น.'):(o.otM?'ทำเกินเวลา':(o.missM?'ทำไม่ครบกะ':''))))];
     vals.forEach((v,k)=>{
       g.textAlign=cols[k][2];
       if(k===6){ g.fillStyle= o.otM? '#3E7D3E' : (o.missM? '#B0483C' : '#B7A88F'); }
-      else if(k===3 && o.late){ g.fillStyle='#B0483C'; }
-      else if(k===7 && o.late){ g.fillStyle='#B0483C'; }
+      else if(k===3 && o.lateWarn){ g.fillStyle='#B0483C'; }
+      else if(k===7 && o.lateWarn){ g.fillStyle='#B0483C'; }
       else g.fillStyle='#3B2F24';
-      g.font=(o.late&&(k===3||k===7))? F(600,15.5) : F(400,15.5);
+      g.font=(o.lateWarn&&(k===3||k===7))? F(600,15.5) : F(400,15.5);
       g.fillText(v,cols[k][1],y+26);
     });
     g.fillStyle='#3B2F24';
@@ -3585,14 +3587,14 @@ function AttendPanel({ user }){
     const st=stOf(pin);
     return (st&&st.shiftIn&&st.shiftOut)? {i:st.shiftIn,o:st.shiftOut} : null;
   };
-  /* นาทีที่เข้าสาย (หลังผ่อนผัน) เทียบกะของวัน · 0 = ไม่สาย */
+  /* นาทีที่เข้าสายเทียบกะของวัน — ใช้แสดงเตือนเท่านั้น: ขึ้นเฉพาะสายเกิน 15 นาที
+     (เบี้ยขยันคิดแยกในหน้าเงินเดือน: สายแม้ 1 นาทีก็ไม่ได้ ไม่ต้องเตือน) */
   const lateOf=(d,pin,pr)=>{
     const st=stOf(pin); if(st&&st.kind==='maid') return 0;
     const sh=shiftOfDay(d,pin); if(!sh||!pr||!pr.pairs||!pr.pairs.length) return 0;
     const sIn=attHM(sh.i), aIn=attHM(pr.pairs[0].i);
     if(sIn==null||aIn==null) return 0;
-    const gr=(cfg.diligGrace!=null? Number(cfg.diligGrace) : 0);
-    const lt=aIn-sIn; return lt>gr? lt : 0;
+    const lt=aIn-sIn; return lt>15? lt : 0;
   };
   /* ชั่วโมงกะปกติของคนนั้น (จากโปรไฟล์ ไม่มีก็ใช้ค่ากลาง) */
   const shiftHrsOf=(pin)=>{
