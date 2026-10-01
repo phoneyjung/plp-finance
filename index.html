@@ -5801,7 +5801,14 @@ const lnNorm=(v)=>({
   staff:v.staff||[],
   months:v.months||{}
 });
-const lnRateOf=(st,cfg)=> (Number(st.custom)>0)? Number(st.custom) : (Number(lnPosCfg(cfg,st.pos).base)||0);
+/* เรทฝั่งซักผ้า: ฐานเอง > เรทตำแหน่ง · ถ้าตั้ง "มีผลตั้งแต่เดือน" เดือนก่อนหน้าใช้ฐานเดิม (customPrev) */
+const lnRateOf=(st,cfg,ym)=>{
+  const pos=Number(lnPosCfg(cfg,st.pos).base)||0;
+  if(ym && st.customFrom && String(ym)<String(st.customFrom)){
+    const pv=Number(st.customPrev)||0; return pv>0? pv : pos;
+  }
+  return (Number(st.custom)>0)? Number(st.custom) : pos;
+};
 const lnMinTxt=(m)=> !m ? '–' : ((m>0?'+':'−') + Math.abs(m) + ' น.');
 
 /* ---- คำนวณเงินเดือนซักผ้า 1 สาขา 1 เดือน — อ่านตรงจาก fpScans ---- */
@@ -5819,7 +5826,7 @@ function lnPayCalc(pay, ym, shopId, fp){
     const modeMonth=(pc.payMode==='month');
     const partner=!!pc.minRule;
     const minHrs= partner? ((st.minHrs!==''&&st.minHrs!=null)? Number(st.minHrs):(Number(pc.minHrs)||5)) : 0;
-    const rate=lnRateOf(st,cfg);
+    const rate=lnRateOf(st,cfg,ym);
     const shiftHrs=Number(pc.shiftHrs)||Number(cfg.shiftHrs)||11;
     const hourRate=rate/(cfg.divisor||26)/shiftHrs;
     const sIn= st.shiftIn? attHM(st.shiftIn):null;
@@ -6104,6 +6111,16 @@ function LnStaffPanel({ shop, user, toast }){
       bank:String(edit.bank||'').trim(),
       bankAcc:String(edit.bankAcc||'').trim(),
       note:String(edit.note||'').trim() };
+    /* ปรับฐาน: จำฐานเดิม + เดือนที่มีผล → เดือนก่อนหน้ายังคำนวณด้วยฐานเดิม */
+    {
+      const oldCustom = edit._orig? (Number(edit._orig.custom)||0) : 0;
+      const changed = !edit._new && clean.custom!==oldCustom;
+      if(clean.custom>0){
+        clean.customFrom = String(edit.customFrom||'').match(/^\d{4}-\d{2}$/)? edit.customFrom : ymOf(today());
+        if(changed) clean.customPrev = lnRateOf({ ...clean, custom:oldCustom, customFrom:'', customPrev:0 }, cfg)||0;
+        else clean.customPrev = Number(edit.customPrev)||0;
+      } else { clean.customFrom=''; clean.customPrev=0; }
+    }
     saveStaff(edit._new? [...staff,clean] : staff.map(x=>x.id===clean.id? clean:x));
   };
   const setOff=(st)=>{
@@ -6217,7 +6234,7 @@ function LnStaffPanel({ shop, user, toast }){
               <div style={{flex:1,minWidth:0}}>
                 <div className="kanit text-[14.5px]" style={{fontWeight:600}}>{st.name} <span className="text-[11.5px]" style={{fontWeight:400,color:si.color}}>· {si.emoji} {si.label}</span></div>
                 <div className="text-[12px]" style={{color:'var(--muted)'}}>
-                  {p.name}{rate>0? ' · ฐาน '+ocFmt(rate,0) : ' · ยังไม่ตั้งเรท'}{st.custom>0?' (กำหนดเอง)':''}
+                  {p.name}{rate>0? ' · ฐาน '+ocFmt(rate,0) : ' · ยังไม่ตั้งเรท'}{st.custom>0?' (กำหนดเอง'+(st.customFrom&&Number(st.customPrev)>0?' ตั้งแต่ '+st.customFrom+' · ก่อนนั้น '+ocFmt(st.customPrev,0):'')+')':''}
                   {st.shiftIn&&st.shiftOut? ' · กะ '+st.shiftIn+'–'+st.shiftOut : ''}
                   {st.fpId? ' · สแกน#'+st.fpId : ' · ยังไม่ผูกรหัสสแกน'}
                 </div>
@@ -6234,7 +6251,7 @@ function LnStaffPanel({ shop, user, toast }){
               </div>
               {!ro && (
                 <div className="flex flex-col gap-1">
-                  <button className="press kanit text-[12px] px-2.5 py-1 rounded-lg" style={{border:'1px solid var(--line)',background:'var(--card)'}} onClick={()=>setEdit({...st,_new:false})}>แก้ไข</button>
+                  <button className="press kanit text-[12px] px-2.5 py-1 rounded-lg" style={{border:'1px solid var(--line)',background:'var(--card)'}} onClick={()=>setEdit({...st,_new:false,_orig:{custom:Number(st.custom)||0}})}>แก้ไข</button>
                   {isOn(st)
                     ? <button className="press kanit text-[12px] px-2.5 py-1 rounded-lg" style={{border:'1px solid var(--line)',background:'var(--card)',color:'#B0483C'}} onClick={()=>setOff(st)}>ลาออก</button>
                     : <React.Fragment>
@@ -6278,6 +6295,18 @@ function LnStaffPanel({ shop, user, toast }){
               <div>
                 <div className="text-[12px] mb-1" style={{color:'var(--muted)'}}>ฐานกำหนดเอง (0 = ใช้เรทตำแหน่ง)</div>
                 <input className="num" style={INP} inputMode="numeric" value={edit.custom||''} placeholder="0" onChange={e=>setEdit({...edit,custom:e.target.value})}/>
+                {(parseFloat(edit.custom)||0)>0 && (
+                  <div className="mt-1.5 rounded-lg p-2" style={{background:'var(--soft)'}}>
+                    <div className="text-[11px] mb-1" style={{color:'var(--muted)'}}>ฐานใหม่มีผลตั้งแต่เดือน (เดือนก่อนหน้าใช้ฐานเดิม)</div>
+                    <input type="month" style={INP} value={edit.customFrom||ymOf(today())} onChange={e=>setEdit({...edit,customFrom:e.target.value})}/>
+                    {!edit._new && edit._orig && (parseFloat(edit.custom)||0)!==(edit._orig.custom||0) && (
+                      <div className="text-[11px] mt-1" style={{color:'var(--muted)'}}>ฐานเดิมที่จะเก็บไว้ให้เดือนก่อนหน้า: <b className="num">{ocFmt(lnRateOf({ ...edit, custom:edit._orig.custom, customFrom:'', customPrev:0 }, cfg),0)}</b> ฿</div>
+                    )}
+                    {!edit._new && edit.customFrom && (parseFloat(edit.custom)||0)===((edit._orig&&edit._orig.custom)||0) && Number(edit.customPrev)>0 && (
+                      <div className="text-[11px] mt-1" style={{color:'var(--muted)'}}>ก่อน {edit.customFrom} ใช้ฐาน <b className="num">{ocFmt(edit.customPrev,0)}</b> ฿</div>
+                    )}
+                  </div>
+                )}
               </div>
               <div>
                 <div className="text-[12px] mb-1" style={{color:'var(--muted)'}}>รหัสสแกนนิ้ว</div>
