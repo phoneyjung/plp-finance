@@ -5308,9 +5308,11 @@ function OCTabPay({ toast }){
             const sid=map[String(pin)]; if(!sid) return;
             if(String(shopAt(d,pin)).split(',').indexOf('owlcha')<0) return;   /* วันนั้นไม่ได้ติ๊ก Owl Cha */
             const cur=(times[d]||{})[sid];
-            if(cur && (cur.i||cur.o)) return;
             const v=sc[d][pin]||{};
             const list=fpClean(v.t);
+            /* เคยดึงไว้ตอนยังไม่สแกนออก → ถ้าเครื่องมีคู่เข้า-ออกครบแล้ว เติมให้เอง (ไม่แตะที่แก้มือครบคู่แล้ว) */
+            const incomplete = !!(cur && cur.i && !cur.o);
+            if(cur && (cur.i||cur.o) && !(incomplete && list.length>=2)) return;
             let brk=0;
             if(list.length>=4){
               const usable=list.length - (list.length%2);
