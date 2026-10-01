@@ -2662,7 +2662,15 @@ const ocPayLabel=(ym)=> OC_PAY_MONTHS[+ym.slice(5,7)-1]+' '+(+ym.slice(0,4)+543)
 const ocPayShift=(ym,dir)=>{ const y=+ym.slice(0,4), m=+ym.slice(5,7)-1+dir; const d=new Date(y,m,1); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); };
 const ocPayMin=(s)=>{ if(!s) return null; const p=String(s).split(':'); const h=parseInt(p[0],10), mn=parseInt(p[1]||'0',10); return isNaN(h)?null:h*60+(isNaN(mn)?0:mn); };
 function ocPayPool(cups,tiers){ let p=0; (tiers||[]).forEach(t=>{ if(cups>=t.min) p=t.pool; }); return p; }
-function ocPayBaseOf(st,cfg){ return (st.custom>0)? st.custom : (st.phase===3?cfg.base3: st.phase===2?cfg.base2: cfg.base1); }
+/* ฐานเงินเดือน: ฐานเอง > ฐานตามเฟส · ถ้าตั้ง "มีผลตั้งแต่เดือน" ไว้ เดือนก่อนหน้านั้นใช้ฐานเดิม (customPrev) ประวัติไม่เพี้ยน */
+function ocPayBaseOf(st,cfg,ym){
+  const ph=(st.phase===3?cfg.base3: st.phase===2?cfg.base2: cfg.base1);
+  if(ym && st.customFrom && String(ym)<String(st.customFrom)){
+    const pv=Number(st.customPrev)||0;
+    return pv>0? pv : ph;
+  }
+  return (st.custom>0)? st.custom : ph;
+}
 /* ---- 📅 ตารางงานรายวัน ----
    เก็บ 2 ที่ให้ตรงกัน: fpScans/{ym}.sched[วัน][pin]  และ  owlCost/payroll months[ym].sched[วัน][staffId]
    ค่า: "06:00-16:00" | "off" (หยุดตามตาราง) | "other" (ไปทำที่อื่น) | "" (ไม่ระบุ → ใช้กะในโปรไฟล์) */
@@ -2767,7 +2775,7 @@ function ocPayCalc(pay,ym){
     const myMinHrs = minHrsOf(st);
     let shortDays=0;
     if(myMinHrs>0){ for(let d=1;d<=nDays;d++){ if(shortDay[d][st.id]) shortDays++; } }
-    const baseUsed0=ocPayBaseOf(st,cfg);
+    const baseUsed0=ocPayBaseOf(st,cfg,ym);
     const hourRate=baseUsed0/(cfg.divisor||26)/(cfg.shiftHrs||10);
     let days=0, com=0, holDays=0, holPay=0;
     for(let d=1;d<=nDays;d++){
@@ -2782,7 +2790,7 @@ function ocPayCalc(pay,ym){
       } else days++;
     }
     com=Math.round(com); holPay=Math.round(holPay);
-    const baseUsed=ocPayBaseOf(st,cfg);
+    const baseUsed=ocPayBaseOf(st,cfg,ym);
     const quota=(st.kind==='maid' && st.offQuota!==''&&st.offQuota!=null)? Number(st.offQuota) : null;
     const inMonth=(dt)=> !!dt && String(dt).slice(0,7)===ym;
     const partialMonth = inMonth(st.start) || inMonth(st.end);
@@ -2925,7 +2933,7 @@ function ocPayBuildWorkbook(pay,ym){
   r2.push(['ชื่อ','ประเภท','เฟส','ฐานกำหนดเอง (0=อัตโนมัติ)','ฐานที่ใช้ (฿)','เบี้ยขยัน (฿)'].map(h=>cell(h,sHead)));
   expStaff.forEach(st=>{
     const row=calc.rows.find(r=>r.st.id===st.id)||{};
-    r2.push([cell(st.name,sTxt),cell(st.kind==='maid'?'แม่บ้าน':'พนักงาน',{...sTxt,alignment:{horizontal:'center'}}),cell(st.phase,{...sNum,alignment:{horizontal:'center'}}),cell(st.custom||0,sYel,'#,##0'),cell(ocPayBaseOf(st,cfg),sNumB,'#,##0'),cell(row.dl!=null?row.dl:cfg.dilig,sNum,'#,##0')]);
+    r2.push([cell(st.name,sTxt),cell(st.kind==='maid'?'แม่บ้าน':'พนักงาน',{...sTxt,alignment:{horizontal:'center'}}),cell(st.phase,{...sNum,alignment:{horizontal:'center'}}),cell(st.custom||0,sYel,'#,##0'),cell(ocPayBaseOf(st,cfg,ym),sNumB,'#,##0'),cell(row.dl!=null?row.dl:cfg.dilig,sNum,'#,##0')]);
   });
   const ws2=toSheet(r2,[{s:{r:0,c:0},e:{r:0,c:4}}],[{wch:16},{wch:6},{wch:20},{wch:12},{wch:12}]);
   /* ---- Sheet 3: Attendance ---- */
@@ -4823,7 +4831,7 @@ function StaffPanel({ user, toast }){
     id:'p'+ocUid(), name:'', phase:1, custom:0, kind:'staff', fpId:'',
     shop:'owlcha', shiftIn:'', shiftOut:'', active:true, start:today(), end:'', phone:'', note:'', _new:true
   });
-  const openEdit=(st)=>setEdit({ ...st, _new:false });
+  const openEdit=(st)=>setEdit({ ...st, _new:false, _orig:{ custom:Number(st.custom)||0, phase:st.phase||1 } });
 
   const commit=()=>{
     if(!edit) return;
@@ -4844,6 +4852,18 @@ function StaffPanel({ user, toast }){
       phone:String(edit.phone||'').trim(),
       note:String(edit.note||'').trim()
     };
+    /* ปรับฐาน: จำฐานเดิม + เดือนที่มีผล → เดือนก่อนหน้ายังคำนวณด้วยฐานเดิม */
+    {
+      const oldCustom = edit._orig? (Number(edit._orig.custom)||0) : 0;
+      const changed = !edit._new && clean.custom!==oldCustom;
+      if(clean.custom>0){
+        clean.customFrom = String(edit.customFrom||'').match(/^\d{4}-\d{2}$/)? edit.customFrom : ymOf(today());
+        if(changed){
+          const prevBase = ocPayBaseOf({ ...clean, custom:oldCustom, customFrom:'', customPrev:0, phase:(edit._orig&&edit._orig.phase)||clean.phase }, cfg);
+          clean.customPrev = prevBase||0;
+        } else clean.customPrev = Number(edit.customPrev)||0;
+      } else { clean.customFrom=''; clean.customPrev=0; }
+    }
     if(clean.kind==='maid'){
       if(edit.offQuota!=null&&edit.offQuota!=='') clean.offQuota=parseFloat(edit.offQuota)||0;
       if(edit.extraRate!=null&&edit.extraRate!=='') clean.extraRate=parseFloat(edit.extraRate)||0;
@@ -4925,7 +4945,7 @@ function StaffPanel({ user, toast }){
               <div className="text-[12px] mt-0.5" style={{color:'var(--muted)'}}>
                 <span style={{color:shopInfo(st.shop).color,fontWeight:600}}>{shopInfo(st.shop).emoji} {shopInfo(st.shop).label}</span>
                 {' · '}{st.kind==='maid'? 'แม่บ้าน' : (st.kind==='partner'? '🤝 หุ้นส่วน' : PHASE[st.phase||1])}
-                {st.custom>0 && ' · ฐานเอง '+ocFmt(st.custom,0)+'฿'}
+                {st.custom>0 && ' · ฐานเอง '+ocFmt(st.custom,0)+'฿'+(st.customFrom&&Number(st.customPrev)>0? ' (ตั้งแต่ '+st.customFrom+' · ก่อนนั้น '+ocFmt(st.customPrev,0)+')' : '')}
                 {st.fpId? ' · สแกน#'+st.fpId : ' · ยังไม่ผูกรหัสสแกน'}
               </div>
               <div className="text-[12px] mt-0.5" style={{color:'var(--muted)'}}>
@@ -5000,6 +5020,18 @@ function StaffPanel({ user, toast }){
                 <input className="num" style={INP} inputMode="numeric" placeholder="0" value={edit.custom||''} onChange={e=>setEdit({...edit,custom:e.target.value})}/>
               </div>
             </div>
+            {(parseFloat(edit.custom)||0)>0 && (
+              <div className="mt-2 rounded-xl p-2.5" style={{background:'var(--soft)'}}>
+                <div className="text-[11.5px] mb-1" style={{color:'var(--muted)'}}>ฐานใหม่มีผลตั้งแต่เดือน (เดือนก่อนหน้ายังใช้ฐานเดิม)</div>
+                <input type="month" style={INP} value={edit.customFrom||ymOf(today())} onChange={e=>setEdit({...edit,customFrom:e.target.value})}/>
+                {!edit._new && edit._orig && (parseFloat(edit.custom)||0)!==(edit._orig.custom||0) && (
+                  <div className="text-[11px] mt-1" style={{color:'var(--muted)'}}>ฐานเดิมที่จะเก็บไว้ให้เดือนก่อนหน้า: <b className="num">{ocFmt(ocPayBaseOf({ ...edit, custom:edit._orig.custom, customFrom:'', customPrev:0, phase:edit._orig.phase }, cfg),0)}</b> ฿</div>
+                )}
+                {!edit._new && edit.customFrom && (parseFloat(edit.custom)||0)===((edit._orig&&edit._orig.custom)||0) && Number(edit.customPrev)>0 && (
+                  <div className="text-[11px] mt-1" style={{color:'var(--muted)'}}>ก่อน {edit.customFrom} ใช้ฐาน <b className="num">{ocFmt(edit.customPrev,0)}</b> ฿</div>
+                )}
+              </div>
+            )}
 
             {edit.kind==='partner' && (
               <div className="mb-2.5">
