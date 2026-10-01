@@ -2663,6 +2663,67 @@ const ocPayShift=(ym,dir)=>{ const y=+ym.slice(0,4), m=+ym.slice(5,7)-1+dir; con
 const ocPayMin=(s)=>{ if(!s) return null; const p=String(s).split(':'); const h=parseInt(p[0],10), mn=parseInt(p[1]||'0',10); return isNaN(h)?null:h*60+(isNaN(mn)?0:mn); };
 function ocPayPool(cups,tiers){ let p=0; (tiers||[]).forEach(t=>{ if(cups>=t.min) p=t.pool; }); return p; }
 function ocPayBaseOf(st,cfg){ return (st.custom>0)? st.custom : (st.phase===3?cfg.base3: st.phase===2?cfg.base2: cfg.base1); }
+/* ---- 📅 ตารางงานรายวัน ----
+   เก็บ 2 ที่ให้ตรงกัน: fpScans/{ym}.sched[วัน][pin]  และ  owlCost/payroll months[ym].sched[วัน][staffId]
+   ค่า: "06:00-16:00" | "off" (หยุดตามตาราง) | "other" (ไปทำที่อื่น) | "" (ไม่ระบุ → ใช้กะในโปรไฟล์) */
+const SCHED_PRESETS=['06:00-16:00','06:00-21:00','09:00-19:00','09:00-21:00','10:00-21:00','11:00-21:00','17:00-21:00'];
+function schedParseVal(raw){
+  const s=String(raw||'').replace(/\s+/g,' ').trim();
+  if(!s) return '';
+  if(/^(หยุด|off|x)(?![a-z0-9])/i.test(s)) return 'off';
+  const owl=/owl/i.test(s);
+  const elsewhere=/\b(GS|YS|Spa|Teddy ?\d?|Tik)\b|เทดดี้|สปา|เกอิชา|โยชิ/i.test(s);
+  if(elsewhere && !owl) return 'other';
+  const m=s.match(/(\d{1,2})[:.]?(\d{2})\s*[-–]\s*(\d{1,2})[:.]?(\d{2})/);
+  if(m){ const a=+m[1], b=+m[3]; if(a<=24&&b<=24) return pad(a)+':'+m[2]+'-'+pad(b===24?0:b)+':'+m[4]; }
+  return 'other';
+}
+function schedRange(v){ const m=/^(\d{2}:\d{2})-(\d{2}:\d{2})$/.exec(String(v||'')); return m? {i:m[1],o:m[2]} : null; }
+function schedLabel(v){ if(v==='off') return 'หยุดตามตาราง'; if(v==='other') return 'ทำที่อื่น'; const r=schedRange(v); return r? (r.i+'→'+r.o) : ''; }
+/* ชื่อชีต → วันจันทร์ที่เริ่มสัปดาห์ : "28.9-4.10.69" · "21-27.9.69" · "ตารางงาน 20-26 ก.ค.69" */
+function schedSheetStart(name){
+  const s=String(name||'').replace(/\s+/g,' ').trim();
+  let m=s.match(/(\d{1,2})(?:\.(\d{1,2}))?\s*[-–]\s*(\d{1,2})\.(\d{1,2})\.(\d{2,4})/);
+  const fixY=(y)=>{ y=+y; if(y<100) y+=2500; if(y>2400) y-=543; return y; };
+  if(m){ const mon=m[2]? +m[2] : +m[4]; return {y:fixY(m[5]),m:mon,d:+m[1]}; }
+  const TH={'ม.ค':1,'ก.พ':2,'มี.ค':3,'เม.ย':4,'พ.ค':5,'มิ.ย':6,'ก.ค':7,'ส.ค':8,'ก.ย':9,'ต.ค':10,'พ.ย':11,'ธ.ค':12};
+  const mk=Object.keys(TH).find(k=>s.indexOf(k)>=0);
+  m=s.match(/(\d{1,2})\s*[-–]\s*(\d{1,2})/); const y=s.match(/(\d{2,4})\s*$/);
+  if(mk && m && y) return {y:fixY(y[1]),m:TH[mk],d:+m[1]};
+  return null;
+}
+/* อ่านทั้งไฟล์ → { cells:[{name,date,val}], names:[...], weeks, from, to } */
+function schedParseBook(XLSX,wb){
+  const cells=[]; const names={}; let weeks=0;
+  wb.SheetNames.forEach(sn=>{
+    const st=schedSheetStart(sn); if(!st) return;
+    const raw=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,raw:true,defval:''});
+    if(!raw.length) return;
+    weeks++;
+    raw.slice(1).forEach(r=>{
+      const name=String(r[0]||'').trim(); if(!name) return;
+      names[name]=1;
+      for(let k=0;k<7;k++){
+        const dt=new Date(st.y,st.m-1,st.d+k);
+        const date=dt.getFullYear()+'-'+pad(dt.getMonth()+1)+'-'+pad(dt.getDate());
+        cells.push({ name, date, val: schedParseVal(r[k+1]) });
+      }
+    });
+  });
+  if(!cells.length) return null;
+  const ds=cells.map(c=>c.date).sort();
+  return { cells, names:Object.keys(names), weeks, from:ds[0], to:ds[ds.length-1] };
+}
+/* จับคู่ชื่อในไฟล์กับพนักงาน: ตรงตัว / ตัด "พี่" / สะกดใกล้เคียง */
+function schedMatchName(name, staff, saved){
+  if(saved && saved[name]) return saved[name];
+  const norm=(x)=>String(x||'').replace(/^(พี่|น้อง|ป๋า|คุณ)/,'').replace(/\s+/g,'').replace(/ต์$/,'').toLowerCase();
+  const n=norm(name);
+  let hit=(staff||[]).find(x=>norm(x.name)===n);
+  if(!hit) hit=(staff||[]).find(x=>norm(x.name).startsWith(n)||n.startsWith(norm(x.name)));
+  return hit? hit.id : '';
+}
+
 function ocPayCalc(pay,ym){
   const cfg=pay.cfg, m=pay.months[ym]||{};
   const cups=m.cups||{}, att=m.att||{}, ot=m.ot||{}, bonus=m.bonus||{}, dg=m.dilig||{}, times=m.times||{}, hol=m.hol||{}, adv=m.adv||{};
@@ -2745,8 +2806,9 @@ function ocPayCalc(pay,ym){
       base=Math.round(baseUsed/(cfg.divisor||26)*days);
     }
     let otMin=0, missMin=0, missH=0;
-    /* นับวันที่เข้าสาย เทียบกะประจำในโปรไฟล์ (ผ่อนผันตาม cfg.diligGrace) */
-    let lateDays=0, lateMin=0;
+    /* นับวันที่เข้าสาย — เทียบตารางงานของวันนั้นก่อน (months[ym].sched) ไม่มีค่อยใช้กะประจำในโปรไฟล์ */
+    let lateDays=0, lateMin=0; const lateList=[];
+    const schedM=m.sched||{};
     const shiftInMin = (st.shiftIn? ocPayMin(st.shiftIn) : null);
     const dGrace = (cfg.diligGrace!=null? Number(cfg.diligGrace) : 0);
     for(let d=1;d<=nDays;d++){
@@ -2773,9 +2835,12 @@ function ocPayCalc(pay,ym){
             if(diffM>gr) otMin+=(diffM-gr);
             else if(diffM<-gr && !isPartner) missMin+=(-diffM-gr);   /* หุ้นส่วนไม่หักชั่วโมงขาด */
           }
-          if(shiftInMin!=null){
-            const late=mi-shiftInMin;
-            if(late>dGrace){ lateDays++; lateMin+=late; }
+          const sv=(schedM[d]||{})[st.id]||'';
+          const sr=schedRange(sv);
+          const sInM = sr? ocPayMin(sr.i) : shiftInMin;
+          if(sInM!=null && sv!=='off' && sv!=='other'){
+            const late=mi-sInM;
+            if(late>dGrace){ lateDays++; lateMin+=late; lateList.push(d); }
           }
         }
       }
@@ -2805,7 +2870,7 @@ function ocPayCalc(pay,ym){
     const bn=Number(bonus[st.id])||0;
     const net = base+com+otB+dl+bn+holPay-missB;
     const diligForced = (dg[st.id]===0 || dg[st.id]===1);
-    return { st, isMaid, days, holDays, holPay, baseUsed, base, com, otAuto, otMan, otH, otB, dl, bn, missH, missB, advT, advList, quota, offDays, offExcess, extraDays, extraRate, net, toPay: net-advT, lateDays, lateMin, diligAuto, diligForced, workedDays, diligMinDays, diligDaysOk, isPartner, myMinHrs, shortDays, partialMonth, sickDays, otMin, otRestMin:(isMaid?0:otRestMin), missMin, missRestMin:(isMaid?0:missRestMin) };
+    return { st, isMaid, days, holDays, holPay, baseUsed, base, com, otAuto, otMan, otH, otB, dl, bn, missH, missB, advT, advList, quota, offDays, offExcess, extraDays, extraRate, net, toPay: net-advT, lateDays, lateMin, lateList, diligAuto, diligForced, workedDays, diligMinDays, diligDaysOk, isPartner, myMinHrs, shortDays, partialMonth, sickDays, otMin, otRestMin:(isMaid?0:otRestMin), missMin, missRestMin:(isMaid?0:missRestMin) };
   });
   const total=rows.reduce((s,r)=>s+r.net,0);
   const rev=cupsT*(cfg.avgPrice||0);
@@ -2987,7 +3052,14 @@ function ocPayPersonDays(pay,ym,stId){
       if(diffM>gr) otM=diffM-gr;
       else if(diffM<-gr && !isPtn) missM=(-diffM)-gr;
     }
-    out.push({ d, cups:Number(cups[d])||0, com: pd.comIds.indexOf(stId)>=0? pd.each:0, tin:tt.i||'', tout:tt.o||'', brk:Number(tt.b)||0, hrs, otM, missM, isHol });
+    /* สาย: เทียบตารางงานของวัน ไม่มีค่อยใช้กะในโปรไฟล์ (ผ่อนผันตาม cfg.diligGrace) */
+    const sv=(((m.sched||{})[d]||{})[stId])||'';
+    const sr=schedRange(sv);
+    const sIn=(sv==='off'||sv==='other')? null : (sr? ocPayMin(sr.i) : (stObj&&stObj.shiftIn? ocPayMin(stObj.shiftIn) : null));
+    const dGr=(cfg.diligGrace!=null? Number(cfg.diligGrace) : 0);
+    let late=0; const mi=ocPayMin(tt.i);
+    if(!isMd && !isHol && sIn!=null && mi!=null){ late=mi-sIn; if(late<=dGr) late=0; }
+    out.push({ d, cups:Number(cups[d])||0, com: pd.comIds.indexOf(stId)>=0? pd.each:0, tin:tt.i||'', tout:tt.o||'', brk:Number(tt.b)||0, hrs, otM, missM, isHol, late, sched: sr? sr.i : '' });
   }
   return out;
 }
@@ -3036,16 +3108,19 @@ async function ocPayPersonImage(pay,ym,stId){
       g.textAlign='right'; g.fillText(o.els? ('ไปช่วย '+(o.els==='teddy1'?'Teddy 1': o.els==='teddy2'?'Teddy 2': o.els)) : 'หยุด',cols[7][1],y+26);
       y+=rowH; return;
     }
-    g.fillStyle= o.isHol? '#FBE9E5' : (i%2? '#F5EEDD':'#FFFFFF'); g.fillRect(0,y,W,rowH);
+    g.fillStyle= o.isHol? '#FBE9E5' : (o.late? '#FDE4E4' : (i%2? '#F5EEDD':'#FFFFFF')); g.fillRect(0,y,W,rowH);
     g.fillStyle='#3B2F24'; g.font=F(400,15.5);
     const vals=[String(o.d), o.cups?num(o.cups):'–', o.com?num(Math.round(o.com)):'–', o.tin||'–', o.tout||'–',
       o.hrs!=null?(Math.round(o.hrs*10)/10).toString():'–',
       o.otM? ('+'+o.otM+'น.') : (o.missM? ('−'+o.missM+'น.') : '–'),
-      o.isHol?'🆘 ×2':(o.brk?('พัก '+o.brk+' น.'):(o.otM?'ทำเกินเวลา':(o.missM?'ทำไม่ครบกะ':'')))];
+      o.isHol?'🆘 ×2':(o.late? ('⚠ สาย '+o.late+' น.'+(o.sched? ' (กะ '+o.sched+')':'')) : (o.brk?('พัก '+o.brk+' น.'):(o.otM?'ทำเกินเวลา':(o.missM?'ทำไม่ครบกะ':''))))];
     vals.forEach((v,k)=>{
       g.textAlign=cols[k][2];
       if(k===6){ g.fillStyle= o.otM? '#3E7D3E' : (o.missM? '#B0483C' : '#B7A88F'); }
+      else if(k===3 && o.late){ g.fillStyle='#B0483C'; }
+      else if(k===7 && o.late){ g.fillStyle='#B0483C'; }
       else g.fillStyle='#3B2F24';
+      g.font=(o.late&&(k===3||k===7))? F(600,15.5) : F(400,15.5);
       g.fillText(v,cols[k][1],y+26);
     });
     g.fillStyle='#3B2F24';
@@ -3279,10 +3354,168 @@ function attFmt(v){
   const h=Math.min(23,+m[1]), mi=Math.min(59,+m[2]);
   return String(h).padStart(2,'0')+':'+String(mi).padStart(2,'0');
 }
+/* ---- 📅 ตารางงาน: นำเข้า Excel รายสัปดาห์ + แก้รายช่อง ---- */
+function ScheduleSheet({ ym, staff, schedMap, setSchedMap, onClose }){
+  const MON=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  const owl=(staff||[]).filter(x=>x.active!==false && String(x.fpId||'').trim()!=='');
+  const Y=+ym.slice(0,4), M=+ym.slice(5,7); const nDay=new Date(Y,M,0).getDate();
+  /* สัปดาห์ในเดือน (เริ่มจันทร์) */
+  const weeks=React.useMemo(()=>{ const out=[]; const first=new Date(Y,M-1,1); let start=1-((first.getDay()+6)%7);
+    while(start<=nDay){ out.push(start); start+=7; } return out; },[ym]);
+  const [wk,setWk]=useState(()=>{ const t=today(); if(t.slice(0,7)!==ym) return 0; const d=+t.slice(8,10); let i=0; weeks.forEach((w,k)=>{ if(d>=w) i=k; }); return i; });
+  const [pick,setPick]=useState(null);     /* {d, st} ช่องที่กำลังแก้ */
+  const [busy,setBusy]=useState(false);
+  const [msg,setMsg]=useState('');
+  const [imp,setImp]=useState(null);       /* ผลอ่าน Excel */
+  const [map,setMap]=useState({});         /* ชื่อในไฟล์ → staff id */
+  const fileRef=useRef();
+  const say=(t)=>{ setMsg(t); setTimeout(()=>setMsg(''),3000); };
+  const DN=['จ','อ','พ','พฤ','ศ','ส','อา'];
+  const valOf=(d,st)=> (((schedMap||{})[String(d)]||{})[String(st.fpId)])||'';
+
+  /* เขียน 1 ช่อง ลงทั้ง 2 เอกสาร */
+  const writeCell=async(d,st,val)=>{
+    setBusy(true);
+    try{
+      const pin=String(st.fpId).trim(); const b=db.batch();
+      const fsv = val===''? FieldValue.delete() : val;
+      b.set(db.collection('fpScans').doc(ym), { sched:{ [String(d)]:{ [pin]: fsv } } }, { merge:true });
+      b.set(db.collection('owlCost').doc('payroll'), { months:{ [ym]:{ sched:{ [String(d)]:{ [st.id]: fsv } } } } }, { merge:true });
+      await b.commit();
+      setSchedMap(prev=>{ const n={...(prev||{})}; const day={...(n[String(d)]||{})}; if(val==='') delete day[pin]; else day[pin]=val; n[String(d)]=day; return n; });
+      setPick(null);
+    }catch(e){ console.error(e); say('บันทึกไม่สำเร็จ'); }
+    setBusy(false);
+  };
+
+  /* นำเข้า Excel */
+  const onFile=async(e)=>{
+    const f=e.target.files&&e.target.files[0]; if(!f) return;
+    setBusy(true);
+    try{
+      const XLSX=await loadXLSX();
+      const buf=await f.arrayBuffer();
+      const wb=XLSX.read(buf,{type:'array'});
+      const p=schedParseBook(XLSX,wb);
+      if(!p){ say('อ่านไม่ได้ — ชื่อชีตต้องเป็นช่วงวัน เช่น 28.9-4.10.69'); setBusy(false); return; }
+      let saved={};
+      try{ const s=await db.collection('owlCost').doc('payroll').get(); saved=(s.exists&&(s.data()||{}).schedNames)||{}; }catch(_){}
+      const mp={}; p.names.forEach(n=>{ mp[n]=schedMatchName(n, owl, saved); });
+      setMap(mp); setImp(p);
+    }catch(err){ console.error(err); say('อ่านไฟล์ไม่สำเร็จ'); }
+    setBusy(false);
+    if(fileRef.current) fileRef.current.value='';
+  };
+  const doImport=async()=>{
+    if(!imp) return;
+    setBusy(true);
+    try{
+      const byYm={};   /* ym → { fp:{d:{pin:val}}, pr:{d:{id:val}} } */
+      let n=0;
+      imp.cells.forEach(c=>{
+        const sid=map[c.name]; if(!sid) return;
+        const st=owl.find(x=>x.id===sid); if(!st) return;
+        const cy=c.date.slice(0,7), cd=String(+c.date.slice(8,10));
+        const o=(byYm[cy]=byYm[cy]||{fp:{},pr:{}});
+        (o.fp[cd]=o.fp[cd]||{})[String(st.fpId)]= c.val===''? FieldValue.delete() : c.val;
+        (o.pr[cd]=o.pr[cd]||{})[st.id]= c.val===''? FieldValue.delete() : c.val;
+        n++;
+      });
+      const yms=Object.keys(byYm);
+      for(const cy of yms){
+        const b=db.batch();
+        b.set(db.collection('fpScans').doc(cy), { sched: byYm[cy].fp }, { merge:true });
+        b.set(db.collection('owlCost').doc('payroll'), { months:{ [cy]:{ sched: byYm[cy].pr } } }, { merge:true });
+        await b.commit();
+      }
+      const keep={}; Object.keys(map).forEach(k=>{ if(map[k]) keep[k]=map[k]; });
+      await db.collection('owlCost').doc('payroll').set({ schedNames: keep },{ merge:true });
+      /* รีเฟรชเดือนที่เปิดอยู่ */
+      if(byYm[ym]){ const s=await db.collection('fpScans').doc(ym).get(); setSchedMap(((s.exists&&s.data())||{}).sched||{}); }
+      say('นำเข้าแล้ว '+n+' ช่อง · '+yms.length+' เดือน'); setImp(null);
+    }catch(e){ console.error(e); say('นำเข้าไม่สำเร็จ: '+(e.message||'')); }
+    setBusy(false);
+  };
+
+  const ws=weeks[wk]!=null? weeks[wk] : 1;
+  const cellS=(v,inMonth)=>({ flex:1,minWidth:0,padding:'6px 2px',textAlign:'center',fontSize:11,borderRadius:8,cursor:inMonth?'pointer':'default',opacity:inMonth?1:.25,
+    background: v==='off'?'#F3F4F6': v==='other'?'#EEF2F7': v?'#E8F5E9':'transparent',
+    color: v==='off'?'#6B7280': v==='other'?'#4B5563': v?'#1B5E20':'var(--muted)', border:'1px solid '+(v?'transparent':'var(--line)') });
+  return (
+    <Sheet title="📅 ตารางงาน" onClose={onClose} z={70}>
+      {msg && <div className="text-[12.5px] mb-2" style={{color:'var(--primary)',fontWeight:600}}>{msg}</div>}
+
+      {/* นำเข้า */}
+      <div className="rounded-xl p-3 mb-3" style={{background:'var(--soft)'}}>
+        <div className="kanit text-[13.5px] mb-1" style={{fontWeight:700}}>นำเข้าจาก Excel (ไฟล์ตารางงานรายสัปดาห์)</div>
+        <div className="text-[11.5px] mb-2" style={{color:'var(--muted)',lineHeight:1.5}}>ชื่อชีตเป็นช่วงวัน เช่น 28.9-4.10.69 · แถว=พนักงาน · คอลัมน์ จ–อา · ค่าเช่น 06:00-16:00 / หยุด / X / Teddy1</div>
+        <input ref={fileRef} type="file" accept=".xlsx,.xls" onChange={onFile} style={{display:'none'}}/>
+        {!imp && <button className="press kanit" disabled={busy} onClick={()=>fileRef.current&&fileRef.current.click()} style={{width:'100%',padding:'10px',border:'1.5px dashed var(--primary)',borderRadius:11,background:'#fff',color:'var(--primary)',fontWeight:600,fontSize:13.5}}>📂 เลือกไฟล์ตารางงาน</button>}
+        {imp && (<>
+          <div className="text-[12.5px] mb-2">อ่านได้ <b>{imp.weeks} สัปดาห์</b> · {imp.from} → {imp.to} · {imp.cells.length} ช่อง</div>
+          <div className="text-[11.5px] mb-1" style={{color:'var(--muted)'}}>จับคู่ชื่อในไฟล์กับพนักงาน (ชื่อที่ไม่ใช่พนักงาน Owl เลือก "ข้าม")</div>
+          {imp.names.map(n=>(
+            <div key={n} className="flex items-center gap-2 mb-1">
+              <div className="kanit text-[13px]" style={{width:92,flex:'none',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{n}</div>
+              <select value={map[n]||''} onChange={e=>setMap({...map,[n]:e.target.value})} style={{flex:1,padding:'6px 8px',border:'1px solid var(--line)',borderRadius:9,fontSize:13,background:map[n]?'#E8F5E9':'#fff'}}>
+                <option value="">— ข้าม —</option>
+                {owl.map(st=><option key={st.id} value={st.id}>{st.name}{st.kind==='maid'?' (แม่บ้าน)':''}</option>)}
+              </select>
+            </div>
+          ))}
+          <div className="flex gap-2 mt-2">
+            <button className="press kanit" disabled={busy} onClick={()=>setImp(null)} style={{flex:1,padding:'10px',border:'1px solid var(--line)',borderRadius:11,background:'#fff',fontSize:13.5}}>ยกเลิก</button>
+            <button className="press kanit" disabled={busy} onClick={doImport} style={{flex:2,padding:'10px',border:'none',borderRadius:11,background:'var(--primary)',color:'#fff',fontWeight:700,fontSize:14}}>{busy?'กำลังบันทึก...':'บันทึกตารางงาน ('+Object.values(map).filter(Boolean).length+' คน)'}</button>
+          </div>
+        </>)}
+      </div>
+
+      {/* ตารางรายสัปดาห์ */}
+      <div className="flex items-center justify-between mb-2">
+        <button className="press kanit" onClick={()=>setWk(Math.max(0,wk-1))} disabled={wk<=0} style={{border:'1px solid var(--line)',borderRadius:9,padding:'5px 12px',background:'#fff',opacity:wk<=0?.4:1}}>‹</button>
+        <div className="kanit text-[13.5px]" style={{fontWeight:700}}>สัปดาห์ {Math.max(1,ws)}–{Math.min(nDay,ws+6)} {MON[M-1]} {Y+543}</div>
+        <button className="press kanit" onClick={()=>setWk(Math.min(weeks.length-1,wk+1))} disabled={wk>=weeks.length-1} style={{border:'1px solid var(--line)',borderRadius:9,padding:'5px 12px',background:'#fff',opacity:wk>=weeks.length-1?.4:1}}>›</button>
+      </div>
+      <div className="flex text-[11px] mb-1" style={{color:'var(--muted)'}}>
+        <div style={{width:64,flex:'none'}}></div>
+        {DN.map((n,k)=>{ const d=ws+k; const inM=d>=1&&d<=nDay; return <div key={k} style={{flex:1,textAlign:'center',opacity:inM?1:.3}}>{n}<br/><b>{inM?d:''}</b></div>; })}
+      </div>
+      {owl.map(st=>(
+        <div key={st.id} className="flex items-center gap-1 mb-1">
+          <div className="kanit text-[12.5px]" style={{width:64,flex:'none',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{st.kind==='maid'?'🧹':''}{st.name}</div>
+          {DN.map((_,k)=>{ const d=ws+k; const inM=d>=1&&d<=nDay; const v=inM? valOf(d,st) : '';
+            const sr=schedRange(v);
+            const lab= !inM? '' : v==='off'? 'หยุด' : v==='other'? 'ที่อื่น' : sr? (sr.i.slice(0,2)+'-'+sr.o.slice(0,2)) : ((st.shiftIn&&st.shiftOut)? '·' : '');
+            return <div key={k} className="num" style={cellS(v,inM)} title={v?schedLabel(v):'ตามโปรไฟล์'} onClick={()=>inM&&setPick({d,st})}>{lab}</div>; })}
+        </div>
+      ))}
+      <div className="text-[10.5px] mt-2" style={{color:'var(--muted)',lineHeight:1.5}}>ช่องว่าง / · = ใช้กะประจำในโปรไฟล์ · แตะช่องเพื่อเปลี่ยน · ตารางมีผลกับการนับ "สาย" และเบี้ยขยัน</div>
+
+      {pick && (
+        <div className="rounded-xl p-3 mt-3" style={{background:'var(--soft)',border:'1px solid var(--line)'}}>
+          <div className="kanit text-[13px] mb-2" style={{fontWeight:700}}>{pick.st.name} · วันที่ {pick.d} {MON[M-1]}</div>
+          <div className="flex flex-wrap gap-1.5">
+            {SCHED_PRESETS.map(p=>(
+              <button key={p} className="press num" disabled={busy} onClick={()=>writeCell(pick.d,pick.st,p)} style={{padding:'7px 9px',borderRadius:9,fontSize:12,border:'1px solid var(--line)',background: valOf(pick.d,pick.st)===p?'var(--primary)':'#fff',color: valOf(pick.d,pick.st)===p?'#fff':'var(--ink)'}}>{p}</button>
+            ))}
+            <button className="press kanit" disabled={busy} onClick={()=>{ const t=window.prompt('พิมพ์ช่วงเวลา เช่น 08:00-18:00'); if(t==null) return; const v=schedParseVal(t); if(!schedRange(v)){ say('รูปแบบไม่ถูก'); return; } writeCell(pick.d,pick.st,v); }} style={{padding:'7px 9px',borderRadius:9,fontSize:12,border:'1px solid var(--line)',background:'#fff'}}>กำหนดเอง…</button>
+            <button className="press kanit" disabled={busy} onClick={()=>writeCell(pick.d,pick.st,'off')} style={{padding:'7px 9px',borderRadius:9,fontSize:12,border:'1px solid var(--line)',background:'#F3F4F6'}}>หยุด</button>
+            <button className="press kanit" disabled={busy} onClick={()=>writeCell(pick.d,pick.st,'other')} style={{padding:'7px 9px',borderRadius:9,fontSize:12,border:'1px solid var(--line)',background:'#EEF2F7'}}>ทำที่อื่น</button>
+            <button className="press kanit" disabled={busy} onClick={()=>writeCell(pick.d,pick.st,'')} style={{padding:'7px 9px',borderRadius:9,fontSize:12,border:'1px solid var(--line)',background:'#fff',color:'var(--muted)'}}>ล้าง (ใช้กะประจำ)</button>
+            <button className="press kanit" onClick={()=>setPick(null)} style={{padding:'7px 9px',borderRadius:9,fontSize:12,border:'none',background:'none',color:'var(--muted)'}}>ปิด</button>
+          </div>
+        </div>
+      )}
+    </Sheet>
+  );
+}
+
 function AttendPanel({ user }){
   const [ym,setYm]=useState(ymOf(today()));
   const [scans,setScans]=useState(null);
   const [shopMap,setShopMap]=useState({});
+  const [schedMap,setSchedMap]=useState({});
+  const [showSched,setShowSched]=useState(false);
   const [leaveMap,setLeaveMap]=useState({});
   const [holMap,setHolMap]=useState({});
   const [cfg,setCfg]=useState({});
@@ -3313,7 +3546,7 @@ function AttendPanel({ user }){
       .then(s=>{ if(!stop && s.exists){ const v=s.data()||{}; const mp={}; (v.staff||[]).forEach(x=>{ const p=String(x.fpId||'').trim(); if(p) mp[p]=x.shop||'teddy2'; }); setLnHome(mp); } })
       .catch(()=>{});
     db.collection('fpScans').doc(ym).get()
-      .then(s=>{ if(stop) return; const v=s.exists? (s.data()||{}) : {}; setScans(v.d||{}); setShopMap(v.shop||{}); setLeaveMap(v.leave||{}); setHolMap(v.hol||{}); })
+      .then(s=>{ if(stop) return; const v=s.exists? (s.data()||{}) : {}; setScans(v.d||{}); setShopMap(v.shop||{}); setSchedMap(v.sched||{}); setLeaveMap(v.leave||{}); setHolMap(v.hol||{}); })
       .catch(e=>{ if(!stop){ setScans({}); setErr('โหลดข้อมูลไม่สำเร็จ'); } });
     return ()=>{ stop=true; };
   },[ym]);
@@ -3343,6 +3576,24 @@ function AttendPanel({ user }){
   const isMaid=(pin)=>{ const st=stOf(pin); return !!(st&&st.kind==='maid'); };
   const leaveOf=(d,pin)=> ((leaveMap||{})[String(d)]||{})[String(pin)] || null;
   const isHol=(d,pin)=> !!(((holMap||{})[String(d)]||{})[String(pin)]);
+  /* 📅 ตารางงานของวัน: ค่าใน fpScans.sched → ไม่มีใช้กะประจำในโปรไฟล์ */
+  const schedOf=(d,pin)=> (((schedMap||{})[String(d)]||{})[String(pin)])||'';
+  const shiftOfDay=(d,pin)=>{
+    const sv=schedOf(d,pin);
+    if(sv==='off'||sv==='other') return null;
+    const sr=schedRange(sv); if(sr) return sr;
+    const st=stOf(pin);
+    return (st&&st.shiftIn&&st.shiftOut)? {i:st.shiftIn,o:st.shiftOut} : null;
+  };
+  /* นาทีที่เข้าสาย (หลังผ่อนผัน) เทียบกะของวัน · 0 = ไม่สาย */
+  const lateOf=(d,pin,pr)=>{
+    const st=stOf(pin); if(st&&st.kind==='maid') return 0;
+    const sh=shiftOfDay(d,pin); if(!sh||!pr||!pr.pairs||!pr.pairs.length) return 0;
+    const sIn=attHM(sh.i), aIn=attHM(pr.pairs[0].i);
+    if(sIn==null||aIn==null) return 0;
+    const gr=(cfg.diligGrace!=null? Number(cfg.diligGrace) : 0);
+    const lt=aIn-sIn; return lt>gr? lt : 0;
+  };
   /* ชั่วโมงกะปกติของคนนั้น (จากโปรไฟล์ ไม่มีก็ใช้ค่ากลาง) */
   const shiftHrsOf=(pin)=>{
     const st=stOf(pin);
@@ -3353,11 +3604,12 @@ function AttendPanel({ user }){
     return cfg.shiftHrs || 10;
   };
   /* OT (นาที) — มาก่อนเวลาไม่บวก · เข้าสายหัก · ออกช้าบวก · ออกก่อนหัก */
-  const otMinFrom=(pin, pr)=>{
+  const otMinFrom=(pin, pr, d)=>{
     const st=stOf(pin);
     if(st && st.kind==='maid') return 0;   /* 🧹 แม่บ้าน: เวลาไว้ดูอย่างเดียว ไม่คิด OT จากเวลา */
-    if(st && st.shiftIn && st.shiftOut && pr && pr.pairs && pr.pairs.length){
-      const sIn=attHM(st.shiftIn), sOut=attHM(st.shiftOut);
+    const sh=(d!=null)? shiftOfDay(d,pin) : ((st&&st.shiftIn&&st.shiftOut)? {i:st.shiftIn,o:st.shiftOut} : null);
+    if(sh && pr && pr.pairs && pr.pairs.length){
+      const sIn=attHM(sh.i), sOut=attHM(sh.o);
       const first=pr.pairs[0], last=pr.pairs[pr.pairs.length-1];
       const aIn=attHM(first.i), aOut=attHM(last.o);
       if(sIn!=null && sOut!=null && aIn!=null && aOut!=null){
@@ -3466,7 +3718,7 @@ function AttendPanel({ user }){
         if(v && (shopF==='all' || hasShop(d,who,shopF))){
           const pr=parseRow(v);
           const hl=isHol(d,who);
-          rows.push({ pin:who, ...v, ...pr, shop:shopOf(d,who), otMin: hl?0:otMinFrom(who,pr), hol:hl });
+          rows.push({ pin:who, ...v, ...pr, shop:shopOf(d,who), otMin: hl?0:otMinFrom(who,pr,d), late: hl?0:lateOf(d,who,pr), sched:schedOf(d,who), hol:hl });
         }
         out.push({ d, rows, full:true });
       }
@@ -3477,11 +3729,11 @@ function AttendPanel({ user }){
         .filter(p=> who==='all' || String(p)===who)
         .filter(p=> shopF==='all' || hasShop(d,p,shopF))
         .sort((a,b)=>(+a)-(+b))
-        .map(p=>{ const pr=parseRow(scans[d][p]||{}); const hl=isHol(d,p); return { pin:p, ...(scans[d][p]||{}), ...pr, shop:shopOf(d,p), otMin: hl?0:otMinFrom(p,pr), hol:hl }; });
+        .map(p=>{ const pr=parseRow(scans[d][p]||{}); const hl=isHol(d,p); return { pin:p, ...(scans[d][p]||{}), ...pr, shop:shopOf(d,p), otMin: hl?0:otMinFrom(p,pr,d), late: hl?0:lateOf(d,p,pr), sched:schedOf(d,p), hol:hl }; });
       if(rows.length) out.push({ d, rows });
     });
     return out;
-  },[scans,who,shopF,shopMap,staff,ym,holMap,cfg]);
+  },[scans,who,shopF,shopMap,staff,ym,holMap,cfg,schedMap]);
 
   const sum=React.useMemo(()=>{
     const per={};
@@ -3492,7 +3744,7 @@ function AttendPanel({ user }){
         per[p].days++;
         per[p].hours+=r.net;
         const hl2=isHol(d,p);
-        if(hl2){ per[p].hol++; per[p].holHours+=r.net; } else per[p].otMin+=otMinFrom(p,r);
+        if(hl2){ per[p].hol++; per[p].holHours+=r.net; } else per[p].otMin+=otMinFrom(p,r,d);
         shopsOf(d,p).forEach(function(sid){
           if(!per[p].byShop[sid]) per[p].byShop[sid]={ days:0, hours:0 };
           per[p].byShop[sid].days++;
@@ -3520,7 +3772,7 @@ function AttendPanel({ user }){
       const r=v? parseRow(v) : null;
       const lvv=leaveOf(d,who);
       const hol=isHol(d,who);
-      const otMin=(r && !hol)? otMinFrom(who,r) : 0;
+      const otMin=(r && !hol)? otMinFrom(who,r,d) : 0;
       if(r){ wk++; wh+=r.net; wot+=otMin; if(hol){ whol++; wholH+=r.net; } }
       else { const t=(lvv&&lvv.t)||'off'; lv[t]=(lv[t]||0)+1; }
       rowsAll.push({ d, r, lv:lvv, dt:new Date(yy,mm-1,d), otMin, hol });
@@ -3873,6 +4125,9 @@ function AttendPanel({ user }){
 
         {user.role==='admin' && (
           <div className="mt-2">
+            <button className="press kanit text-[13px] w-full py-2 mb-1" style={{border:'1.5px solid var(--primary)',borderRadius:12,background:'#fff',color:'var(--primary)',fontWeight:700}}
+              onClick={()=>setShowSched(true)}>📅 ตารางงาน · นำเข้า Excel / แก้รายวัน</button>
+            {showSched && <ScheduleSheet ym={ym} staff={staff} schedMap={schedMap} setSchedMap={setSchedMap} onClose={()=>setShowSched(false)}/>}
             <button className="press kanit text-[12px] w-full py-1.5" style={{border:'none',background:'none',color:'var(--muted)'}}
               onClick={()=>setShowSync(!showSync)}>🔄 ย้ายข้อมูลกับหน้าเงินเดือน {showSync?'▴':'▾'}</button>
             {showSync && (
@@ -4010,8 +4265,12 @@ function AttendPanel({ user }){
                     {li.emoji} {li.label}
                     {lvv && lvv.n && <span className="text-[12px]" style={{color:'var(--muted)',fontWeight:400,marginLeft:8}}>· {lvv.n}</span>}
                   </div>
-                  <div className="num text-[12.5px]" style={{width:236,padding:'9px 6px',display:'flex',alignItems:'center',color:'var(--muted)',opacity:.6}}>
-                    {st1 && st1.shiftIn && st1.shiftOut ? ('ปกติ '+st1.shiftIn+'→'+st1.shiftOut) : ''}
+                  <div className="num text-[12.5px]" style={{width:236,padding:'9px 6px',display:'flex',alignItems:'center',color:'var(--muted)',opacity:.85}}>
+                    {(()=>{ const sv=schedOf(d,who); const sr=schedRange(sv);
+                      if(sr && !lvv) return <span className="kanit" style={{color:'#CE4A5A',fontWeight:700}}>⚠️ มีตาราง {sr.i}→{sr.o} แต่ไม่มีสแกน</span>;
+                      if(sv==='off') return <span className="kanit" style={{color:'#3E7D3E'}}>หยุดตามตาราง ✓</span>;
+                      if(sv==='other') return <span className="kanit">ตารางว่าทำที่อื่น</span>;
+                      return (st1 && st1.shiftIn && st1.shiftOut)? ('ปกติ '+st1.shiftIn+'→'+st1.shiftOut) : ''; })()}
                   </div>
                   <div style={{width:80,padding:'9px 8px',display:'flex',alignItems:'center',justifyContent:'flex-end',color:'var(--muted)'}}>–</div>
                   <div style={{width:62,padding:'9px 4px',display:'flex',alignItems:'center',justifyContent:'flex-end',color:'var(--muted)'}}>–</div>
@@ -4027,7 +4286,8 @@ function AttendPanel({ user }){
               <div key={d+'-'+r.pin} className="flex items-stretch px-0 text-[13px]"
                 style={{
                   background: zebra,
-                  borderTop: ri===0 ? '2px solid var(--line)' : '1px solid rgba(0,0,0,.045)'
+                  borderTop: ri===0 ? '2px solid var(--line)' : '1px solid rgba(0,0,0,.045)',
+                  ...(r.late? {background:'#FFF1F1'} : {})
                 }}>
                 <div style={{width:118,padding:'9px 10px',borderRight:'1px solid rgba(0,0,0,.06)',display:'flex',alignItems:'center'}}>
                   {ri===0 ? (
@@ -4050,10 +4310,14 @@ function AttendPanel({ user }){
                 </div>
                 <div style={{width:236,color:'var(--muted)',padding:'9px 6px',display:'flex',alignItems:'center',flexWrap:'wrap',gap:2}} className="num text-[12.5px]">
                   {r.pairs.map((x,k)=>(
-                    <span key={k} style={{marginRight:10,whiteSpace:'nowrap'}}>
+                    <span key={k} style={{marginRight:10,whiteSpace:'nowrap',color:(k===0&&r.late)?'#CE4A5A':'inherit',fontWeight:(k===0&&r.late)?700:400}}>
                       {x.i}<span style={{opacity:.6}}>→</span><span style={{color: x.o? 'inherit':'var(--neg)'}}>{x.o||'?'}</span>
                     </span>
                   ))}
+                  {(()=>{ const sh=shiftOfDay(d,r.pin); const sv=r.sched;
+                    return (<span className="kanit text-[10.5px]" style={{flexBasis:'100%',color: r.late?'#CE4A5A':'var(--muted)',opacity: r.late?1:.75,fontWeight: r.late?700:400}}>
+                      {r.late? ('⚠️ สาย '+r.late+' น.') : ''}{r.late&&sh? ' · ':''}{sh? ('กะ '+sh.i+'→'+sh.o+(schedRange(sv)?'':' (ประจำ)')) : (sv==='off'?'ตารางว่าหยุด':sv==='other'?'ตารางว่าทำที่อื่น':'')}
+                    </span>); })()}
                 </div>
                 <div className="num" style={{width:80,padding:'9px 8px',textAlign:'right',fontWeight:700,display:'flex',alignItems:'center',justifyContent:'flex-end',color: hasShop(d,r.pin,'owlcha')? (r.net>=10?'#3E7D3E':'var(--ink)') : 'var(--line)'}}>{hasShop(d,r.pin,'owlcha')? (r.net? r.net+'ช':'–') : <span className="kanit text-[10.5px]" style={{fontWeight:400,color:'var(--muted)'}}>ทำที่อื่น</span>}</div>
                 <div className="num" style={{width:62,padding:'9px 4px',textAlign:'right',display:'flex',alignItems:'center',justifyContent:'flex-end',fontWeight:700,fontSize:12,color: r.hol?'#CE4A5A':(r.otMin>0?'#C68B4A':(r.otMin<0?'#CE4A5A':'var(--muted)'))}}>{!hasShop(d,r.pin,'owlcha')? '–' : (r.hol? '×2' : minTxt(r.otMin))}</div>
@@ -4109,9 +4373,11 @@ function AttendPanel({ user }){
                 <div className="flex-1 min-w-0">
                   <div className="kanit text-[13.5px]" style={{color:li.color,fontWeight:600}}>{li.emoji} {li.label}</div>
                   {lvv && lvv.n && <div className="text-[12px]" style={{color:'var(--muted)'}}>{lvv.n}</div>}
-                  {!lvv && st1 && st1.shiftIn && st1.shiftOut && (
-                    <div className="num text-[11.5px]" style={{color:'var(--muted)',opacity:.7}}>ปกติ {st1.shiftIn}→{st1.shiftOut}</div>
-                  )}
+                  {(()=>{ const sv=schedOf(d,who); const sr=schedRange(sv);
+                    if(sr && !lvv) return <div className="kanit text-[12px]" style={{color:'#CE4A5A',fontWeight:700}}>⚠️ มีตาราง {sr.i}→{sr.o} แต่ไม่มีสแกน</div>;
+                    if(sv==='off') return <div className="kanit text-[11.5px]" style={{color:'#3E7D3E'}}>หยุดตามตาราง ✓</div>;
+                    if(sv==='other') return <div className="kanit text-[11.5px]" style={{color:'var(--muted)'}}>ตารางว่าทำที่อื่น</div>;
+                    return (!lvv && st1 && st1.shiftIn && st1.shiftOut)? <div className="num text-[11.5px]" style={{color:'var(--muted)',opacity:.7}}>ปกติ {st1.shiftIn}→{st1.shiftOut}</div> : null; })()}
                 </div>
                 <button className="press kanit text-[12px]" style={{border:'1px solid var(--line)',background:'var(--card)',borderRadius:9,padding:'5px 13px',flex:'none',fontWeight:600}}
                   onClick={()=>openStatus(d,who)}>⚙️ เปลี่ยนสถานะ</button>
@@ -4129,7 +4395,7 @@ function AttendPanel({ user }){
               </div>
             </div>
             {rows.map(r=>(
-              <div key={r.pin} className="py-1.5" style={{borderTop:'1px solid var(--line)'}} onClick={()=>openEdit(d,r.pin)}>
+              <div key={r.pin} className="py-1.5" style={{borderTop:'1px solid var(--line)',...(r.late? {background:'#FFF1F1',marginLeft:-12,marginRight:-12,paddingLeft:12,paddingRight:12} : {})}} onClick={()=>openEdit(d,r.pin)}>
                 <div className="flex items-center gap-2">
                   <div className="kanit text-[13.5px] flex-1 min-w-0" style={{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
                     {nameOf(r.pin)}
@@ -4154,9 +4420,14 @@ function AttendPanel({ user }){
                   {r.hol && <span className="text-[10.5px]" style={{color:'#CE4A5A',fontWeight:700}}>🆘×2</span>}
                   <span className="text-[12px]" style={{color:'var(--muted)'}}>✏️</span>
                 </div>
+                {(()=>{ const sh=shiftOfDay(d,r.pin); const sv=r.sched;
+                  if(!r.late && !sh && !sv) return null;
+                  return (<div className="kanit text-[11px] mt-0.5" style={{paddingLeft:8,color: r.late?'#CE4A5A':'var(--muted)',fontWeight: r.late?700:400}}>
+                    {r.late? ('⚠️ สาย '+r.late+' นาที') : ''}{r.late&&sh?' · ':''}{sh? ('กะ '+sh.i+'→'+sh.o+(schedRange(sv)?'':' (ประจำ)')) : (sv==='off'?'ตารางว่าหยุด':sv==='other'?'ตารางว่าทำที่อื่น':'')}
+                  </div>); })()}
                 {r.pairs.map((p,k)=>(
                   <div key={k} className="flex items-center gap-2 mt-0.5 text-[12.5px]" style={{color:'var(--muted)',paddingLeft:8}}>
-                    <span className="num">{p.i}</span><span>→</span>
+                    <span className="num" style={{color:(k===0&&r.late)?'#CE4A5A':'inherit',fontWeight:(k===0&&r.late)?700:400}}>{p.i}</span><span>→</span>
                     <span className="num" style={{color: p.o? 'inherit':'var(--neg)'}}>{p.o||'ยังไม่ออก'}</span>
                     <span className="num" style={{marginLeft:'auto'}}>{p.h!=null? p.h+' ชม.':''}</span>
                   </div>
@@ -4180,7 +4451,7 @@ function AttendPanel({ user }){
           const r=v? parseRow(v) : null;
           const lvv=leaveOf(d,detail);
           const hol=isHol(d,detail);
-          const otMin=(r && !hol)? otMinFrom(detail,r) : 0;
+          const otMin=(r && !hol)? otMinFrom(detail,r,d) : 0;
           if(r){ wk++; wh+=r.net; wot+=otMin; if(hol){ whol++; wholH+=r.net; } }
           else { const t=(lvv&&lvv.t)||'off'; lv[t]=(lv[t]||0)+1; }
           rowsAll.push({ d, r, lv:lvv, dt:new Date(Y,M-1,d), otMin, hol });
@@ -5215,9 +5486,9 @@ function OCTabPay({ toast }){
               {!r.isMaid && <span className="flex items-center gap-1">OT{r.otAuto>0? <span className="num"> {ocFmt(r.otAuto,1)}+</span>:null} <OCPayIn value={(mo.ot||{})[r.st.id]} onChange={v=>setOt(r.st.id,v)} w="44px" ph="เพิ่ม"/> <span>= <b className="num">{ocFmt(r.otH,1)}ชม. · {ocFmt(r.otB,0)}฿</b></span></span>}
               {!r.isMaid && (
                 <button className="press kanit" style={chipS(r.dl>0)} onClick={()=>togDilig(r.st.id)}
-                  title={'ทำงาน '+r.workedDays+'/'+r.diligMinDays+' วัน'+(r.lateDays>0? (' · สาย '+r.lateDays+' วัน รวม '+r.lateMin+' นาที') : ' · ไม่สายเลย')}>
+                  title={'ทำงาน '+r.workedDays+'/'+r.diligMinDays+' วัน'+(r.lateDays>0? (' · สาย '+r.lateDays+' วัน รวม '+r.lateMin+' นาที (วันที่ '+(r.lateList||[]).join(', ')+')') : ' · ไม่สายเลย')}>
                   เบี้ยขยัน {r.dl>0? ocFmt(r.dl,0) : '✗'}
-                  {r.lateDays>0 && <span style={{opacity:.8,fontSize:11}}> · สาย {r.lateDays}ว</span>}
+                  {r.lateDays>0 && <span style={{opacity:.9,fontSize:11,color:'#CE4A5A'}}> · สาย {r.lateDays}ว ({(r.lateList||[]).join(',')})</span>}
                   {!r.diligDaysOk && <span style={{opacity:.8,fontSize:11}}> · {r.workedDays}/{r.diligMinDays}ว</span>}
                   {r.diligForced && <span style={{opacity:.7,fontSize:11}}> ✋</span>}
                 </button>
@@ -8400,9 +8671,148 @@ async function addCapital({shopId,shareholder,type,amount,note,by,actor,method})
   return ref.id;
 }
 
+/* ---- 🖼 สรุปรายปีเป็นรูปภาพ (ให้หุ้นส่วนดู/บันทึกได้) ---- */
+const YR_TM=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+function yrCalc(io,cap,year){
+  const Y=String(year);
+  const yIO=io.filter(t=>String(t.date||'').slice(0,4)===Y);
+  const mon={}; for(let i=1;i<=12;i++) mon[i]={inc:0,exp:0};
+  yIO.forEach(t=>{ const k=+String(t.date).slice(5,7); if(!mon[k]) return; const a=Number(t.amount)||0;
+    if(t.kind==='income') mon[k].inc+=a; else if(t.kind==='expense') mon[k].exp+=a; });
+  const active=Object.keys(mon).map(Number).filter(k=>mon[k].inc||mon[k].exp);
+  const from=active.length?Math.min(...active):1, to=active.length?Math.max(...active):1;
+  const rows=[]; for(let k=from;k<=to;k++) rows.push({m:k,...mon[k]});
+  const inc=rows.reduce((a,r)=>a+r.inc,0), exp=rows.reduce((a,r)=>a+r.exp,0);
+  const cats={}; yIO.forEach(t=>{ if(t.kind!=='expense') return; const c=t.category||'อื่นๆ'; cats[c]=(cats[c]||0)+(Number(t.amount)||0); });
+  const expCats=Object.entries(cats).map(([n,a])=>({n,a})).sort((x,z)=>z.a-x.a);
+  const S=(k,f)=>cap.reduce((s,t)=>s+((t.kind===k&&(!f||f(t)))?(Number(t.amount)||0):0),0);
+  const inYear=t=>String(t.date||'').slice(0,4)===Y;
+  const investAll=S('invest')-S('withdraw');
+  const divYear=S('dividend',inYear);
+  const incAll=io.reduce((a,t)=>a+(t.kind==='income'?(Number(t.amount)||0):0),0);
+  const expAll=io.reduce((a,t)=>a+(t.kind==='expense'?(Number(t.amount)||0):0),0);
+  const balance=investAll+incAll-expAll-S('dividend');
+  return {rows,inc,exp,profit:inc-exp,expCats,investAll,divYear,balance,best:rows.reduce((b,r)=>(!b||(r.inc-r.exp)>(b.inc-b.exp))?r:b,null)};
+}
+async function yrDraw(shop,c,year){
+  try{ if(document.fonts&&document.fonts.ready) await document.fonts.ready; }catch(e){}
+  const th=shop.theme||{}; const P=th.primary||'#13294B', A=th.accent||'#C68B4A', T=th.tint||'#F3F4F6';
+  const W=1080, RH=58;
+  const catN=Math.min(6,c.expCats.length);
+  const H=250+190+90+RH*(c.rows.length+1)+40+(catN?90+catN*64:0)+250+90;
+  const cv=document.createElement('canvas'); cv.width=W; cv.height=H;
+  const g=cv.getContext('2d');
+  const F=(w,sz)=>w+' '+sz+'px Kanit, "Noto Sans Thai", Tahoma, sans-serif';
+  const num=n=>(n<0?'-':'')+Math.abs(Math.round(n||0)).toLocaleString('en-US');
+  const bt=n=>(n<0?'-':'')+'฿'+Math.abs(Math.round(n||0)).toLocaleString('en-US');
+  const rr=(x,y,w,h,r,fill)=>{ g.beginPath(); g.moveTo(x+r,y); g.arcTo(x+w,y,x+w,y+h,r); g.arcTo(x+w,y+h,x,y+h,r); g.arcTo(x,y+h,x,y,r); g.arcTo(x,y,x+w,y,r); g.closePath(); g.fillStyle=fill; g.fill(); };
+  g.fillStyle='#FAFAF8'; g.fillRect(0,0,W,H);
+  /* หัว */
+  g.fillStyle=P; g.fillRect(0,0,W,230);
+  if(shop.logo){ try{ const im=await new Promise((ok,no)=>{ const i=new Image(); i.onload=()=>ok(i); i.onerror=no; i.src=shop.logo; });
+      g.save(); g.beginPath(); g.arc(112,115,64,0,Math.PI*2); g.closePath(); g.fillStyle='#fff'; g.fill(); g.clip();
+      g.drawImage(im,48,51,128,128); g.restore(); }catch(e){} }
+  g.fillStyle='#fff'; g.textAlign='left';
+  g.font=F(700,46); g.fillText('สรุปผลประกอบการ ปี '+(year+543),206,108);
+  g.font=F(400,26); g.fillStyle='rgba(255,255,255,.82)'; g.fillText(shop.name+(shop.brand?' · '+shop.brand:''),206,152);
+  g.font=F(400,20); g.fillStyle='rgba(255,255,255,.62)'; g.fillText('ข้อมูล ณ '+today(),206,190);
+  /* KPI */
+  let y=260; const kw=(W-48*2-24*2)/3;
+  [['รายรับ',c.inc,'#16A34A'],['รายจ่าย',c.exp,'#DC2626'],['กำไรสุทธิ',c.profit,c.profit>=0?P:'#DC2626']].forEach((k,i)=>{
+    const x=48+i*(kw+24);
+    rr(x,y,kw,160,22,'#fff'); g.strokeStyle='#ECECEC'; g.lineWidth=2; g.stroke();
+    g.fillStyle='#7A7A7A'; g.font=F(500,24); g.textAlign='left'; g.fillText(k[0],x+26,y+48);
+    g.fillStyle=k[2]; g.font=F(700,Math.abs(k[1])>=1e6?38:44); g.fillText(bt(k[1]),x+26,y+118);
+  });
+  /* ตารางรายเดือน */
+  y=470;
+  g.fillStyle=P; g.font=F(700,30); g.textAlign='left'; g.fillText('รายเดือน',48,y); y+=26;
+  const CX=[70,470,730,W-70];
+  rr(48,y,W-96,RH,14,T);
+  g.fillStyle=P; g.font=F(600,23);
+  g.textAlign='left'; g.fillText('เดือน',CX[0],y+38);
+  g.textAlign='right'; g.fillText('รายรับ',CX[1],y+38); g.fillText('รายจ่าย',CX[2],y+38); g.fillText('กำไร',CX[3],y+38);
+  y+=RH;
+  const maxInc=Math.max(1,...c.rows.map(r=>r.inc));
+  c.rows.forEach((r,i)=>{
+    if(i%2) { g.fillStyle='#F4F4F2'; g.fillRect(48,y,W-96,RH); }
+    const bw=(CX[1]-230)*(r.inc/maxInc);
+    g.fillStyle=A+'33'; g.fillRect(CX[1]-bw,y+12,bw,RH-24);
+    const pr=r.inc-r.exp;
+    g.font=F(500,24); g.fillStyle='#2B2B2B'; g.textAlign='left'; g.fillText(YR_TM[r.m-1]+' '+(year+543),CX[0],y+38);
+    g.textAlign='right';
+    g.fillStyle='#16A34A'; g.fillText(r.inc?num(r.inc):'–',CX[1],y+38);
+    g.fillStyle='#DC2626'; g.fillText(r.exp?num(r.exp):'–',CX[2],y+38);
+    g.fillStyle=pr>=0?P:'#DC2626'; g.font=F(700,24); g.fillText((r.inc||r.exp)?num(pr):'–',CX[3],y+38);
+    y+=RH;
+  });
+  rr(48,y,W-96,RH+4,14,P);
+  g.fillStyle='#fff'; g.font=F(700,25); g.textAlign='left'; g.fillText('รวมทั้งปี',CX[0],y+40);
+  g.textAlign='right'; g.fillText(num(c.inc),CX[1],y+40); g.fillText(num(c.exp),CX[2],y+40); g.fillText(num(c.profit),CX[3],y+40);
+  y+=RH+60;
+  /* รายจ่ายแยกหมวด */
+  if(catN){
+    g.fillStyle=P; g.font=F(700,30); g.textAlign='left'; g.fillText('รายจ่ายหลัก',48,y); y+=30;
+    const tot=Math.max(1,c.exp);
+    c.expCats.slice(0,catN).forEach(k=>{
+      g.fillStyle='#2B2B2B'; g.font=F(500,23); g.textAlign='left'; g.fillText(k.n,48,y+26);
+      g.textAlign='right'; g.font=F(600,23); g.fillText(num(k.a)+'  ·  '+Math.round(k.a/tot*100)+'%',W-48,y+26);
+      rr(48,y+38,W-96,12,6,'#EDEBE6'); rr(48,y+38,Math.max(12,(W-96)*k.a/tot),12,6,'#DC2626');
+      y+=64;
+    });
+    y+=30;
+  }
+  /* ทุน */
+  rr(48,y,W-96,200,22,T);
+  g.fillStyle=P; g.font=F(700,28); g.textAlign='left'; g.fillText('ทุนและเงินคงเหลือ',78,y+50);
+  const cw=(W-96-60)/3;
+  [['ลงทุนสุทธิ (สะสม)',c.investAll],['ปันผลจ่ายปีนี้',c.divYear],['เงินคงเหลือ (ประมาณ)',c.balance]].forEach((k,i)=>{
+    const x=78+i*(cw+10);
+    g.fillStyle='#6B6B6B'; g.font=F(500,21); g.fillText(k[0],x,y+104);
+    g.fillStyle=k[1]<0?'#DC2626':P; g.font=F(700,34); g.fillText(bt(k[1]),x,y+152);
+  });
+  y+=240;
+  g.fillStyle='#9A9A9A'; g.font=F(400,19); g.textAlign='center';
+  g.fillText('PLP Finance · สร้างอัตโนมัติจากข้อมูลในระบบ · เงินคงเหลือนับรวมทุกช่วงเวลา',W/2,y);
+  const fin=document.createElement('canvas'); fin.width=W; fin.height=Math.min(H,y+44);
+  const g2=fin.getContext('2d'); g2.fillStyle='#FAFAF8'; g2.fillRect(0,0,W,fin.height); g2.drawImage(cv,0,0);
+  return fin.toDataURL('image/jpeg',0.93);
+}
+function YearReportSheet({shop,io,cap,onClose}){
+  const years=[...new Set([new Date().getFullYear(), ...io.map(t=>+String(t.date||'').slice(0,4)).filter(Boolean)])].sort((a,b)=>b-a);
+  const [year,setYear]=useState(years[0]);
+  const [img,setImg]=useState('');
+  const c=yrCalc(io,cap,year);
+  useEffect(()=>{ let live=true; setImg(''); yrDraw(shop,c,year).then(u=>{ if(live) setImg(u); }); return ()=>{ live=false; }; },[year,shop.id]);
+  const save=()=>{ const a=document.createElement('a'); a.download='สรุปปี_'+(year+543)+'_'+shop.name+'.jpg'; a.href=img; document.body.appendChild(a); a.click(); a.remove(); };
+  return (
+    <Sheet title="สรุปรายปี" onClose={onClose} z={70}>
+      <div style={{display:'flex',gap:8,marginBottom:12,flexWrap:'wrap'}}>
+        {years.map(y=>(
+          <button key={y} onClick={()=>setYear(y)} className="press kanit" style={{padding:'8px 16px',borderRadius:11,fontSize:14,fontWeight:600,border:`1.5px solid ${year===y?'var(--primary)':'var(--line)'}`,background:year===y?'var(--primary)':'#fff',color:year===y?'#fff':'var(--ink)'}}>ปี {y+543}</button>
+        ))}
+      </div>
+      <div style={{display:'flex',gap:8,marginBottom:12}}>
+        {[['รายรับ',c.inc,'#16A34A'],['รายจ่าย',c.exp,'#DC2626'],['กำไร',c.profit,c.profit>=0?'var(--primary)':'#DC2626']].map(([l,v,col])=>(
+          <div key={l} style={{flex:1,background:'#fff',border:'1px solid var(--line)',borderRadius:12,padding:'9px 10px'}}>
+            <div style={{fontSize:11,color:'var(--muted)'}}>{l}</div>
+            <div className="num" style={{fontSize:15.5,fontWeight:800,color:col}}>{baht(v)}</div>
+          </div>
+        ))}
+      </div>
+      <div style={{background:'var(--bg)',border:'1px solid var(--line)',borderRadius:14,padding:8,marginBottom:12,minHeight:220,display:'grid',placeItems:'center'}}>
+        {img? <img src={img} alt="สรุปรายปี" style={{width:'100%',borderRadius:10,display:'block'}}/> : <Loading label="กำลังสร้างรูป..."/>}
+      </div>
+      <button onClick={save} disabled={!img} className="press kanit" style={{width:'100%',padding:'14px',border:'none',borderRadius:14,background:'var(--primary)',color:'#fff',fontSize:15.5,fontWeight:600,opacity:img?1:.5}}>🖼 บันทึกรูปภาพ</button>
+      <div style={{fontSize:11.5,color:'var(--muted)',textAlign:'center',marginTop:8,lineHeight:1.6}}>หรือกดค้างที่รูปเพื่อแชร์เข้าไลน์ได้เลย</div>
+    </Sheet>
+  );
+}
+
 function ShopSummary({shop}){
   const [load,setLoad]=useState(true);
   const [d,setD]=useState(null);
+  const [showYr,setShowYr]=useState(false);
   useEffect(()=>{ let live=true; (async()=>{
     setLoad(true);
     try{
@@ -8492,6 +8902,9 @@ function ShopSummary({shop}){
           )}
         </div>
       </div>
+
+      <button onClick={()=>setShowYr(true)} className="press kanit" style={{width:'100%',padding:'13px',marginBottom:14,border:'1.5px solid var(--primary)',borderRadius:14,background:'#fff',color:'var(--primary)',fontWeight:700,fontSize:14.5,display:'flex',justifyContent:'center',alignItems:'center',gap:8}}>🖼 สรุปรายปี (รูปภาพ)</button>
+      {showYr && <YearReportSheet shop={shop} io={io} cap={cap} onClose={()=>setShowYr(false)}/>}
 
       {catCard('รายรับแยกหมวด (ทั้งหมด)', incCats, income, '#16A34A')}
       {catCard('รายจ่ายแยกหมวด (ทั้งหมด)', expCats, expense, '#DC2626')}
