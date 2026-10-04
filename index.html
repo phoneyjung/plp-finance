@@ -8374,6 +8374,88 @@ function posParse(XLSX,wb){
   return null;
 }
 
+/* ===== นำเข้าไฟล์แอปแม่บ้าน (otteri-teddy-app export รายเดือน) ===== */
+const TH_MON_ABBR={'ม.ค.':1,'ก.พ.':2,'มี.ค.':3,'เม.ย.':4,'พ.ค.':5,'มิ.ย.':6,'ก.ค.':7,'ส.ค.':8,'ก.ย.':9,'ต.ค.':10,'พ.ย.':11,'ธ.ค.':12};
+function maidParse(XLSX,wb){
+  const wsJ=wb.Sheets['รายการงาน'], wsS=wb.Sheets['สรุปรวม'], wsD=wb.Sheets['รายวัน'];
+  if(!wsJ && !wsD) return null;
+  let brand='', ym='';
+  if(wsS){
+    const sm=XLSX.utils.sheet_to_json(wsS,{header:1,raw:true,defval:''});
+    const a1=String((sm[0]||[])[0]||''), b1=String((sm[0]||[])[1]||'').trim();
+    const bm=a1.match(/Teddy\s*(\d)/i); if(bm) brand='teddy'+bm[1]; else if(/otteri/i.test(a1)) brand='otteri';
+    const mm=b1.match(/^(\S+)\s+(\d{4})$/); if(mm && TH_MON_ABBR[mm[1]]){ let y=+mm[2]; if(y>2400) y-=543; ym=`${y}-${pad(TH_MON_ABBR[mm[1]])}`; }
+  }
+  const days={}; const maids={}; let jobs=0;
+  const blank=()=>({n:0,cash:0,bank:0,dlv:0,dlvCash:0,dlvBank:0,dlvN:0,fold:0,baskets:0});
+  if(wsJ){
+    const raw=XLSX.utils.sheet_to_json(wsJ,{header:1,raw:true,defval:''});
+    const hs=(raw[0]||[]).map(x=>String(x||'').trim()); const ix=(n)=>hs.indexOf(n);
+    const iD=ix('วันที่'), iM=ix('แม่บ้าน'), iTot=ix('ยอดรวม'), iC=ix('เงินสด'), iB=ix('เงินโอน'), iDl=ix('ค่าส่ง'), iF=ix('ค่าพับ'), iBk=ix('ตะกร้าพับ');
+    if(iD<0||iTot<0) return null;
+    raw.slice(1).forEach(r=>{
+      const ds=String(r[iD]||'').trim(); const m=ds.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/); if(!m) return;
+      let y=+m[3]; if(y>2400) y-=543; const key=`${y}-${pad(+m[2])}-${pad(+m[1])}`;
+      const o=(days[key]=days[key]||blank());
+      const cash=xAmt(r[iC])||0, bank=xAmt(r[iB])||0, dlv=iDl>=0?(xAmt(r[iDl])||0):0, fold=iF>=0?(xAmt(r[iF])||0):0, bk=iBk>=0?(xAmt(r[iBk])||0):0;
+      o.n++; o.cash+=cash; o.bank+=bank; o.dlv+=dlv; o.fold+=fold; o.baskets+=bk;
+      if(dlv>0){ o.dlvN++; if(cash>0 && bank<=0) o.dlvCash+=dlv; else o.dlvBank+=dlv; }
+      const mn=String(r[iM]||'').trim()||'(ไม่ระบุ)'; maids[mn]=(maids[mn]||0)+1; jobs++;
+    });
+  } else {
+    if(!ym) return null;
+    const raw=XLSX.utils.sheet_to_json(wsD,{header:1,raw:true,defval:''});
+    const hs=(raw[0]||[]).map(x=>String(x||'').trim()); const ix=(n)=>hs.indexOf(n);
+    const iD=ix('วันที่'), iN=ix('จำนวนงาน'), iC=ix('เงินสด'), iB=ix('เงินโอน'), iDl=ix('ค่าส่ง'), iF=ix('ค่าพับ');
+    if(iD<0||iC<0) return null;
+    raw.slice(1).forEach(r=>{ const d=parseInt(r[iD]); if(!d||d>31) return; const key=`${ym}-${pad(d)}`;
+      const o=(days[key]=blank()); o.n=Math.round(xAmt(r[iN])||0); o.cash=xAmt(r[iC])||0; o.bank=xAmt(r[iB])||0;
+      o.dlv=iDl>=0?(xAmt(r[iDl])||0):0; o.dlvBank=o.dlv; o.fold=iF>=0?(xAmt(r[iF])||0):0; jobs+=o.n; });
+  }
+  const dates=Object.keys(days).sort(); if(!dates.length) return null;
+  if(!ym) ym=dates[0].slice(0,7);
+  const R=(v)=>Math.round(v*100)/100;
+  const rows=dates.map(d=>{ const o=days[d]; return {date:d,ym:d.slice(0,7),n:o.n,cash:R(o.cash),bank:R(o.bank),dlv:R(o.dlv),dlvCash:R(o.dlvCash),dlvBank:R(o.dlvBank),dlvN:o.dlvN,fold:R(o.fold),baskets:o.baskets}; });
+  return {mode:'maid',brand,ym,rows,maids,jobs,fromJobs:!!wsJ};
+}
+/* ===== นำเข้า CSV ระบบรับเงินตู้ (QR + เงินสด รายวัน) ===== */
+const EN_MON={jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12};
+function kioskParse(XLSX,wb){
+  const ws=wb.Sheets[wb.SheetNames[0]]; if(!ws) return null;
+  const raw=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:''});
+  if(raw.length<2) return null;
+  const hs=(raw[0]||[]).map(x=>String(x||'').replace(/^\uFEFF/,'').trim());
+  const iCat=hs.findIndex(h=>h.toLowerCase()==='category'); if(iCat<0) return null;
+  const iPts=hs.findIndex(h=>h.indexOf('ใช้แต้ม')>=0||h.indexOf('สะสมแต้ม')>=0);
+  const iQr=hs.findIndex(h=>h.toLowerCase()==='qr'), iCash=hs.findIndex(h=>h==='เงินสด');
+  if(iQr<0 && iCash<0) return iPts>=0? {mode:'points'} : null;
+  const rows=[];
+  raw.slice(1).forEach(r=>{
+    const ds=String(r[iCat]||'').trim(); let key=null;
+    const m=ds.match(/^[A-Za-z]{3}\s+([A-Za-z]{3})\s+(\d{1,2})\s+(\d{4})$/);
+    if(m && EN_MON[m[1].toLowerCase()]) key=`${m[3]}-${pad(EN_MON[m[1].toLowerCase()])}-${pad(+m[2])}`;
+    else { const d=xDate(ds); if(d) key=d; }
+    if(!key) return;
+    const qr=iQr>=0?(xAmt(r[iQr])||0):0, cash=iCash>=0?(xAmt(r[iCash])||0):0;
+    rows.push({date:key,ym:key.slice(0,7),qr:Math.round(qr*100)/100,cash:Math.round(cash*100)/100});
+  });
+  if(!rows.length) return null;
+  return {mode:'kiosk',rows};
+}
+/* เทียบแผน (วันที่+mkey) กับรายการที่ลงไว้แล้วจาก source เดียวกัน */
+function planDiff(rows, docsOf, ex){
+  const add=[], chg=[], same=[], del=[];
+  rows.forEach(r=>{
+    const have=(ex&&ex[r.date])||{}; const seen={};
+    docsOf(r).forEach(d=>{ seen[d.mkey]=1; const e=have[d.mkey];
+      if(!e) add.push({...d,date:r.date,ym:r.ym});
+      else if(Math.round(e.amount*100)!==Math.round(d.amount*100)||e.method!==d.method) chg.push({...d,date:r.date,ym:r.ym,id:e.id,old:e.amount});
+      else same.push(d); });
+    Object.keys(have).forEach(k=>{ if(!seen[k]) del.push(have[k].id); });
+  });
+  return {add,chg,same,del};
+}
+
 function Import({shop,user,toast,onClose,onDone}){
   const [step,setStep]=useState('upload');
   const [fileName,setFileName]=useState('');
@@ -8397,6 +8479,18 @@ function Import({shop,user,toast,onClose,onDone}){
   const [posBusy,setPosBusy]=useState(false);
   const [ottUndo,setOttUndo]=useState(false);   /* false | 'ott' | 'imp' */
   const fileRef=useRef();
+  /* แอปแม่บ้าน */
+  const [maid,setMaid]=useState(null); const [maidEx,setMaidEx]=useState(null); const [maidBusy,setMaidBusy]=useState(false);
+  const [maidStaff,setMaidStaff]=useState([]); const [maidMap,setMaidMap]=useState({});
+  const [foldRate,setFoldRate]=useState(0); const [foldExp,setFoldExp]=useState(false); const [foldJob,setFoldJob]=useState(true);
+  const [riderOn,setRiderOn]=useState(true); const [expMethod,setExpMethod]=useState('cash');
+  /* ระบบรับเงินตู้ */
+  const [kiosk,setKiosk]=useState(null); const [kioskEx,setKioskEx]=useState(null); const [kioskBusy,setKioskBusy]=useState(false);
+  const loadEx=async(yms,src)=>{ const ex={};
+    for(const ym of yms){ try{ const list=await monthTxns(shop.id,ym);
+      list.forEach(t=>{ if(t.source!==src||!t.date||!t.mkey) return; (ex[t.date]=ex[t.date]||{})[t.mkey]={id:t.id,amount:Number(t.amount)||0,method:t.method}; });
+    }catch(e){ console.error(e); } }
+    return ex; };
 
   const guessMap=(hs)=>{
     const find=(keys)=>hs.findIndex(h=>{ const t=String(h||'').toLowerCase(); return keys.some(k=>t.includes(k)); });
@@ -8413,6 +8507,34 @@ function Import({shop,user,toast,onClose,onDone}){
       const XLSX=await loadXLSX();
       const buf=await f.arrayBuffer();
       const wb=XLSX.read(buf,{type:'array',cellDates:true});
+      const mp=maidParse(XLSX,wb);
+      if(mp){
+        if(shop.type!=='laundry'){ toast('ไฟล์แอปแม่บ้านใช้ได้เฉพาะร้านซักผ้า — สลับร้านก่อนนะคะ','err'); setStep('upload'); return; }
+        if(mp.brand && mp.brand!==shop.id){ toast(`ไฟล์นี้เป็นของ ${mp.brand.toUpperCase()} — สลับไปร้านนั้นก่อนนะคะ`,'err'); setStep('upload'); return; }
+        setMaid(mp); setStep('maid'); setMaidEx(null);
+        const ex=await loadEx([...new Set(mp.rows.map(r=>r.ym))],'maidApp');
+        /* รายชื่อแม่บ้าน + เรทค่าพับจากตั้งค่าเงินเดือน */
+        let staff=[], rate=0;
+        try{ const sn=await db.collection('owlCost').doc('laundryPay').get(); const pay=lnNorm(sn.exists?(sn.data()||{}):{});
+          staff=(pay.staff||[]).filter(x=>x.active!==false && (x.shop||'teddy2')===shop.id);
+          if(!staff.length) staff=(pay.staff||[]).filter(x=>x.active!==false);
+          const cfg=lnCfgOf(pay,shop.id);
+          (pay.positions||[]).forEach(ps=>{ const pc=lnPosCfg(cfg,ps.id); if(pc.jobOn && Number(pc.jobRate)>0 && !rate) rate=Number(pc.jobRate); });
+        }catch(e){ console.error(e); }
+        const map={}; Object.keys(mp.maids).forEach(nm=>{ const n=nm.replace(/^(พี่|น้อง)/,'');
+          const hit=staff.find(x=>{ const sn=String(x.name||'').replace(/^(พี่|น้อง)/,''); return sn && (sn===n || sn.indexOf(n)>=0 || n.indexOf(sn)>=0); });
+          map[nm]=hit? hit.id : ''; });
+        setMaidStaff(staff); setMaidMap(map); setFoldRate(rate); setFoldExp(rate>0); setFoldJob(true); setMaidEx(ex);
+        return;
+      }
+      const kp=kioskParse(XLSX,wb);
+      if(kp){
+        if(kp.mode==='points'){ toast('ไฟล์แต้ม (ใช้แต้ม/สะสมแต้ม) ยังไม่นำเข้าในรุ่นนี้ — ข้ามไว้ก่อน','err'); setStep('upload'); return; }
+        if(shop.type!=='laundry'){ toast('ไฟล์ระบบรับเงินตู้ใช้ได้เฉพาะร้านซักผ้า — สลับร้านก่อนนะคะ','err'); setStep('upload'); return; }
+        setKiosk(kp); setStep('kiosk'); setKioskEx(null);
+        const ex=await loadEx([...new Set(kp.rows.map(r=>r.ym))],'kioskTd');
+        setKioskEx(ex); return;
+      }
       const p=posParse(XLSX,wb);
       if(p){
         if(shop.id!=='owlcha'){
@@ -8637,6 +8759,84 @@ function Import({shop,user,toast,onClose,onDone}){
     }catch(e){ console.error(e); toast('ถอนไม่สำเร็จ: '+(e.message||''),'err'); setOttBusy(false); }
   };
 
+  /* ---- แผนนำเข้า: แอปแม่บ้าน ---- */
+  const maidDocs=(r)=>{ const d=[];
+    const R=(v)=>Math.round(v*100)/100;
+    const svcCash=R(r.cash-r.dlvCash), svcBank=R(r.bank-r.dlvBank);
+    if(svcCash>0) d.push({mkey:'svc_cash',kind:'income',category:'บริการ ซัก-อบ-พับ',method:'cash',amount:svcCash,note:`แอปแม่บ้าน · ${r.n} งาน · เงินสด`});
+    if(svcBank>0) d.push({mkey:'svc_bank',kind:'income',category:'บริการ ซัก-อบ-พับ',method:'bank',amount:svcBank,note:`แอปแม่บ้าน · ${r.n} งาน · โอน`});
+    if(r.dlvCash>0) d.push({mkey:'dlv_cash',kind:'income',category:'Delivery',method:'cash',amount:r.dlvCash,note:`แอปแม่บ้าน · ค่าส่ง ${r.dlvN} งาน · เงินสด`});
+    if(r.dlvBank>0) d.push({mkey:'dlv_bank',kind:'income',category:'Delivery',method:'bank',amount:r.dlvBank,note:`แอปแม่บ้าน · ค่าส่ง ${r.dlvN} งาน · โอน`});
+    if(riderOn && r.dlv>0) d.push({mkey:'exp_rider',kind:'expense',category:'ค่าส่งไรเดอร์',method:expMethod,amount:r.dlv,note:`แอปแม่บ้าน · ส่ง ${r.dlvN} งาน (จ่ายเต็มค่าส่ง)`});
+    if(foldExp && Number(foldRate)>0 && r.n>0) d.push({mkey:'exp_fold',kind:'expense',category:'ค่าพับแม่บ้าน',method:expMethod,amount:Math.round(r.n*Number(foldRate)),note:`แอปแม่บ้าน · พับ ${r.n} งาน × ${foldRate}`});
+    return d; };
+  const mPlan=(maid&&maidEx)? planDiff(maid.rows,maidDocs,maidEx) : {add:[],chg:[],same:[],del:[]};
+  const mSum=(list,f)=>list.filter(f).reduce((a,d)=>a+d.amount,0);
+  const mAll=[...mPlan.add,...mPlan.chg,...mPlan.same];
+  const mInCash=mSum(mAll,d=>d.kind==='income'&&d.method==='cash'), mInBank=mSum(mAll,d=>d.kind==='income'&&d.method==='bank');
+  const mExRider=mSum(mAll,d=>d.mkey==='exp_rider'), mExFold=mSum(mAll,d=>d.mkey==='exp_fold');
+  const jobByStaff=(()=>{ const o={}; if(!maid) return o; Object.keys(maid.maids).forEach(nm=>{ const id=maidMap[nm]; if(id) o[id]=(o[id]||0)+maid.maids[nm]; }); return o; })();
+  const mNothing=!mPlan.add.length&&!mPlan.chg.length&&!mPlan.del.length&&!(foldJob&&Object.keys(jobByStaff).length);
+
+  const runPlan=async(plan,src,label)=>{
+    const chunk=350; let done=0;
+    for(let i=0;i<plan.add.length;i+=chunk){ const b=db.batch();
+      plan.add.slice(i,i+chunk).forEach(d=>{ const ref=db.collection('transactions').doc();
+        b.set(ref,{shopId:shop.id,kind:d.kind,category:d.category,amount:d.amount,method:d.method,note:d.note,mkey:d.mkey,date:d.date,ym:d.ym,skey:`${shop.id}_${d.ym}`,by:{id:user.id,name:user.name},source:src,ts:FieldValue.serverTimestamp()}); });
+      await b.commit(); done+=Math.min(chunk,plan.add.length-i); setProg(done); }
+    for(let i=0;i<plan.chg.length;i+=chunk){ const b=db.batch();
+      plan.chg.slice(i,i+chunk).forEach(d=>b.update(db.collection('transactions').doc(d.id),{amount:d.amount,method:d.method,note:d.note+' (ปรับยอด)',ts:FieldValue.serverTimestamp()}));
+      await b.commit(); done+=Math.min(chunk,plan.chg.length-i); setProg(done); }
+    for(let i=0;i<plan.del.length;i+=chunk){ const b=db.batch();
+      plan.del.slice(i,i+chunk).forEach(id=>b.delete(db.collection('transactions').doc(id))); await b.commit(); }
+    await writeLog(shop.id,{id:user.id,name:user.name},'import',`${label} — ใหม่ ${plan.add.length} · ปรับ ${plan.chg.length}`+(plan.del.length?` · ลบ ${plan.del.length}`:''),[]);
+  };
+  const doImportMaid=async()=>{
+    if(mNothing){ toast('ยอดตรงกับที่ลงไว้แล้วทุกวัน'); return; }
+    setMaidBusy(true); setProg(0);
+    try{
+      await runPlan(mPlan,'maidApp',`นำเข้าแอปแม่บ้าน ${maid.ym}`);
+      if(foldJob && Object.keys(jobByStaff).length){
+        await db.collection('owlCost').doc('laundryPay').set({months:{[maid.ym]:{job:jobByStaff}}},{merge:true});
+      }
+      toast(`ลงบัญชีแล้ว · ใหม่ ${mPlan.add.length} · ปรับ ${mPlan.chg.length}`+(foldJob&&Object.keys(jobByStaff).length?` · ใส่จำนวนงานพับในเงินเดือน ${Object.keys(jobByStaff).length} คน`:''));
+      onDone();
+    }catch(e){ console.error(e); toast('นำเข้าไม่สำเร็จ: '+(e.message||''),'err'); setMaidBusy(false); }
+  };
+  /* ---- แผนนำเข้า: ระบบรับเงินตู้ ---- */
+  const kioskDocs=(r)=>{ const d=[];
+    if(r.qr>0) d.push({mkey:'qr',kind:'income',category:'รายได้เครื่อง',method:'bank',amount:r.qr,note:'ระบบรับเงินตู้ · QR'});
+    if(r.cash>0) d.push({mkey:'cash',kind:'income',category:'รายได้เครื่อง',method:'cash',amount:r.cash,note:'ระบบรับเงินตู้ · เงินสด'});
+    return d; };
+  const kPlan=(kiosk&&kioskEx)? planDiff(kiosk.rows,kioskDocs,kioskEx) : {add:[],chg:[],same:[],del:[]};
+  const kAll=[...kPlan.add,...kPlan.chg,...kPlan.same];
+  const kQr=mSum(kAll,d=>d.mkey==='qr'), kCash=mSum(kAll,d=>d.mkey==='cash');
+  const kNothing=!kPlan.add.length&&!kPlan.chg.length&&!kPlan.del.length;
+  const doImportKiosk=async()=>{
+    if(kNothing){ toast('ยอดตรงกับที่ลงไว้แล้วทุกวัน'); return; }
+    setKioskBusy(true); setProg(0);
+    try{ await runPlan(kPlan,'kioskTd',`นำเข้าระบบรับเงินตู้ ${kiosk.rows[0].ym}`);
+      toast(`ลงบัญชีแล้ว · ใหม่ ${kPlan.add.length} · ปรับ ${kPlan.chg.length}`); onDone();
+    }catch(e){ console.error(e); toast('นำเข้าไม่สำเร็จ: '+(e.message||''),'err'); setKioskBusy(false); }
+  };
+  const Stat=({l,v,c})=>(<div style={{flex:1,background:'#fff',border:'1px solid var(--line)',borderRadius:12,padding:'10px 12px'}}><div style={{fontSize:11,color:'var(--muted)'}}>{l}</div><div className="num" style={{fontSize:20,fontWeight:800,color:c||'var(--ink)'}}>{v}</div></div>);
+  const Tg=({on,set,l})=>(<button onClick={()=>set(!on)} className="press kanit" style={{display:'flex',alignItems:'center',gap:8,width:'100%',padding:'10px 12px',borderRadius:11,fontSize:13.5,border:`1.5px solid ${on?'var(--primary)':'var(--line)'}`,background:on?'var(--tint)':'#fff',color:'var(--ink)',marginBottom:8,textAlign:'left'}}><span style={{width:34,height:20,borderRadius:10,background:on?'var(--primary)':'#CBD5E1',position:'relative',flexShrink:0}}><span style={{position:'absolute',top:2,left:on?16:2,width:16,height:16,borderRadius:8,background:'#fff'}}/></span>{l}</button>);
+  const MethodPick=({v,set})=>(<div style={{display:'flex',gap:8,marginBottom:12}}>{[['cash','💵 เงินสด'],['bank','🏦 โอน']].map(([k,l])=>(<button key={k} onClick={()=>set(k)} className="press kanit" style={{flex:1,padding:'10px 2px',borderRadius:11,fontSize:13.5,fontWeight:600,border:`1.5px solid ${v===k?'var(--primary)':'var(--line)'}`,background:v===k?'var(--tint)':'#fff',color:'var(--ink)'}}>{l}</button>))}</div>);
+  const dmy=(d)=>`${d.slice(8)}/${d.slice(5,7)}`;
+  const ChgList=({list,color,bg,border,title})=>list.length>0&&(
+    <div style={{background:bg,border:`1px solid ${border}`,borderRadius:12,padding:'11px 13px',marginBottom:12}}>
+      <div style={{fontSize:13,fontWeight:700,color,marginBottom:7}}>{title}</div>
+      {list.slice(0,12).map((r,i)=>(<div key={i} style={{display:'flex',fontSize:12.5,padding:'4px 0',color,borderTop:'1px solid rgba(0,0,0,.06)'}}>
+        <span style={{flex:1}}>{dmy(r.date)} · {r.category}{r.method==='cash'?' 💵':' 🏦'}</span>
+        <span className="num" style={{width:80,textAlign:'right',textDecoration:'line-through',opacity:.6}}>{baht(r.old)}</span><span style={{width:18,textAlign:'center'}}>→</span>
+        <span className="num" style={{width:80,textAlign:'right',fontWeight:700}}>{baht(r.amount)}</span></div>))}
+      {list.length>12 && <div style={{fontSize:11.5,marginTop:6,color}}>…และอีก {list.length-12} รายการ</div>}
+    </div>);
+  const ImportBtn=({busy,nothing,plan,onClick,extra})=>(
+    <button onClick={onClick} disabled={busy||nothing} className="press kanit" style={{width:'100%',padding:'15px',border:'none',borderRadius:14,background:'var(--primary)',color:'#fff',fontSize:15,fontWeight:700,opacity:(busy||nothing)?.5:1}}>
+      {busy? `กำลังลงบัญชี ${prog}...` : nothing? 'ยอดตรงกันทุกวันแล้ว' : [plan.add.length?`ลงใหม่ ${plan.add.length}`:'', plan.chg.length?`ปรับ ${plan.chg.length}`:'', plan.del.length?`ลบ ${plan.del.length}`:'', extra||''].filter(Boolean).join(' · ')}
+    </button>);
+
   const sel={width:'100%',padding:'11px 12px',border:'1.5px solid var(--line)',borderRadius:11,fontSize:14,background:'#fff',marginBottom:12,color:'var(--ink)'};
   const opts=[<option key="-1" value={-1}>— ไม่ใช้ —</option>,...headers.map((h,i)=><option key={i} value={i}>{h}</option>)];
 
@@ -8650,12 +8850,82 @@ function Import({shop,user,toast,onClose,onDone}){
             • <b>ไฟล์รายธุรกรรม (abb)</b> — แยกเงินสด/โอนอัตโนมัติ <b style={{color:'var(--pos)'}}>แนะนำ</b><br/>
             • ไฟล์สรุปรายเดือน (January…December) — เลือกช่องทางเอง<br/>
             <b>🧋 รายงานยอดขาย POS (Owl Cha)</b> — รวมยอดรายวันให้เอง ลงซ้ำได้ ยอดไม่บวกเพิ่ม
+            <br/><b>🧺 แอปแม่บ้าน Teddy/Otteri</b> — ไฟล์ teddyN-YYYY-MM.xlsx: รายรับสด/โอน + ค่าส่งให้ไรเดอร์ + งานพับเข้าเงินเดือน<br/>
+            <b>📟 ระบบรับเงินตู้</b> — ไฟล์ .csv (Qr / เงินสด รายวัน) · ไฟล์แต้มข้ามไว้ก่อน
           </div>
           <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" onChange={onFile} style={{display:'none'}}/>
           <button onClick={()=>fileRef.current.click()} className="press kanit" style={{padding:'14px 24px',border:'2px dashed var(--accent)',borderRadius:14,background:'var(--tint)',color:'var(--primary)',fontWeight:600,fontSize:15,display:'inline-flex',alignItems:'center',gap:8}}><I.table/> เลือกไฟล์ Excel</button>
         </div>
       )}
       {step==='loading' && <div style={{padding:'30px 0'}}><Loading label="กำลังอ่านไฟล์..."/></div>}
+
+      {step==='maid' && (<>
+        <div style={{fontSize:12.5,color:'var(--muted)',marginBottom:12,display:'flex',alignItems:'center',gap:6}}><I.table/> {fileName}</div>
+        <div style={{background:'var(--tint)',borderRadius:12,padding:'12px 14px',marginBottom:14}}>
+          <div style={{fontSize:14,fontWeight:700,color:'var(--primary)',marginBottom:4}}>🧺 แอปแม่บ้าน {maid&&maid.brand? maid.brand.toUpperCase():''} · {maid&&maid.ym}</div>
+          <div style={{fontSize:12.5,color:'var(--muted)',lineHeight:1.6}}>{maid&&maid.rows.length} วัน · {maid&&maid.jobs} งาน · ลงเป็นรายรับของร้าน <b style={{color:'var(--ink)'}}>{shop.name}</b> แยกเงินสด/โอน · ค่าส่งแยกหมวด Delivery · {maid&&!maid.fromJobs?'(ไฟล์ไม่มีชีตรายการงาน — ค่าส่งถือเป็นโอน และไม่รู้ชื่อแม่บ้าน)':''}</div>
+        </div>
+        {!maidEx && <div style={{padding:'20px 0'}}><Loading label="กำลังตรวจรายการที่ลงไว้แล้ว..."/></div>}
+        {maidEx && (<>
+          <div style={{display:'flex',gap:8,marginBottom:12}}>
+            <Stat l="รายรับเงินสด" v={baht(mInCash)} c="var(--pos)"/><Stat l="รายรับโอน" v={baht(mInBank)} c="var(--pos)"/>
+          </div>
+          <div style={{display:'flex',gap:8,marginBottom:12}}>
+            <Stat l="ใหม่" v={mPlan.add.length} c="var(--pos)"/><Stat l="ปรับยอด" v={mPlan.chg.length} c={mPlan.chg.length?'#C2410C':'var(--muted)'}/><Stat l="เหมือนเดิม" v={mPlan.same.length} c="var(--muted)"/>
+          </div>
+          <ChgList list={mPlan.chg} color="#9A3412" bg="#FFF7ED" border="#FED7AA" title={`⚠️ ยอดเปลี่ยน ${mPlan.chg.length} รายการ — จะแก้ของเดิม ไม่เพิ่มใหม่`}/>
+          {mPlan.del.length>0 && <div style={{background:'#FEF2F2',border:'1px solid #FECACA',borderRadius:12,padding:'10px 12px',marginBottom:12,fontSize:12.5,color:'#B91C1C',lineHeight:1.6}}>รายการที่นำเข้าไว้ก่อนแต่ไม่อยู่ในแผนรอบนี้ {mPlan.del.length} รายการ — จะลบออก (เช่น ปิดค่าส่ง/ค่าพับ)</div>}
+
+          <label style={lbl}>รายจ่ายให้ไรเดอร์ / แม่บ้าน</label>
+          <Tg on={riderOn} set={setRiderOn} l={<span>🛵 ค่าส่งให้ไรเดอร์ — จ่ายเต็มค่าส่ง <b className="num">{baht(mExRider)}</b></span>}/>
+          <Tg on={foldExp} set={setFoldExp} l={<span>🧺 ค่าพับแม่บ้านเป็นรายจ่าย — {Number(foldRate)>0? <b className="num">{baht(mExFold)}</b> : 'ยังไม่มีเรท (ใส่ด้านล่าง)'}</span>}/>
+          <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:10}}>
+            <span style={{fontSize:13,color:'var(--muted)',whiteSpace:'nowrap'}}>เรทค่าพับ บาท/งาน</span>
+            <input type="number" inputMode="decimal" value={foldRate} onChange={e=>setFoldRate(e.target.value)} style={{flex:1,padding:'9px 12px',border:'1.5px solid var(--line)',borderRadius:10,fontSize:14,textAlign:'right'}} className="num"/>
+          </div>
+          {(riderOn||foldExp) && (<><label style={lbl}>จ่ายรายจ่ายพวกนี้ด้วย</label><MethodPick v={expMethod} set={setExpMethod}/></>)}
+
+          {maid&&maid.fromJobs && (<>
+            <Tg on={foldJob} set={setFoldJob} l={<span>📋 ใส่จำนวนงานพับในหน้าเงินเดือน {maid.ym} (ช่อง "พับ N งาน")</span>}/>
+            {foldJob && (
+              <div style={{background:'#fff',border:'1px solid var(--line)',borderRadius:12,padding:'10px 12px',marginBottom:12}}>
+                {Object.keys(maid.maids).map(nm=>(
+                  <div key={nm} style={{display:'flex',alignItems:'center',gap:8,padding:'5px 0',borderTop:'1px solid var(--soft)'}}>
+                    <span style={{flex:1,fontSize:13}}>{nm} <b className="num">{maid.maids[nm]}</b> งาน</span>
+                    <select value={maidMap[nm]||''} onChange={e=>setMaidMap(m=>({...m,[nm]:e.target.value}))} style={{flex:1.2,padding:'7px 8px',border:'1.5px solid var(--line)',borderRadius:9,fontSize:13,background:'#fff',color:'var(--ink)'}}>
+                      <option value="">— ไม่ใส่ —</option>
+                      {maidStaff.map(st=><option key={st.id} value={st.id}>{st.name}</option>)}
+                    </select>
+                  </div>))}
+                {!maidStaff.length && <div style={{fontSize:12,color:'#B91C1C',marginTop:6}}>ยังไม่มีพนักงานร้านนี้ในตั้งค่าเงินเดือน</div>}
+                {foldExp&&Number(foldRate)>0 && <div style={{fontSize:11.5,color:'#9A3412',marginTop:8,lineHeight:1.5}}>⚠️ เปิดทั้ง "รายจ่ายค่าพับ" และ "ใส่ในเงินเดือน" — ถ้าหน้าเงินเดือนคิดค่าพับให้ด้วย ยอดจะซ้ำ 2 ที่ ควรเปิดอย่างใดอย่างหนึ่งตอนจ่ายจริง</div>}
+              </div>)}
+          </>)}
+
+          <ImportBtn busy={maidBusy} nothing={mNothing} plan={mPlan} onClick={doImportMaid} extra={foldJob&&Object.keys(jobByStaff).length?`งานพับ ${Object.keys(jobByStaff).length} คน`:''}/>
+          <div style={{fontSize:11,color:'var(--muted)',textAlign:'center',marginTop:8,lineHeight:1.6}}>วันเดียวกันแต่ละประเภทมีรายการเดียวเสมอ · นำเข้าไฟล์เดิมซ้ำ = ยึดยอดล่าสุด ไม่บวกเพิ่ม</div>
+          <button onClick={()=>{ setMaid(null); setMaidEx(null); setStep('upload'); }} className="press kanit" style={{width:'100%',marginTop:10,padding:'11px',border:'1px solid var(--line)',borderRadius:12,background:'#fff',fontSize:13.5,color:'var(--muted)'}}>เลือกไฟล์อื่น</button>
+        </>)}
+      </>)}
+
+      {step==='kiosk' && (<>
+        <div style={{fontSize:12.5,color:'var(--muted)',marginBottom:12,display:'flex',alignItems:'center',gap:6}}><I.table/> {fileName}</div>
+        <div style={{background:'var(--tint)',borderRadius:12,padding:'12px 14px',marginBottom:14}}>
+          <div style={{fontSize:14,fontWeight:700,color:'var(--primary)',marginBottom:4}}>📟 ระบบรับเงินตู้ (QR + เงินสด) · {kiosk&&kiosk.rows[0].ym}</div>
+          <div style={{fontSize:12.5,color:'var(--muted)',lineHeight:1.6}}>{kiosk&&kiosk.rows.length} วัน · ไฟล์นี้ไม่ระบุสาขา — จะลงที่ร้าน <b style={{color:'var(--ink)'}}>{shop.name}</b> หมวด "รายได้เครื่อง" · QR = โอน · เงินสด = เงินสด</div>
+        </div>
+        {!kioskEx && <div style={{padding:'20px 0'}}><Loading label="กำลังตรวจรายการที่ลงไว้แล้ว..."/></div>}
+        {kioskEx && (<>
+          <div style={{display:'flex',gap:8,marginBottom:12}}><Stat l="QR (โอน)" v={baht(kQr)} c="var(--pos)"/><Stat l="เงินสด" v={baht(kCash)} c="var(--pos)"/></div>
+          <div style={{display:'flex',gap:8,marginBottom:12}}>
+            <Stat l="ใหม่" v={kPlan.add.length} c="var(--pos)"/><Stat l="ปรับยอด" v={kPlan.chg.length} c={kPlan.chg.length?'#C2410C':'var(--muted)'}/><Stat l="เหมือนเดิม" v={kPlan.same.length} c="var(--muted)"/>
+          </div>
+          <ChgList list={kPlan.chg} color="#9A3412" bg="#FFF7ED" border="#FED7AA" title={`⚠️ ยอดเปลี่ยน ${kPlan.chg.length} รายการ — จะแก้ของเดิม ไม่เพิ่มใหม่`}/>
+          <ImportBtn busy={kioskBusy} nothing={kNothing} plan={kPlan} onClick={doImportKiosk}/>
+          <div style={{fontSize:11,color:'var(--muted)',textAlign:'center',marginTop:8,lineHeight:1.6}}>วันละ 2 รายการ (QR / เงินสด) · นำเข้าซ้ำ = ยึดยอดล่าสุด · ไฟล์แต้มยังไม่นำเข้า</div>
+          <button onClick={()=>{ setKiosk(null); setKioskEx(null); setStep('upload'); }} className="press kanit" style={{width:'100%',marginTop:10,padding:'11px',border:'1px solid var(--line)',borderRadius:12,background:'#fff',fontSize:13.5,color:'var(--muted)'}}>เลือกไฟล์อื่น</button>
+        </>)}
+      </>)}
 
       {step==='pos' && (<>
         <div style={{fontSize:12.5,color:'var(--muted)',marginBottom:12,display:'flex',alignItems:'center',gap:6}}><I.table/> {fileName}</div>
