@@ -1,5 +1,5 @@
 /* PLP Finance · Service Worker */
-const CACHE = 'plp-finance-v45';
+const CACHE = 'plp-finance-v46';
 const SHELL = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png', './icon-maskable-512.png'];
 
 self.addEventListener('install', function (e) {

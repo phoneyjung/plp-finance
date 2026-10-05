@@ -8442,6 +8442,38 @@ function kioskParse(XLSX,wb){
   if(!rows.length) return null;
   return {mode:'kiosk',rows};
 }
+/* ===== ระบบเว็บจัดการเครื่อง (Teddy 1): รายธุรกรรมต่อเครื่อง ทั้งปี ===== */
+function tdWebParse(XLSX,wb){
+  for(const name of wb.SheetNames){
+    const ws=wb.Sheets[name]; if(!ws) continue;
+    const raw=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:''});
+    if(raw.length<2) continue;
+    let hr=-1;
+    for(let i=0;i<Math.min(6,raw.length);i++){ const hs=(raw[i]||[]).map(x=>String(x||'').trim());
+      if(hs.some(h=>h==='วัน'||h==='วันที่') && hs.some(h=>h.indexOf('ชื่อเครื่อง')>=0) && hs.some(h=>h.indexOf('การจ่าย')>=0)){ hr=i; break; } }
+    if(hr<0) continue;
+    const hs=(raw[hr]||[]).map(x=>String(x||'').trim());
+    const iD=hs.findIndex(h=>h==='วัน'||h==='วันที่'), iN=hs.findIndex(h=>h.indexOf('ชื่อเครื่อง')>=0), iA=hs.findIndex(h=>h.indexOf('ยอด')>=0), iP=hs.findIndex(h=>h.indexOf('การจ่าย')>=0);
+    const days={}; let ptsN=0, ptsAmt=0, n=0;
+    raw.slice(hr+1).forEach(r=>{
+      const ds=String(r[iD]||'').trim(); const m=ds.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/); if(!m) return;
+      let y=+m[3]; if(y<100) y+=2500; if(y>2400) y-=543;
+      const key=`${y}-${pad(+m[2])}-${pad(+m[1])}`;
+      const amt=xAmt(r[iA]); if(amt==null) return;
+      const pay=String(r[iP]||'').toLowerCase(); const nm=String(r[iN]||'');
+      if(pay.indexOf('point')>=0||pay.indexOf('แต้ม')>=0){ ptsN++; ptsAmt+=amt; return; }
+      const meth= (pay.indexOf('coin')>=0||pay.indexOf('เหรียญ')>=0||pay.indexOf('cash')>=0||pay.indexOf('เงินสด')>=0) ? 'cash' : 'bank';
+      const cat= nm.indexOf('อบ')>=0 ? 'dry' : nm.indexOf('ซัก')>=0 ? 'wash' : 'oth';
+      const o=(days[key]=days[key]||{n:0,wash_cash:0,wash_bank:0,dry_cash:0,dry_bank:0,oth_cash:0,oth_bank:0});
+      o[cat+'_'+meth]+=amt; o.n++; n++;
+    });
+    const dates=Object.keys(days).sort(); if(!dates.length) continue;
+    const rows=dates.map(d=>({date:d,ym:d.slice(0,7),...days[d]}));
+    const months={}; rows.forEach(r=>{ const o=(months[r.ym]=months[r.ym]||{ym:r.ym,wash:0,dry:0,oth:0,n:0}); o.wash+=r.wash_cash+r.wash_bank; o.dry+=r.dry_cash+r.dry_bank; o.oth+=r.oth_cash+r.oth_bank; o.n+=r.n; });
+    return {mode:'tdweb',rows,months:Object.values(months).sort((a,b)=>a.ym.localeCompare(b.ym)),n,ptsN,ptsAmt,from:dates[0],to:dates[dates.length-1]};
+  }
+  return null;
+}
 /* เทียบแผน (วันที่+mkey) กับรายการที่ลงไว้แล้วจาก source เดียวกัน */
 function planDiff(rows, docsOf, ex){
   const add=[], chg=[], same=[], del=[];
@@ -8486,6 +8518,8 @@ function Import({shop,user,toast,onClose,onDone}){
   const [riderOn,setRiderOn]=useState(true); const [expMethod,setExpMethod]=useState('cash');
   /* ระบบรับเงินตู้ */
   const [kiosk,setKiosk]=useState(null); const [kioskEx,setKioskEx]=useState(null); const [kioskBusy,setKioskBusy]=useState(false);
+  const [tdw,setTdw]=useState(null); const [tdwEx,setTdwEx]=useState(null); const [tdwBusy,setTdwBusy]=useState(false);
+  const [tdwOther,setTdwOther]=useState([]); const [tdwReplace,setTdwReplace]=useState(true);
   const loadEx=async(yms,src)=>{ const ex={};
     for(const ym of yms){ try{ const list=await monthTxns(shop.id,ym);
       list.forEach(t=>{ if(t.source!==src||!t.date||!t.mkey) return; (ex[t.date]=ex[t.date]||{})[t.mkey]={id:t.id,amount:Number(t.amount)||0,method:t.method}; });
@@ -8534,6 +8568,18 @@ function Import({shop,user,toast,onClose,onDone}){
         setKiosk(kp); setStep('kiosk'); setKioskEx(null);
         const ex=await loadEx([...new Set(kp.rows.map(r=>r.ym))],'kioskTd');
         setKioskEx(ex); return;
+      }
+      const tw=tdWebParse(XLSX,wb);
+      if(tw){
+        if(shop.type!=='laundry'){ toast('ไฟล์ระบบเว็บเครื่องซักใช้ได้เฉพาะร้านซักผ้า — สลับร้านก่อนนะคะ','err'); setStep('upload'); return; }
+        setTdw(tw); setStep('tdweb'); setTdwEx(null); setTdwOther([]); setTdwReplace(true);
+        const yms=[...new Set(tw.rows.map(r=>r.ym))];
+        const ex=await loadEx(yms,'tdWeb');
+        /* รายการเครื่องซัก/อบ ที่คีย์มือหรือนำเข้าแบบอื่นไว้ในวันเดียวกัน → เสนอให้แทนที่ */
+        const inFile={}; tw.rows.forEach(r=>{ inFile[r.date]=1; });
+        const other=[]; const MCAT={'เครื่องซัก':1,'เครื่องอบ':1,'รายได้เครื่อง':1};
+        for(const ym of yms){ try{ (await monthTxns(shop.id,ym)).forEach(t=>{ if(t.kind==='income' && t.source!=='tdWeb' && MCAT[t.category] && inFile[t.date]) other.push({id:t.id,date:t.date,amount:Number(t.amount)||0,category:t.category,source:t.source||'manual'}); }); }catch(e){} }
+        setTdwOther(other); setTdwEx(ex); return;
       }
       const p=posParse(XLSX,wb);
       if(p){
@@ -8819,6 +8865,24 @@ function Import({shop,user,toast,onClose,onDone}){
       toast(`ลงบัญชีแล้ว · ใหม่ ${kPlan.add.length} · ปรับ ${kPlan.chg.length}`); onDone();
     }catch(e){ console.error(e); toast('นำเข้าไม่สำเร็จ: '+(e.message||''),'err'); setKioskBusy(false); }
   };
+  /* ---- แผนนำเข้า: ระบบเว็บเครื่องซัก (Teddy 1) ---- */
+  const tdwDocs=(r)=>{ const d=[]; const R=(v)=>Math.round(v*100)/100;
+    const cats={wash:'เครื่องซัก',dry:'เครื่องอบ',oth:'รายได้เครื่อง'};
+    Object.keys(cats).forEach(c=>{ ['cash','bank'].forEach(m=>{ const a=R(r[c+'_'+m]); if(a>0) d.push({mkey:c+'_'+m,kind:'income',category:cats[c],method:m,amount:a,note:`ระบบเว็บเครื่อง · ${m==='cash'?'เหรียญ':'QR'}`}); }); });
+    return d; };
+  const tPlan=(tdw&&tdwEx)? planDiff(tdw.rows,tdwDocs,tdwEx) : {add:[],chg:[],same:[],del:[]};
+  const tAll=[...tPlan.add,...tPlan.chg,...tPlan.same];
+  const tCash=mSum(tAll,d=>d.method==='cash'), tBank=mSum(tAll,d=>d.method==='bank');
+  const tOtherSum=tdwOther.reduce((a,t)=>a+t.amount,0);
+  const tPlanX= tdwReplace&&tdwOther.length ? {...tPlan,del:[...tPlan.del,...tdwOther.map(t=>t.id)]} : tPlan;
+  const tNothing=!tPlanX.add.length&&!tPlanX.chg.length&&!tPlanX.del.length;
+  const doImportTdw=async()=>{
+    if(tNothing){ toast('ยอดตรงกับที่ลงไว้แล้วทุกวัน'); return; }
+    setTdwBusy(true); setProg(0);
+    try{ await runPlan(tPlanX,'tdWeb',`นำเข้าระบบเว็บเครื่อง ${tdw.from}…${tdw.to}`);
+      toast(`ลงบัญชีแล้ว · ใหม่ ${tPlan.add.length} · ปรับ ${tPlan.chg.length}`); onDone();
+    }catch(e){ console.error(e); toast('นำเข้าไม่สำเร็จ: '+(e.message||''),'err'); setTdwBusy(false); }
+  };
   const Stat=({l,v,c})=>(<div style={{flex:1,background:'#fff',border:'1px solid var(--line)',borderRadius:12,padding:'10px 12px'}}><div style={{fontSize:11,color:'var(--muted)'}}>{l}</div><div className="num" style={{fontSize:20,fontWeight:800,color:c||'var(--ink)'}}>{v}</div></div>);
   const Tg=({on,set,l})=>(<button onClick={()=>set(!on)} className="press kanit" style={{display:'flex',alignItems:'center',gap:8,width:'100%',padding:'10px 12px',borderRadius:11,fontSize:13.5,border:`1.5px solid ${on?'var(--primary)':'var(--line)'}`,background:on?'var(--tint)':'#fff',color:'var(--ink)',marginBottom:8,textAlign:'left'}}><span style={{width:34,height:20,borderRadius:10,background:on?'var(--primary)':'#CBD5E1',position:'relative',flexShrink:0}}><span style={{position:'absolute',top:2,left:on?16:2,width:16,height:16,borderRadius:8,background:'#fff'}}/></span>{l}</button>);
   const MethodPick=({v,set})=>(<div style={{display:'flex',gap:8,marginBottom:12}}>{[['cash','💵 เงินสด'],['bank','🏦 โอน']].map(([k,l])=>(<button key={k} onClick={()=>set(k)} className="press kanit" style={{flex:1,padding:'10px 2px',borderRadius:11,fontSize:13.5,fontWeight:600,border:`1.5px solid ${v===k?'var(--primary)':'var(--line)'}`,background:v===k?'var(--tint)':'#fff',color:'var(--ink)'}}>{l}</button>))}</div>);
@@ -8852,6 +8916,7 @@ function Import({shop,user,toast,onClose,onDone}){
             <b>🧋 รายงานยอดขาย POS (Owl Cha)</b> — รวมยอดรายวันให้เอง ลงซ้ำได้ ยอดไม่บวกเพิ่ม
             <br/><b>🧺 แอปแม่บ้าน Teddy/Otteri</b> — ไฟล์ teddyN-YYYY-MM.xlsx: รายรับสด/โอน + ค่าส่งให้ไรเดอร์ + งานพับเข้าเงินเดือน<br/>
             <b>📟 ระบบรับเงินตู้</b> — ไฟล์ .csv (Qr / เงินสด รายวัน) · ไฟล์แต้มข้ามไว้ก่อน
+            <br/><b>🖥️ ระบบเว็บจัดการเครื่อง (Teddy 1)</b> — ไฟล์ "สรุปประวัติรายได้" ทั้งปี: รวมเป็นรายวัน ซัก/อบ × เหรียญ/QR · ดึงใหม่ลงซ้ำได้
           </div>
           <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" onChange={onFile} style={{display:'none'}}/>
           <button onClick={()=>fileRef.current.click()} className="press kanit" style={{padding:'14px 24px',border:'2px dashed var(--accent)',borderRadius:14,background:'var(--tint)',color:'var(--primary)',fontWeight:600,fontSize:15,display:'inline-flex',alignItems:'center',gap:8}}><I.table/> เลือกไฟล์ Excel</button>
@@ -8905,6 +8970,40 @@ function Import({shop,user,toast,onClose,onDone}){
           <ImportBtn busy={maidBusy} nothing={mNothing} plan={mPlan} onClick={doImportMaid} extra={foldJob&&Object.keys(jobByStaff).length?`งานพับ ${Object.keys(jobByStaff).length} คน`:''}/>
           <div style={{fontSize:11,color:'var(--muted)',textAlign:'center',marginTop:8,lineHeight:1.6}}>วันเดียวกันแต่ละประเภทมีรายการเดียวเสมอ · นำเข้าไฟล์เดิมซ้ำ = ยึดยอดล่าสุด ไม่บวกเพิ่ม</div>
           <button onClick={()=>{ setMaid(null); setMaidEx(null); setStep('upload'); }} className="press kanit" style={{width:'100%',marginTop:10,padding:'11px',border:'1px solid var(--line)',borderRadius:12,background:'#fff',fontSize:13.5,color:'var(--muted)'}}>เลือกไฟล์อื่น</button>
+        </>)}
+      </>)}
+
+      {step==='tdweb' && (<>
+        <div style={{fontSize:12.5,color:'var(--muted)',marginBottom:12,display:'flex',alignItems:'center',gap:6}}><I.table/> {fileName}</div>
+        <div style={{background:'var(--tint)',borderRadius:12,padding:'12px 14px',marginBottom:14}}>
+          <div style={{fontSize:14,fontWeight:700,color:'var(--primary)',marginBottom:4}}>🖥️ ระบบเว็บจัดการเครื่อง · {tdw&&dmy(tdw.from)} – {tdw&&dmy(tdw.to)}/{tdw&&tdw.to.slice(2,4)}</div>
+          <div style={{fontSize:12.5,color:'var(--muted)',lineHeight:1.6}}>{tdw&&tdw.n.toLocaleString()} รายการ · {tdw&&tdw.rows.length} วัน · {tdw&&tdw.months.length} เดือน · รวมเป็นรายวันแยก <b style={{color:'var(--ink)'}}>เครื่องซัก / เครื่องอบ</b> × เหรียญ / QR · ลงที่ร้าน <b style={{color:'var(--ink)'}}>{shop.name}</b>{tdw&&tdw.ptsN? ` · ข้ามรายการแต้ม ${tdw.ptsN} รายการ (${baht(tdw.ptsAmt)})`:''}</div>
+        </div>
+        {!tdwEx && <div style={{padding:'20px 0'}}><Loading label="กำลังตรวจรายการที่ลงไว้แล้ว (ทุกเดือนในไฟล์)..."/></div>}
+        {tdwEx && (<>
+          <div style={{display:'flex',gap:8,marginBottom:12}}><Stat l="เหรียญ (เงินสด)" v={baht(tCash)} c="var(--pos)"/><Stat l="QR (โอน)" v={baht(tBank)} c="var(--pos)"/></div>
+          <div style={{display:'flex',gap:8,marginBottom:12}}>
+            <Stat l="ใหม่" v={tPlan.add.length} c="var(--pos)"/><Stat l="ปรับยอด" v={tPlan.chg.length} c={tPlan.chg.length?'#C2410C':'var(--muted)'}/><Stat l="เหมือนเดิม" v={tPlan.same.length} c="var(--muted)"/>
+          </div>
+          <div style={{background:'#fff',border:'1px solid var(--line)',borderRadius:12,padding:'8px 12px',marginBottom:12}}>
+            <div style={{display:'flex',fontSize:11,color:'var(--muted)',padding:'2px 0 6px'}}><span style={{flex:1}}>เดือน</span><span style={{width:70,textAlign:'right'}}>ซัก</span><span style={{width:70,textAlign:'right'}}>อบ</span><span style={{width:80,textAlign:'right'}}>รวม</span></div>
+            {tdw.months.map(m=>(<div key={m.ym} style={{display:'flex',fontSize:12.5,padding:'5px 0',borderTop:'1px solid var(--soft)'}}>
+              <span style={{flex:1}}>{m.ym.slice(5)}/{+m.ym.slice(0,4)+543} <span style={{color:'var(--muted)',fontSize:11}}>· {m.n}</span></span>
+              <span className="num" style={{width:70,textAlign:'right'}}>{baht(m.wash).replace('฿','')}</span>
+              <span className="num" style={{width:70,textAlign:'right'}}>{baht(m.dry).replace('฿','')}</span>
+              <span className="num" style={{width:80,textAlign:'right',fontWeight:700}}>{baht(m.wash+m.dry+m.oth).replace('฿','')}</span></div>))}
+          </div>
+          <ChgList list={tPlan.chg} color="#9A3412" bg="#FFF7ED" border="#FED7AA" title={`⚠️ ยอดเปลี่ยน ${tPlan.chg.length} รายการ — จะแก้ของเดิม ไม่เพิ่มใหม่ (ปกติคือวันล่าสุดที่ดึงไฟล์ไม่ครบวัน)`}/>
+          {tPlan.del.length>0 && <div style={{background:'#FEF2F2',border:'1px solid #FECACA',borderRadius:12,padding:'10px 12px',marginBottom:12,fontSize:12.5,color:'#B91C1C',lineHeight:1.6}}>รายการที่นำเข้าไว้ก่อนแต่ไม่อยู่ในไฟล์รอบนี้ {tPlan.del.length} รายการ — จะลบออก</div>}
+          {tdwOther.length>0 && (
+            <div style={{background:'#EFF6FF',border:'1px solid #BFDBFE',borderRadius:12,padding:'11px 13px',marginBottom:12}}>
+              <div style={{fontSize:13,fontWeight:700,color:'#1E40AF',marginBottom:4}}>🔁 มีรายรับเครื่องซัก/อบ ที่คีย์มือหรือนำเข้าแบบเดิมไว้แล้ว {tdwOther.length} รายการ รวม {baht(tOtherSum)} ในวันที่อยู่ในไฟล์</div>
+              <div style={{fontSize:12,color:'#1E3A8A',marginBottom:8,lineHeight:1.5}}>ถ้าไม่ลบ ยอดจะซ้ำ 2 ชุด — แนะนำให้แทนที่ด้วยยอดจากระบบเว็บ</div>
+              <Tg on={tdwReplace} set={setTdwReplace} l={<span>ลบรายการเดิม {tdwOther.length} รายการ แล้วใช้ยอดจากไฟล์แทน</span>}/>
+            </div>)}
+          <ImportBtn busy={tdwBusy} nothing={tNothing} plan={tPlanX} onClick={doImportTdw}/>
+          <div style={{fontSize:11,color:'var(--muted)',textAlign:'center',marginTop:8,lineHeight:1.6}}>วันละไม่เกิน 4 รายการ (ซัก/อบ × เหรียญ/QR) · ดึงไฟล์ใหม่มาลงซ้ำได้เรื่อยๆ ยึดยอดล่าสุด ไม่บวกเพิ่ม · ไฟล์ทั้งปีใช้เวลาตรวจสักครู่</div>
+          <button onClick={()=>{ setTdw(null); setTdwEx(null); setStep('upload'); }} className="press kanit" style={{width:'100%',marginTop:10,padding:'11px',border:'1px solid var(--line)',borderRadius:12,background:'#fff',fontSize:13.5,color:'var(--muted)'}}>เลือกไฟล์อื่น</button>
         </>)}
       </>)}
 
