@@ -9765,15 +9765,15 @@ function MiniBars({data,color}){
     </div>
   );
 }
-function CatBars({list,color}){
+function CatBars({list,color,onPick}){
   const max=Math.max(1,...list.map(x=>x[1]));
   return (
     <div style={{marginTop:8}}>
       {list.map(([cat,val])=>(
-        <div key={cat} style={{marginBottom:11}}>
-          <div style={{display:'flex',justifyContent:'space-between',fontSize:13,marginBottom:5}}>
+        <div key={cat} className={onPick?'press':''} onClick={onPick?()=>onPick(cat):undefined} style={{marginBottom:11,cursor:onPick?'pointer':'default'}}>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',fontSize:13,marginBottom:5}}>
             <span style={{color:'var(--ink)'}}>{cat}</span>
-            <span className="num" style={{fontWeight:600}}>{baht(val)}</span>
+            <span><span className="num" style={{fontWeight:600}}>{baht(val)}</span>{onPick && <span style={{color:'var(--muted)',marginLeft:6,fontSize:15,lineHeight:1}}>›</span>}</span>
           </div>
           <div style={{height:8,background:'var(--soft)',borderRadius:6,overflow:'hidden'}}>
             <div style={{height:'100%',width:`${(val/max)*100}%`,background:color,borderRadius:6}}/>
@@ -9783,6 +9783,38 @@ function CatBars({list,color}){
     </div>
   );
 }
+/* รายการในหมวด (แตะจากกราฟแยกหมวด) */
+function CatDetailSheet({shop,kind,cat,txns,monthLabel,onClose}){
+  const list=txns.filter(t=>t.kind===kind && (t.category||'อื่นๆ')===cat).sort((a,b)=> (b.date||'').localeCompare(a.date||''));
+  const tot=list.reduce((a,t)=>a+(Number(t.amount)||0),0);
+  const isCash=(m)=>m==='cash';
+  const cash=list.reduce((a,t)=>a+(isCash(t.method)?(Number(t.amount)||0):0),0), bank=tot-cash;
+  const col= kind==='income'?'var(--pos)':'var(--neg)';
+  const srcTag=(t)=> t.source==='maidApp'?'แอปแม่บ้าน': t.source==='kioskTd'?'ระบบรับเงินตู้': t.source==='posOwl'?'POS': t.source==='ottRep'?'รายงาน Otteri': t.source==='import'?'นำเข้า': '';
+  return (
+    <Sheet title={cat} onClose={onClose} z={70}>
+      <div style={{fontSize:12.5,color:'var(--muted)',marginBottom:10}}>{shop.name} · {monthLabel} · {kind==='income'?'รายรับ':'รายจ่าย'}</div>
+      <div style={{display:'flex',gap:8,marginBottom:12}}>
+        {[['รวม',tot,col],['💵 เงินสด',cash,'var(--ink)'],['🏦 โอน',bank,'var(--ink)']].map(([l,v,c])=>(
+          <div key={l} style={{flex:1,background:'#fff',border:'1px solid var(--line)',borderRadius:12,padding:'9px 10px'}}>
+            <div style={{fontSize:11,color:'var(--muted)'}}>{l}</div>
+            <div className="num" style={{fontSize:16,fontWeight:800,color:c}}>{baht(v)}</div>
+          </div>))}
+      </div>
+      <div style={{fontSize:11.5,color:'var(--muted)',marginBottom:6}}>{list.length} รายการ · เรียงจากวันล่าสุด</div>
+      {list.length===0 && <div style={{textAlign:'center',color:'var(--muted)',padding:'20px 0'}}>ไม่มีรายการ</div>}
+      {list.map(t=>(
+        <div key={t.id} style={{display:'flex',gap:10,padding:'9px 0',borderBottom:'1px solid var(--line)',alignItems:'flex-start'}}>
+          <div className="num" style={{width:44,flexShrink:0,fontSize:12.5,color:'var(--muted)',paddingTop:2}}>{(t.date||'').slice(8)}/{(t.date||'').slice(5,7)}</div>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:13.5,color:'var(--ink)',wordBreak:'break-word'}}>{t.note||<span style={{color:'var(--muted)'}}>— ไม่มีบันทึก —</span>}</div>
+            <div style={{fontSize:11,color:'var(--muted)',marginTop:2}}>{isCash(t.method)?'💵 เงินสด':'🏦 โอน'}{t.by&&t.by.name?' · '+t.by.name:''}{srcTag(t)?' · '+srcTag(t):''}</div>
+          </div>
+          <div className="num" style={{fontWeight:700,fontSize:14,color:col,flexShrink:0}}>{baht(Number(t.amount)||0)}</div>
+        </div>))}
+    </Sheet>
+  );
+}
 function Analyze({shop,user,toast}){
   const TM=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
   const curYm=ymOf(today());
@@ -9790,6 +9822,7 @@ function Analyze({shop,user,toast}){
   const [load,setLoad]=useState(true);
   const [txns,setTxns]=useState([]);
   const [showReport,setShowReport]=useState(false);
+  const [catDetail,setCatDetail]=useState(null);   /* {kind,cat} */
   useEffect(()=>{ (async()=>{ setLoad(true); try{ setTxns(await monthTxns(shop.id,ym)); }catch(e){ console.error(e); } setLoad(false); })(); },[shop.id,ym]);
 
   const shift=(d)=>{ const [y,m]=ym.split('-').map(Number); const dt=new Date(y,m-1+d,1); setYm(`${dt.getFullYear()}-${pad(dt.getMonth()+1)}`); };
@@ -9866,16 +9899,19 @@ function Analyze({shop,user,toast}){
         {expCats.length>0 && (
           <div style={card}>
             <div className="kanit" style={ttl}>รายจ่ายแยกหมวด</div>
-            <CatBars list={expCats} color="var(--neg)"/>
+            <CatBars list={expCats} color="var(--neg)" onPick={(c)=>setCatDetail({kind:'expense',cat:c})}/>
+            <div style={{fontSize:11,color:'var(--muted)',textAlign:'center',marginTop:4}}>แตะหมวดเพื่อดูรายการ</div>
           </div>
         )}
         {incCats.length>0 && (
           <div style={card}>
             <div className="kanit" style={ttl}>รายรับแยกหมวด</div>
-            <CatBars list={incCats} color="var(--pos)"/>
+            <CatBars list={incCats} color="var(--pos)" onPick={(c)=>setCatDetail({kind:'income',cat:c})}/>
+            <div style={{fontSize:11,color:'var(--muted)',textAlign:'center',marginTop:4}}>แตะหมวดเพื่อดูรายการ</div>
           </div>
         )}
       </>)}
+      {catDetail && <CatDetailSheet shop={shop} kind={catDetail.kind} cat={catDetail.cat} txns={txns} monthLabel={monthLabel} onClose={()=>setCatDetail(null)}/>}
     </div>
   );
 }
