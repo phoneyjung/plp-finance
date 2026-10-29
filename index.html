@@ -287,11 +287,32 @@ async function pinTakenByOther(pin,exceptId){
   return !s.empty && s.docs[0].id!==exceptId;
 }
 
-async function addTxn({shopId,kind,category,amount,method,note,by,photo,date}){
+/* ---- ภาษีซื้อ: แปลงข้อมูลใบกำกับภาษีให้เป็นฟิลด์มาตรฐาน ----
+   vatType: 'full' ใบกำกับเต็มรูป (ขอเครดิตภาษีซื้อได้) · 'short' อย่างย่อ · 'none' ไม่มีใบกำกับ
+   base = ยอดก่อน VAT (คำนวณจาก amount - vat ให้เสมอ จะได้ไม่ต้องเชื่อเลขที่พิมพ์มา) */
+/* ภาษีซื้อจากยอดที่รวม VAT แล้ว = ยอด × 7/107 */
+function vatOf(amountIncVat){
+  return Math.round(((Number(amountIncVat)||0) * 7 / 107) * 100) / 100;
+}
+function taxFields(tax, amount){
+  const t = tax || {};
+  const amt = Number(amount) || 0;
+  const vat = Math.round((Number(t.vat) || 0) * 100) / 100;
+  const type = (t.vatType === 'full' || t.vatType === 'short') ? t.vatType : 'none';
+  return {
+    vendor : (t.vendor || '').trim(),
+    taxDoc : (t.taxDoc || '').trim(),
+    vatType: type,
+    vat    : type === 'full' ? vat : 0,
+    base   : Math.round((amt - (type === 'full' ? vat : 0)) * 100) / 100
+  };
+}
+async function addTxn({shopId,kind,category,amount,method,note,by,photo,date,tax}){
   const ds=date||today(), ym=ymOf(ds);
   const ref=await db.collection('transactions').add({
     shopId, kind, category, amount:Number(amount), method, note:note||'',
-    date:ds, ym, skey:`${shopId}_${ym}`, by, source:'manual', hasPhoto:!!photo, ts:FieldValue.serverTimestamp()
+    date:ds, ym, skey:`${shopId}_${ym}`, by, source:'manual', hasPhoto:!!photo, ts:FieldValue.serverTimestamp(),
+    ...taxFields(tax, amount)
   });
   if(photo){ await db.collection('transactions').doc('rcpt_'+ref.id).set({ skey:`${shopId}_RCPT`, txnRef:ref.id, photo, ts:FieldValue.serverTimestamp() }); }
   await writeLog(shopId, by, 'txn.add', `เพิ่ม${kind==='income'?'รายรับ':'รายจ่าย'} ${category} ${baht(Number(amount))}`, [{id:ref.id, before:null, after:{kind,category,amount:Number(amount),method,note:note||'',date:ds,hasPhoto:!!photo}}]);
@@ -310,11 +331,11 @@ async function delTxn(id, actor){
     await writeLog(before.shopId||'', actor, cap?'capital.delete':'txn.delete', lbl, [{id, before, after:null}]);
   }
 }
-async function updateTxn(id, {shopId,kind,category,amount,method,note,date,by}){
+async function updateTxn(id, {shopId,kind,category,amount,method,note,date,by,tax}){
   let before=null;
   try{ const d=await db.collection('transactions').doc(id).get(); if(d.exists) before={...d.data()}; }catch(e){}
   const ds=date||today(), ym=ymOf(ds);
-  const after={ kind, category, amount:Number(amount), method, note:note||'', date:ds, ym, skey:`${shopId}_${ym}` };
+  const after={ kind, category, amount:Number(amount), method, note:note||'', date:ds, ym, skey:`${shopId}_${ym}`, ...taxFields(tax, amount) };
   await db.collection('transactions').doc(id).update(after);
   await writeLog(shopId, by, 'txn.edit', `แก้ไข${kind==='income'?'รายรับ':'รายจ่าย'} ${category} ${baht(Number(amount))}`, [{id, before, after}]);
 }
@@ -7517,6 +7538,12 @@ function EntrySheet({shop,user,initMode,initDate,editTxn,onClose,onSaved,toast})
   const [date,setDate]=useState(editTxn?editTxn.date:(initDate||today()));
   const [note,setNote]=useState(editTxn?(editTxn.note||''):'');
   const [showNote,setShowNote]=useState(!!(editTxn&&editTxn.note));
+  /* ---- ใบกำกับภาษี (เฉพาะรายจ่าย) ---- */
+  const [vendor,setVendor]=useState(editTxn?(editTxn.vendor||''):'');
+  const [taxDoc,setTaxDoc]=useState(editTxn?(editTxn.taxDoc||''):'');
+  const [vatType,setVatType]=useState(editTxn?(editTxn.vatType||'none'):'none');
+  const [vatStr,setVatStr]=useState(editTxn&&editTxn.vat?String(editTxn.vat):'');
+  const [showTax,setShowTax]=useState(!!(editTxn&&editTxn.vatType&&editTxn.vatType!=='none'));
   const [photo,setPhoto]=useState(null);
   const [photoBusy,setPhotoBusy]=useState(false);
   const [saving,setSaving]=useState(false);
@@ -7543,17 +7570,25 @@ function EntrySheet({shop,user,initMode,initDate,editTxn,onClose,onSaved,toast})
     const amount=Math.round(evalExpr(expr));
     if(!amount||amount<=0){ toast('ใส่จำนวนเงินก่อน','err'); return; }
     if(!cat){ toast('เลือกหมวดก่อน','err'); return; }
+    if(kind==='expense' && vatType==='full' && !taxDoc.trim()){
+      toast('ใบกำกับเต็มรูปต้องใส่เลขที่เอกสาร','err'); return;
+    }
+    const taxPayload = kind==='expense'
+      ? { vendor, taxDoc, vatType, vat: vatType==='full' ? (vatStr!=='' ? Number(vatStr) : vatOf(amount)) : 0 }
+      : null;
     setSaving(true);
     try{
       if(isEdit){
-        await updateTxn(editTxn.id,{shopId:shop.id,kind,category:cat,amount,method:pay,note,date,by:{id:user.id,name:user.name}});
+        await updateTxn(editTxn.id,{shopId:shop.id,kind,category:cat,amount,method:pay,note,date,by:{id:user.id,name:user.name},tax:taxPayload});
         toast('แก้ไขรายการแล้ว'); onSaved&&onSaved();
       } else {
-        await addTxn({shopId:shop.id,kind,category:cat,amount,method:pay,note,by:{id:user.id,name:user.name},photo,date});
+        await addTxn({shopId:shop.id,kind,category:cat,amount,method:pay,note,by:{id:user.id,name:user.name},photo,date,tax:taxPayload});
         toast(`บันทึก${mode==='inc'?'รายรับ':'รายจ่าย'} ${baht(amount)} แล้ว`); onSaved&&onSaved();
       }
     }catch(e){ toast('บันทึกไม่สำเร็จ','err'); setSaving(false); }
   };
+  const INP={width:'100%',padding:'10px 12px',border:'1.5px solid var(--line)',borderRadius:10,outline:'none',fontSize:14,background:'#fff'};
+  const vatNow = vatStr!=='' ? (Number(vatStr)||0) : vatOf(val);
   const dStr = date===today()? 'วันนี้' : (()=>{ const a=date.split('-'); return `${parseInt(a[2])} ${THAI_MON[parseInt(a[1])-1]}`; })();
   const kbtn=(key,label,o)=>{ o=o||{}; return <button key={key} onClick={o.onClick||(()=>press(key))} className="press" style={{gridColumn:o.span?('span '+o.span):undefined,border:'none',background:o.bg||'#EDF0F2',color:o.fg||'var(--ink)',borderRadius:14,height:56,fontSize:o.fs||23,fontWeight:600,display:'grid',placeItems:'center'}}>{label}</button>; };
 
@@ -7602,6 +7637,35 @@ function EntrySheet({shop,user,initMode,initDate,editTxn,onClose,onSaved,toast})
 
         <button onClick={()=>setShowNote(v=>!v)} className="press kanit" style={{marginTop:10,width:'100%',display:'flex',alignItems:'center',gap:8,padding:'11px 0',border:'none',background:'none',color:note?'var(--ink)':'var(--muted)',fontSize:14,textAlign:'left'}}><span style={{fontSize:15}}>📝</span> <span style={{flex:1,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{note||'เพิ่มหมายเหตุ'}</span></button>
         {showNote && <input value={note} onChange={e=>setNote(e.target.value)} placeholder="หมายเหตุ" autoFocus style={{width:'100%',padding:'11px 14px',border:'1.5px solid var(--line)',borderRadius:12,outline:'none',fontSize:14}}/>}
+        {mode==='exp' && (<>
+          <button onClick={()=>setShowTax(v=>!v)} className="press kanit" style={{marginTop:10,width:'100%',display:'flex',alignItems:'center',gap:8,padding:'11px 0',border:'none',background:'none',color:vatType!=='none'?'var(--ink)':'var(--muted)',fontSize:14,textAlign:'left'}}>
+            <span style={{fontSize:16}}>🧾</span>
+            <span style={{flex:1,minWidth:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
+              {vatType==='full' ? 'ใบกำกับเต็มรูป · ภาษีซื้อ '+baht(vatNow) : vatType==='short' ? 'ใบกำกับอย่างย่อ' : 'ใบกำกับภาษี'}
+            </span>
+            <span style={{fontSize:19,color:'#C0C4CC',lineHeight:1}}>{showTax?'−':'+'}</span>
+          </button>
+          {showTax && (
+            <div style={{border:'1px solid var(--line)',borderRadius:12,padding:12,marginTop:2,display:'flex',flexDirection:'column',gap:9,background:'var(--soft)'}}>
+              <div style={{display:'flex',gap:7}}>
+                {[['full','เต็มรูป'],['short','อย่างย่อ'],['none','ไม่มี']].map(([k,l])=>(
+                  <button key={k} onClick={()=>setVatType(k)} className="press kanit"
+                    style={{flex:1,padding:'9px 0',borderRadius:10,border:'none',fontSize:13.5,fontWeight:600,
+                      background:vatType===k?'var(--primary)':'#fff',color:vatType===k?'#fff':'var(--primary)'}}>{l}</button>
+                ))}
+              </div>
+              <input value={vendor} onChange={e=>setVendor(e.target.value)} placeholder="ชื่อผู้ขาย" style={INP}/>
+              {vatType!=='none' && <input value={taxDoc} onChange={e=>setTaxDoc(e.target.value)} placeholder="เลขที่ใบกำกับภาษี" style={INP}/>}
+              {vatType==='full' && (<div style={{display:'flex',alignItems:'center',gap:8}}>
+                <input value={vatStr} onChange={e=>setVatStr(e.target.value)} inputMode="decimal" placeholder="ภาษีซื้อ" style={{...INP,flex:1}}/>
+                <button onClick={()=>setVatStr(String(vatOf(val)))} className="press kanit"
+                  style={{padding:'10px 12px',borderRadius:10,border:'none',background:'#fff',color:'var(--primary)',fontSize:13,fontWeight:600,whiteSpace:'nowrap'}}>คิด 7%</button>
+              </div>)}
+              {vatType==='full' && <div style={{fontSize:12,color:'var(--muted)'}}>ยอดก่อน VAT {baht(Math.max(0,val-vatNow))} · ภาษีซื้อขอคืนได้ {baht(vatNow)}</div>}
+              {vatType==='short' && <div style={{fontSize:12,color:'var(--muted)'}}>อย่างย่อขอเครดิตภาษีซื้อไม่ได้ แต่ลงเป็นรายจ่ายได้</div>}
+            </div>
+          )}
+        </>)}
         {mode==='exp' && photo && <div style={{display:'flex',gap:10,alignItems:'center',marginTop:10}}><img src={photo} alt="" style={{width:46,height:46,borderRadius:10,objectFit:'cover',border:'1px solid var(--line)'}}/><span style={{fontSize:12.5,color:'var(--muted)',flex:1}}>แนบรูปใบเสร็จแล้ว</span><button onClick={()=>setPhoto(null)} className="press kanit" style={{border:'1px solid var(--line)',background:'#fff',color:'#DC2626',borderRadius:9,padding:'6px 11px',fontSize:12.5,fontWeight:600}}>ลบ</button></div>}
       </div>
 
@@ -9851,7 +9915,7 @@ function Report({shop,ym,onClose,toast}){
   const [yrLoad,setYrLoad]=useState(false);
   useEffect(()=>{ (async()=>{ setLoad(true); try{ setTxns(await monthTxns(shop.id,ym)); }catch(e){ console.error(e); } setLoad(false); })(); },[shop.id,ym]);
   const [yy,mm]=ym.split('-').map(Number);
-  useEffect(()=>{ if(scope!=='year'||yrTxns) return;
+  useEffect(()=>{ if(scope==='month'||yrTxns) return;
     (async()=>{ setYrLoad(true);
       try{ const all=[];
         for(let i=1;i<=12;i++){ const r=await monthTxns(shop.id,`${yy}-${pad(i)}`); all.push(...r); }
@@ -9861,11 +9925,22 @@ function Report({shop,ym,onClose,toast}){
     })();
   },[scope,yy,shop.id]);
 
-  const src=(scope==='year'&&yrTxns)?yrTxns:txns;
+  /* ช่วงเวลา: month = เดือนเดียว · h1 = ม.ค.–มิ.ย. (ภ.ง.ด.51) · h2 = ก.ค.–ธ.ค. · year = ทั้งปี */
+  const MR = scope==='h1'?[1,6] : scope==='h2'?[7,12] : scope==='year'?[1,12] : null;
+  const isMulti = !!MR;
+  const src=(MR&&yrTxns)
+    ? yrTxns.filter(t=>{ const k=+String(t.date||'').slice(5,7); return k>=MR[0]&&k<=MR[1]; })
+    : txns;
+  const tag = scope==='month' ? ym : (yy+'-'+scope);
   const list=[...src].sort((a,b)=> a.date<b.date?-1:a.date>b.date?1:((a.ts?.seconds||0)-(b.ts?.seconds||0)));
   const income=sumBy(src,x=>x.kind==='income'), expense=sumBy(src,x=>x.kind==='expense'), profit=income-expense;
   const monthLabel=`${TM[mm-1]} ${yy+543}`; const gen=today();
-  const periodLabel=(scope==='year')?`ปีภาษี ${yy+543}`:`เดือน ${monthLabel}`;
+  const periodLabel = scope==='year' ? `ปีภาษี ${yy+543}`
+    : scope==='h1' ? `ครึ่งปีแรก ${yy+543} (ม.ค.–มิ.ย.)`
+    : scope==='h2' ? `ครึ่งปีหลัง ${yy+543} (ก.ค.–ธ.ค.)`
+    : `เดือน ${monthLabel}`;
+  const totalLabel = scope==='year' ? 'รวมทั้งปี' : scope==='h1' ? 'รวมครึ่งปีแรก'
+    : scope==='h2' ? 'รวมครึ่งปีหลัง' : 'รวมทั้งเดือน';
   /* สรุปรายเดือน แยกเงินสด/โอน (ใช้ในรายงานภาษี) */
   const byMonth=(()=>{ const m={};
     for(let i=1;i<=12;i++) m[i]={inC:0,inB:0,exp:0};
@@ -9880,6 +9955,61 @@ function Report({shop,ym,onClose,toast}){
   const aggCat=(k)=>{ const m={}; txns.filter(t=>t.kind===k).forEach(t=>{ const c=t.category||'อื่นๆ'; m[c]=(m[c]||0)+(Number(t.amount)||0); }); return Object.entries(m).sort((a,b)=>b[1]-a[1]); };
   const expCat=aggCat('expense'), incCat=aggCat('income');
 
+  /* ---------- รายงานภาษีซื้อ: เฉพาะรายจ่ายที่มีใบกำกับภาษีเต็มรูป ---------- */
+  const vatRows=src.filter(t=>t.kind==='expense'&&t.vatType==='full'&&(Number(t.vat)||0)>0)
+    .sort((a,b)=> a.date<b.date?-1:a.date>b.date?1:0);
+  const vatTotal=vatRows.reduce((s,t)=>s+(Number(t.vat)||0),0);
+  const vatBase =vatRows.reduce((s,t)=>s+(Number(t.base)||((Number(t.amount)||0)-(Number(t.vat)||0))),0);
+  const noDocExp=src.filter(t=>t.kind==='expense'&&t.vatType!=='full')
+    .reduce((s,t)=>s+(Number(t.amount)||0),0);
+
+  const taxReport=()=>{
+    if(!vatRows.length){ toast('ช่วงนี้ยังไม่มีใบกำกับภาษีเต็มรูป','err'); return; }
+    const esc=(s)=>String(s==null?'':s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+    const n2=(v)=>(Number(v)||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+    const body=vatRows.map((t,i)=>`<tr>
+        <td class="c">${i+1}</td><td class="c">${esc(t.date)}</td>
+        <td>${esc(t.taxDoc||'—')}</td><td>${esc(t.vendor||'—')}</td>
+        <td>${esc(t.category||'')}</td>
+        <td class="n">${n2(t.base!=null?t.base:(Number(t.amount)||0)-(Number(t.vat)||0))}</td>
+        <td class="n">${n2(t.vat)}</td><td class="n">${n2(t.amount)}</td></tr>`).join('');
+    const html=`<!doctype html><html lang="th"><head><meta charset="utf-8">
+<title>รายงานภาษีซื้อ ${esc(shop.name)}</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap">
+<style>
+ @page{size:A4;margin:14mm 12mm}
+ body{font-family:Sarabun,"Noto Sans Thai",Tahoma,sans-serif;color:#191714;font-size:12px;margin:0}
+ h1{font-size:17px;margin:0 0 2px}
+ .sub{color:#5c574e;font-size:12px;margin:0 0 12px}
+ table{border-collapse:collapse;width:100%}
+ th,td{border-bottom:1px solid #ddd8cd;padding:5px 6px;text-align:left;vertical-align:top}
+ thead th{background:#eef2f7;border-bottom:1px solid #191714;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:#5c574e}
+ thead{display:table-header-group} tr{break-inside:avoid}
+ .n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+ .c{text-align:center;white-space:nowrap}
+ tfoot td{border-top:1px solid #191714;border-bottom:2px solid #191714;font-weight:700;background:#f3f0e9}
+ .note{margin-top:14px;font-size:11px;color:#5c574e;line-height:1.6}
+ .sign{margin-top:34px;display:flex;gap:30px}
+ .sign div{flex:1;border-top:1px solid #191714;padding-top:5px;font-size:11px;color:#5c574e}
+ @media print{.noprint{display:none}}
+</style></head><body>
+<h1>รายงานภาษีซื้อ</h1>
+<p class="sub">${esc(shop.name)} · ${esc(periodLabel)} · ออกรายงาน ${esc(gen)}</p>
+<table><thead><tr><th class="c">#</th><th class="c">วันที่</th><th>เลขที่ใบกำกับภาษี</th>
+<th>ชื่อผู้ขาย</th><th>รายการ</th><th class="n">ยอดก่อน VAT</th><th class="n">ภาษีซื้อ</th><th class="n">รวม</th></tr></thead>
+<tbody>${body}</tbody>
+<tfoot><tr><td colspan="5">รวม ${vatRows.length} ฉบับ</td>
+<td class="n">${n2(vatBase)}</td><td class="n">${n2(vatTotal)}</td><td class="n">${n2(vatBase+vatTotal)}</td></tr></tfoot>
+</table>
+<p class="note">นับเฉพาะรายจ่ายที่บันทึกไว้ว่ามีใบกำกับภาษีเต็มรูป${noDocExp>0?` · ยังมีรายจ่ายอีก ${n2(noDocExp)} บาท ที่ไม่มีใบกำกับเต็มรูป จึงขอเครดิตภาษีซื้อไม่ได้`:''}<br>ต้องเก็บใบกำกับภาษีตัวจริงไว้คู่กับรายงานนี้ และตรวจว่าชื่อผู้ซื้อบนใบกำกับตรงกับชื่อนิติบุคคล</p>
+<div class="sign"><div>ผู้จัดทำ / วันที่</div><div>ผู้มีอำนาจลงนาม / วันที่</div></div>
+<p class="noprint" style="margin-top:18px;font-size:11px;color:#8a8a8a">กด Ctrl/Cmd + P เพื่อสั่งพิมพ์หรือบันทึกเป็น PDF</p>
+</body></html>`;
+    const w=window.open('','_blank');
+    if(!w){ toast('เปิดหน้าต่างไม่ได้ — โปรดอนุญาต popup แล้วลองใหม่','err'); return; }
+    w.document.open(); w.document.write(html); w.document.close();
+  };
+
   const excel=async()=>{ setBusy(true);
     try{ const XLSX=await loadXLSX();
       const rows=[['รายงานการเงิน',shop.name],['เดือน',monthLabel],['ออกรายงาน',gen],[],['วันที่','ประเภท','หมวด','ช่องทาง','จำนวนเงิน','หมายเหตุ']];
@@ -9887,22 +10017,22 @@ function Report({shop,ym,onClose,toast}){
       rows.push([],['','','','','รวมรายรับ',income],['','','','','รวมรายจ่าย',expense],['','','','','กำไรสุทธิ',profit]);
       const ws=XLSX.utils.aoa_to_sheet(rows); ws['!cols']=[{wch:12},{wch:9},{wch:22},{wch:9},{wch:12},{wch:26}];
       const wb=XLSX.utils.book_new();
-      if(scope==='year'){
-        const sm=[['สรุปรายเดือน',shop.name],['ปีภาษี',yy+543],['ออกรายงาน',gen],[],
+      if(isMulti){
+        const sm=[['สรุปรายเดือน',shop.name],['ช่วง',periodLabel],['ออกรายงาน',gen],[],
                   ['เดือน','รายรับเงินสด','รายรับโอน','รายรับรวม','รายจ่าย','คงเหลือ']];
         byMonth.forEach(r=>sm.push([TM[r.m-1],r.inC,r.inB,r.inC+r.inB,r.exp,r.inC+r.inB-r.exp]));
-        sm.push(['รวมทั้งปี',inCash,inBank,income,expense,profit]);
+        sm.push([totalLabel,inCash,inBank,income,expense,profit]);
         const ws2=XLSX.utils.aoa_to_sheet(sm); ws2['!cols']=[{wch:12},{wch:14},{wch:14},{wch:14},{wch:14},{wch:14}];
         XLSX.utils.book_append_sheet(wb,ws2,'สรุปรายเดือน');
       }
       XLSX.utils.book_append_sheet(wb,ws,'รายการ');
-      XLSX.writeFile(wb,`รายงาน_${shop.name}_${scope==='year'?yy:ym}.xlsx`);
+      XLSX.writeFile(wb,`รายงาน_${shop.name}_${tag}.xlsx`);
     }catch(e){ console.error(e); toast('ส่งออก Excel ไม่สำเร็จ','err'); }
     setBusy(false);
   };
   const pdf=()=>{
     const esc=(s)=>String(s==null?'':s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
-    const smH = scope==='year'
+    const smH = isMulti
       ? ('<table><thead><tr><th>เดือน</th><th>รายรับเงินสด</th><th>รายรับโอน</th><th>รายรับรวม</th><th>รายจ่าย</th><th>คงเหลือ</th></tr></thead><tbody>'
         + byMonth.map(r=>'<tr><td>'+TM[r.m-1]+' '+(yy+543)+'</td><td class="r">'+r.inC.toLocaleString('en-US')+'</td><td class="r">'+r.inB.toLocaleString('en-US')+'</td><td class="r g">'+(r.inC+r.inB).toLocaleString('en-US')+'</td><td class="r rd">'+r.exp.toLocaleString('en-US')+'</td><td class="r">'+(r.inC+r.inB-r.exp).toLocaleString('en-US')+'</td></tr>').join('')
         + '<tr style="font-weight:700;background:#f5f5f5"><td>รวมทั้งปี</td><td class="r">'+inCash.toLocaleString('en-US')+'</td><td class="r">'+inBank.toLocaleString('en-US')+'</td><td class="r g">'+income.toLocaleString('en-US')+'</td><td class="r rd">'+expense.toLocaleString('en-US')+'</td><td class="r">'+profit.toLocaleString('en-US')+'</td></tr></tbody></table>')
@@ -9916,7 +10046,7 @@ function Report({shop,ym,onClose,toast}){
 
   const jpg=async()=>{
     try{ if(document.fonts&&document.fonts.ready) await document.fonts.ready; }catch(e){}
-    const rows=(scope==='year')?byMonth:[{m:mm,inC:inCash,inB:inBank,exp:expense}];
+    const rows=isMulti?byMonth:[{m:mm,inC:inCash,inB:inBank,exp:expense}];
     const W=1000, HEAD=210, RH=46, FOOT=150;
     const cv=document.createElement('canvas');
     cv.width=W; cv.height=HEAD+RH*(rows.length+2)+FOOT;
@@ -9954,7 +10084,7 @@ function Report({shop,ym,onClose,toast}){
     });
     g.fillStyle='#13294B'; g.fillRect(0,y-24,W,RH+6);
     g.fillStyle='#FFFFFF'; g.font=F(700,19); g.textAlign='left';
-    g.fillText(scope==='year'?'รวมทั้งปี':'รวมทั้งเดือน',CX[0],y+4);
+    g.fillText(totalLabel,CX[0],y+4);
     g.textAlign='right';
     g.fillText(num(inCash),CX[1],y+4); g.fillText(num(inBank),CX[2],y+4);
     g.fillText(num(income),CX[3],y+4); g.fillText(num(expense),CX[4],y+4); g.fillText(num(profit),CX[5],y+4);
@@ -9965,7 +10095,7 @@ function Report({shop,ym,onClose,toast}){
     g.fillStyle='#9AA4B2'; g.font=F(400,13);
     g.fillText('PLP Finance · สร้างอัตโนมัติจากข้อมูลในระบบ',36,y+62);
     const a=document.createElement('a');
-    a.download='รายงาน_'+shop.name+'_'+(scope==='year'?yy:ym)+'.jpg';
+    a.download='รายงาน_'+shop.name+'_'+tag+'.jpg';
     a.href=cv.toDataURL('image/jpeg',0.95);
     document.body.appendChild(a); a.click(); a.remove();
     toast('บันทึกรูปแล้ว');
@@ -9974,8 +10104,8 @@ function Report({shop,ym,onClose,toast}){
   return (
     <Sheet title="ออกรายงาน" onClose={onClose} z={70}>
       <div style={{fontSize:13,color:'var(--muted)'}}>{shop.name} · {periodLabel}</div>
-      <div style={{display:'flex',gap:8,margin:'10px 0 2px'}}>
-        {[['month','เดือนนี้'],['year','ทั้งปี '+(yy+543)]].map(([k,l])=>(
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,margin:'10px 0 2px'}}>
+        {[['month','เดือนนี้'],['h1','ครึ่งปีแรก'],['h2','ครึ่งปีหลัง'],['year','ทั้งปี '+(yy+543)]].map(([k,l])=>(
           <button key={k} onClick={()=>setScope(k)} className="press kanit" style={{flex:1,padding:'9px 2px',borderRadius:11,fontSize:13.5,fontWeight:600,border:`1.5px solid ${scope===k?'var(--primary)':'var(--line)'}`,background:scope===k?'var(--primary)':'#fff',color:scope===k?'#fff':'var(--ink)'}}>{l}</button>
         ))}
       </div>
@@ -9993,7 +10123,21 @@ function Report({shop,ym,onClose,toast}){
           <button onClick={pdf} className="press kanit" style={{flex:1,padding:'13px',border:'none',borderRadius:13,background:'#C0392B',color:'#fff',fontWeight:600,fontSize:14.5,display:'flex',justifyContent:'center',alignItems:'center',gap:7}}><I.receipt/> PDF</button>
           <button onClick={jpg} className="press kanit" style={{flex:1,padding:'13px',border:'none',borderRadius:13,background:'#7C3AED',color:'#fff',fontWeight:600,fontSize:14.5,display:'flex',justifyContent:'center',alignItems:'center',gap:7}}>🖼 JPG</button>
         </div>
-        <div style={{fontSize:11.5,color:'var(--muted)',marginBottom:18,textAlign:'center',lineHeight:1.5}}>{list.length} รายการ{scope==='year'?' ทั้งปี':'ในเดือนนี้'} · PDF เปิดหน้าใหม่ให้กด “บันทึกเป็น PDF” · JPG บันทึกเป็นรูปสรุปทันที</div>
+        <div style={{display:'flex',gap:10,marginBottom:10}}>
+          <button onClick={excel} disabled={busy} className="press kanit" style={{flex:1,padding:'13px',border:'none',borderRadius:13,background:'#1D6F42',color:'#fff',fontWeight:600,fontSize:14.5,opacity:busy?.6:1,display:'flex',justifyContent:'center',alignItems:'center',gap:7}}>⬇ Excel</button>
+          <button onClick={taxReport} className="press kanit" style={{flex:1,padding:'13px',border:'none',borderRadius:13,background:'#13294B',color:'#fff',fontWeight:600,fontSize:14.5,display:'flex',justifyContent:'center',alignItems:'center',gap:7}}>🧾 ภาษีซื้อ</button>
+        </div>
+        {vatRows.length>0 && (
+          <div style={{border:'1px solid var(--line)',borderRadius:12,padding:'10px 12px',marginBottom:14,background:'var(--soft)'}}>
+            <div className="kanit" style={{fontWeight:600,fontSize:13.5,marginBottom:4}}>ภาษีซื้อที่ขอเครดิตได้</div>
+            <div style={{display:'flex',justifyContent:'space-between',fontSize:13}}>
+              <span style={{color:'var(--muted)'}}>{vatRows.length} ใบกำกับเต็มรูป · ยอดก่อน VAT {baht(vatBase)}</span>
+              <span className="num" style={{fontWeight:700}}>{baht(vatTotal)}</span>
+            </div>
+            {noDocExp>0 && <div style={{fontSize:11.5,color:'#B45309',marginTop:5}}>ยังมีรายจ่าย {baht(noDocExp)} ที่ไม่มีใบกำกับเต็มรูป ขอคืนภาษีซื้อไม่ได้</div>}
+          </div>
+        )}
+        <div style={{fontSize:11.5,color:'var(--muted)',marginBottom:18,textAlign:'center',lineHeight:1.5}}>{list.length} รายการ{isMulti?(' '+periodLabel):'ในเดือนนี้'} · PDF เปิดหน้าใหม่ให้กด “บันทึกเป็น PDF” · JPG บันทึกเป็นรูปสรุปทันที</div>
 
         {expCat.length>0 && (<div style={{marginBottom:14}}>
           <div className="kanit" style={{fontWeight:600,fontSize:14,marginBottom:6}}>รายจ่ายแยกหมวด</div>
