@@ -2988,11 +2988,9 @@ function ocPayCalc(pay,ym){
             if(diffM2>gr) otMin+=(diffM2-gr);
             else if(diffM2<-gr) missMin+=(-diffM2-gr);
           } else {
-            let hrs=ocPayNetHrs(tt);
-            const diffM=Math.round((hrs-(cfg.shiftHrs||10))*60);
-            /* หักช่วงผ่อนผันออกก่อน — เช่น ผ่อนผัน 15 น. ออกช้า 16 น. = OT 1 นาที */
-            if(diffM>gr) otMin+=(diffM-gr);
-            else if(diffM<-gr && !isPartner) missMin+=(-diffM-gr);   /* หุ้นส่วนไม่หักชั่วโมงขาด */
+            /* ใช้กะของวันนั้น (ตารางงาน 06:00-21:00 = กะ 15 ชม. ไม่ใช่ 10) ให้ตรงกับแท็บเวลางาน */
+            const ro=ocPayOtDay(tt, ocPayShiftOf(st, (schedM[d]||{})[st.id]||''), cfg, isPartner);
+            otMin+=ro.ot; missMin+=ro.miss;   /* หุ้นส่วนไม่หักชั่วโมงขาด */
           }
           const sv=(schedM[d]||{})[st.id]||'';
           const sr=schedRange(sv);
@@ -3188,6 +3186,34 @@ function ocPayAbsent(pay,ym,stId){
   for(let d=1;d<=calc.nDays;d++){ const pd=calc.perDay[d]; if(!pd||pd.ids.indexOf(stId)<0){ if(!((els[d]||{})[stId])) abs.push(d); } }
   return { n:abs.length, text:ocPayRanges(abs) };
 }
+/* OT/ขาด ต่อวัน — มีกะของวันนั้น: คิดแบบเดียวกับแท็บเวลางาน (มาก่อนไม่บวก · เข้าสายหัก · ออกช้าบวก · ออกก่อนหัก · หักผ่อนผันแยกฝั่ง)
+   ไม่มีกะ: เทียบชั่วโมงรวมกับ shiftHrs (10) แบบเดิม */
+function ocPayOtDay(tt, shift, cfg, isPartner){
+  const gr=(cfg.otGrace!=null? Number(cfg.otGrace) : 15);
+  const mi=ocPayMin(tt&&tt.i), mo=ocPayMin(tt&&tt.o);
+  if(mi==null||mo==null) return {ot:0,miss:0};
+  const sI=shift? ocPayMin(shift.i) : null, sO=shift? ocPayMin(shift.o) : null;
+  let net;
+  if(sI!=null && sO!=null){
+    let late=Math.max(0, mi-sI);
+    let over=mo-sO; if(over>720) over-=1440; if(over<-720) over+=1440;
+    late=Math.max(0, late-gr);
+    over= over>0? Math.max(0,over-gr) : Math.min(0,over+gr);
+    net=Math.round(over-late);
+  } else {
+    const diffM=Math.round((ocPayNetHrs(tt)-(cfg.shiftHrs||10))*60);
+    net= diffM>gr? diffM-gr : (diffM<-gr? diffM+gr : 0);
+  }
+  return { ot: net>0? net:0, miss: (net<0 && !isPartner)? -net : 0 };
+}
+/* กะของวัน: ตารางงาน (ถ้าไม่ใช่ หยุด/ที่อื่น) > กะประจำในโปรไฟล์ > ไม่มี */
+function ocPayShiftOf(st, sv){
+  const sr=schedRange(sv);
+  if(sr) return sr;
+  if(sv==='off'||sv==='other') return null;
+  if(st && st.shiftIn && st.shiftOut) return {i:st.shiftIn,o:st.shiftOut};
+  return null;
+}
 function ocPayPersonDays(pay,ym,stId){
   const m=pay.months[ym]||{}; const cups=m.cups||{}, times=m.times||{}, hol=m.hol||{};
   const cfg=pay.cfg; const calc=ocPayCalc(pay,ym); const out=[];
@@ -3207,9 +3233,8 @@ function ocPayPersonDays(pay,ym,stId){
     if(isMd){
       /* 🧹 แม่บ้าน: เวลาเข้าออกไว้ดูอย่างเดียว — ไม่คิด OT/หักขาดจากเวลา */
     } else if(!isHol && hrs!=null){
-      const diffM=Math.round((hrs-(cfg.shiftHrs||10))*60);
-      if(diffM>gr) otM=diffM-gr;
-      else if(diffM<-gr && !isPtn) missM=(-diffM)-gr;
+      const ro=ocPayOtDay(tt, ocPayShiftOf(stObj, (((m.sched||{})[d]||{})[stId])||''), cfg, isPtn);
+      otM=ro.ot; missM=ro.miss;
     }
     /* สาย: เทียบตารางงานของวัน ไม่มีค่อยใช้กะในโปรไฟล์ (ผ่อนผันตาม cfg.diligGrace) */
     const sv=(((m.sched||{})[d]||{})[stId])||'';
@@ -5548,6 +5573,9 @@ function OCTabPay({ toast }){
   },[ym, pay?1:0]);
   const saveTimer=useRef(null);
   const loadedRef=useRef(false);
+  const [fsImp,setFsImp]=useState(null);      /* ผลอ่านไฟล์ FoodStory รอยืนยัน */
+  const [fsFree,setFsFree]=useState(true);    /* นับแก้ว FREE (โปร) ด้วยไหม */
+  const fsRef=useRef(null);
 
   useEffect(()=>{
     let stop=false;
@@ -5685,6 +5713,35 @@ function OCTabPay({ toast }){
     }catch(e){ console.error(e); toast('ดึงข้อมูลไม่สำเร็จ','err'); }
   };
 
+  /* 📂 ยอดแก้วจาก FoodStory (รายงาน ยอดขายสินค้าตามวัน) */
+  const onFsFile=async(e)=>{
+    const f=e.target.files&&e.target.files[0]; if(!f) return;
+    try{
+      const XLSX=await loadXLSX();
+      const wb=XLSX.read(await f.arrayBuffer(),{type:'array',cellDates:true});
+      const p=fsCupsParse(XLSX,wb);
+      if(!p){ toast('อ่านไม่ได้ — ต้องเป็นไฟล์ "ยอดขายสินค้าตามวัน" จาก FoodStory (มีคอลัมน์ วันที่ · หมวดสินค้า · จำนวนการขาย)','err'); }
+      else setFsImp(p);
+    }catch(err){ console.error(err); toast('อ่านไฟล์ไม่สำเร็จ','err'); }
+    if(fsRef.current) fsRef.current.value='';
+  };
+  const fsApply=()=>{
+    if(!fsImp) return;
+    const fills={}; let chg=0, same=0;
+    Object.keys(fsImp.days).forEach(k=>{
+      if(k.slice(0,7)!==ym) return;
+      const o=fsImp.days[k]; const v=Math.round(o.all-(fsFree?0:o.free));
+      const d=String(+k.slice(8,10));
+      if((Number((mo.cups||{})[d])||0)===v) same++; else chg++;
+      fills[d]=v;
+    });
+    const n=Object.keys(fills).length;
+    if(!n){ toast('ไฟล์นี้เป็นช่วง '+fsImp.from+' → '+fsImp.to+' ไม่ตรงเดือนที่เปิดอยู่ ('+ocPayLabel(ym)+') — เปลี่ยนเดือนก่อน','err'); return; }
+    setMon(m=>{ m.cups=Object.assign({}, m.cups||{}, fills); });
+    toast('ลงยอดแก้ว '+n+' วัน · เปลี่ยน '+chg+' · เท่าเดิม '+same+(fsFree?' · นับแก้วฟรีด้วย':' · ไม่นับแก้วฟรี'));
+    setFsImp(null);
+  };
+
   /* 💸 ยืนยันจ่าย: บันทึกสถานะลงเดือน + (ถ้าเลือก) ลงรายจ่าย "เงินเดือนพนักงาน" */
   const confirmPaid=async(o)=>{
     let txnId='';
@@ -5732,6 +5789,24 @@ function OCTabPay({ toast }){
           {mo.paid? ('✓ จ่ายแล้ว '+mo.paid.at+' · '+ocFmt(mo.paid.amount||mo.paid.toPay||0,0)+' ฿ · ดูรายละเอียด') : '💸 จ่ายเงินเดือน · เช็กลิสต์ 5 ข้อ'}
         </button>
         {showPayChk && <OCPayCheckSheet pay={pay} ym={ym} calc={calc} toast={toast} onClose={()=>setShowPayChk(false)} onConfirm={confirmPaid} onUndo={undoPaid}/>}
+        <input ref={fsRef} type="file" accept=".xlsx,.xls,.csv" onChange={onFsFile} style={{display:'none'}}/>
+        <button className="press kanit text-[12px] w-full py-1.5 mt-2 rounded-lg" style={{background:'#fff',color:'var(--primary)',border:'1.5px dashed var(--primary)',fontWeight:600}} onClick={()=>fsRef.current&&fsRef.current.click()}>📂 ลงยอดแก้วจากไฟล์ FoodStory (ยอดขายสินค้าตามวัน · ตัด topping)</button>
+        {fsImp && (()=>{
+          const ks=Object.keys(fsImp.days).filter(k=>k.slice(0,7)===ym).sort();
+          const sumAll=ks.reduce((a,k)=>a+fsImp.days[k].all,0), sumFree=ks.reduce((a,k)=>a+fsImp.days[k].free,0), sumTop=ks.reduce((a,k)=>a+fsImp.days[k].top,0);
+          return (
+            <div className="rounded-xl p-2.5 mt-2" style={{background:'var(--soft)'}}>
+              <div className="kanit text-[12.5px]" style={{fontWeight:700}}>อ่านได้ {ks.length} วันของ {ocPayLabel(ym)} <span style={{fontWeight:400,color:'var(--muted)'}}>(ไฟล์ {fsImp.from} → {fsImp.to})</span></div>
+              <div className="text-[11.5px] mt-0.5" style={{color:'var(--muted)'}}>แก้ว {ocFmt(sumAll,0)} · ไม่นับ topping {ocFmt(sumTop,0)} ชิ้น · ในนี้เป็นแก้วฟรี (โปร) {ocFmt(sumFree,0)}</div>
+              <label className="flex items-center gap-2 text-[12px] mt-1.5"><input type="checkbox" checked={fsFree} onChange={e=>setFsFree(e.target.checked)}/> นับแก้วฟรี (หมวด FREE) เป็นแก้วด้วย → รวม <b className="num">{ocFmt(sumAll-(fsFree?0:sumFree),0)}</b></label>
+              <div className="text-[10.5px] mt-1" style={{color:'var(--muted)'}}>จะเขียนทับช่องแก้วของวันที่มีในไฟล์ (วันอื่นไม่แตะ)</div>
+              <div className="flex gap-2 mt-2">
+                <button className="press kanit text-[12px] flex-1 py-1.5 rounded-lg" style={{background:'#fff',border:'1px solid var(--line)'}} onClick={()=>setFsImp(null)}>ยกเลิก</button>
+                <button className="press kanit text-[12px] py-1.5 rounded-lg text-white" style={{flex:2,background:'var(--primary)',border:'none',fontWeight:700}} onClick={fsApply}>ลงช่องแก้ว {ks.length} วัน</button>
+              </div>
+            </div>
+          );
+        })()}
         <div className="flex gap-2 mt-2">
           <button className="press kanit text-[12px] flex-1 py-1.5 rounded-lg" style={{background:'var(--soft)',color:'var(--primary)',border:'none',opacity:fpBusy?0.6:1}} disabled={fpBusy} onClick={()=>pullFp(false)}>🖐 ดึงเวลาสแกนนิ้ว</button>
           <button className="press kanit text-[12px] py-1.5 px-3 rounded-lg" style={{background:'var(--card)',color:'var(--muted)',border:'1px solid var(--line)',opacity:fpBusy?0.6:1}} disabled={fpBusy} onClick={()=>{ if(window.confirm('ทับเวลาที่แก้มือไว้ทั้งหมดด้วยข้อมูลจากเครื่องสแกน?')) pullFp(true); }}>ทับทั้งหมด</button>
@@ -8383,6 +8458,41 @@ function loadXLSX(){
     s.onload=()=>res(window.XLSX); s.onerror=()=>rej(new Error('โหลดไลบรารีไม่สำเร็จ'));
     document.head.appendChild(s);
   });
+}
+/* FoodStory → ยอดขายสินค้าตามวัน (ดาวน์โหลด Excel): วันที่ · รหัสสินค้า · ชื่อสินค้า · กลุ่ม · หมวดสินค้า · … · จำนวนการขาย
+   → แก้วต่อวัน = Σ จำนวนการขาย ยกเว้นหมวด topping · แยกนับหมวด FREE ไว้ให้เลือก */
+function fsCupsParse(XLSX,wb){
+  const days={}; let rows=0;
+  for(const name of wb.SheetNames){
+    const ws=wb.Sheets[name]; if(!ws) continue;
+    const raw=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:''});
+    if(raw.length<2) continue;
+    let hr=-1;
+    for(let i=0;i<Math.min(10,raw.length);i++){
+      const hs=(raw[i]||[]).map(x=>String(x||'').trim());
+      if(hs.some(h=>h==='วันที่') && hs.some(h=>h.indexOf('หมวด')>=0) && hs.some(h=>h.indexOf('จำนวน')>=0)){ hr=i; break; }
+    }
+    if(hr<0) continue;
+    const hs=(raw[hr]||[]).map(x=>String(x||'').trim());
+    const iD=hs.findIndex(h=>h==='วันที่');
+    const iCat=hs.findIndex(h=>h.indexOf('หมวดสินค้า')>=0); const iCat2= iCat>=0? iCat : hs.findIndex(h=>h.indexOf('หมวด')>=0);
+    const iQ=hs.findIndex(h=>h.indexOf('จำนวนการขาย')>=0); const iQ2= iQ>=0? iQ : hs.findIndex(h=>h.indexOf('จำนวน')>=0);
+    const iName=hs.findIndex(h=>h.indexOf('ชื่อสินค้า')>=0);
+    raw.slice(hr+1).forEach(r=>{
+      const key=xDate(r[iD]); if(!key) return;             /* ข้ามแถวรวม/ว่าง */
+      const q=xAmt(r[iQ2]); if(q==null) return;
+      const cat=String(r[iCat2]||'').trim().toLowerCase();
+      const nm=String(iName>=0? r[iName]:'').trim();
+      const o=(days[key]=days[key]||{all:0,top:0,free:0});
+      rows++;
+      if(/top|ท็อป|ท๊อป/.test(cat)){ o.top+=q; return; }   /* topping ไม่ใช่แก้ว */
+      o.all+=q;
+      if(/free|ฟรี/.test(cat) || /^free\b|^ฟรี/i.test(nm)) o.free+=q;
+    });
+  }
+  const ks=Object.keys(days).sort();
+  if(!ks.length) return null;
+  return { days, rows, from:ks[0], to:ks[ks.length-1] };
 }
 function xDate(v){
   if(v==null||v==='') return null;
