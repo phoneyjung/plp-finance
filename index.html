@@ -2855,14 +2855,32 @@ function schedParseBook(XLSX,wb){
   return { cells, names:Object.keys(names), weeks, from:ds[0], to:ds[ds.length-1] };
 }
 /* จับคู่ชื่อในไฟล์กับพนักงาน: ตรงตัว / ตัด "พี่" / สะกดใกล้เคียง */
+const schedNorm=(x)=>String(x||'').replace(/^(พี่|น้อง|ป๋า|คุณ)/,'').replace(/\s+/g,'').replace(/ต์$/,'').toLowerCase();
 function schedMatchName(name, staff, saved){
-  if(saved && saved[name]) return saved[name];
-  const norm=(x)=>String(x||'').replace(/^(พี่|น้อง|ป๋า|คุณ)/,'').replace(/\s+/g,'').replace(/ต์$/,'').toLowerCase();
+  const norm=schedNorm;
   const n=norm(name);
+  if(saved && saved[name]){
+    /* ค่าที่เคยจับคู่ไว้ใช้ได้ก็ต่อเมื่อไม่ชนกับชื่อตรงตัวของคนอื่น (เช่น "ป๋า" เคยถูกจับไปเป็นแซ็คโดยตัวจับคู่เก่า) */
+    const st=(staff||[]).find(x=>x.id===saved[name]);
+    if(st && n!=='' && (norm(st.name)===n || !(staff||[]).some(x=>norm(x.name)===n))) return saved[name];
+  }
   if(!n) return '';                                                   /* ชื่อที่ตัดคำนำหน้าแล้วว่าง (เช่น "ป๋า") ไม่เดา */
   let hit=(staff||[]).find(x=>norm(x.name)===n);
   if(!hit && n.length>=2) hit=(staff||[]).find(x=>{ const m=norm(x.name); return m.length>=2 && (m.startsWith(n)||n.startsWith(m)); });
   return hit? hit.id : '';
+}
+/* ชื่อในไฟล์หลายชื่อชี้คนเดียวกัน → เก็บชื่อที่ตรงตัวไว้ ชื่ออื่นให้ "ข้าม" · คืนรายการ id ที่ยังซ้ำอยู่ */
+function schedFixDups(mp, staff){
+  const by={}; Object.keys(mp).forEach(n=>{ if(mp[n]) (by[mp[n]]=by[mp[n]]||[]).push(n); });
+  const left=[];
+  Object.keys(by).forEach(id=>{
+    const ns=by[id]; if(ns.length<2) return;
+    const st=(staff||[]).find(x=>x.id===id);
+    const exact=st? ns.filter(n=>schedNorm(n)===schedNorm(st.name)) : [];
+    if(exact.length===1){ ns.forEach(n=>{ if(n!==exact[0]) mp[n]=''; }); }
+    else left.push(id);
+  });
+  return left;
 }
 
 function ocPayCalc(pay,ym){
@@ -3544,6 +3562,7 @@ function ScheduleSheet({ ym, staff, schedMap, setSchedMap, onClose }){
       let saved={};
       try{ const s=await db.collection('owlCost').doc('payroll').get(); saved=(s.exists&&(s.data()||{}).schedNames)||{}; }catch(_){}
       const mp={}; p.names.forEach(n=>{ mp[n]=schedMatchName(n, owl, saved); });
+      schedFixDups(mp, owl);
       setMap(mp); setImp(p);
     }catch(err){ console.error(err); say('อ่านไฟล์ไม่สำเร็จ'); }
     setBusy(false);
@@ -3571,7 +3590,7 @@ function ScheduleSheet({ ym, staff, schedMap, setSchedMap, onClose }){
         b.set(db.collection('owlCost').doc('payroll'), { months:{ [cy]:{ sched: byYm[cy].pr } } }, { merge:true });
         await b.commit();
       }
-      const keep={}; Object.keys(map).forEach(k=>{ if(map[k]) keep[k]=map[k]; });
+      const keep={}; Object.keys(map).forEach(k=>{ keep[k]= map[k]? map[k] : FieldValue.delete(); });
       await db.collection('owlCost').doc('payroll').set({ schedNames: keep },{ merge:true });
       /* รีเฟรชเดือนที่เปิดอยู่ */
       if(byYm[ym]){ const s=await db.collection('fpScans').doc(ym).get(); setSchedMap(((s.exists&&s.data())||{}).sched||{}); }
@@ -3581,6 +3600,7 @@ function ScheduleSheet({ ym, staff, schedMap, setSchedMap, onClose }){
   };
 
   const ws=weeks[wk]!=null? weeks[wk] : 1;
+  const dupIds=(()=>{ const c={}; Object.keys(map||{}).forEach(k=>{ if(map[k]) c[map[k]]=(c[map[k]]||0)+1; }); return Object.keys(c).filter(id=>c[id]>1); })();
   const cellS=(v,inMonth)=>({ flex:1,minWidth:0,padding:'6px 2px',textAlign:'center',fontSize:11,borderRadius:8,cursor:inMonth?'pointer':'default',opacity:inMonth?1:.25,
     background: v==='off'?'#F3F4F6': v==='other'?'#EEF2F7': v?'#E8F5E9':'transparent',
     color: v==='off'?'#6B7280': v==='other'?'#4B5563': v?'#1B5E20':'var(--muted)', border:'1px solid '+(v?'transparent':'var(--line)') });
@@ -3597,10 +3617,11 @@ function ScheduleSheet({ ym, staff, schedMap, setSchedMap, onClose }){
         {imp && (<>
           <div className="text-[12.5px] mb-2">อ่านได้ <b>{imp.weeks} สัปดาห์</b> · {imp.from} → {imp.to} · {imp.cells.length} ช่อง</div>
           <div className="text-[11.5px] mb-1" style={{color:'var(--muted)'}}>จับคู่ชื่อในไฟล์กับพนักงาน (ชื่อที่ไม่ใช่พนักงาน Owl เลือก "ข้าม")</div>
+          {dupIds.length>0 && <div className="text-[12px] mb-1 kanit" style={{color:'#B42318',fontWeight:600,lineHeight:1.5}}>⚠️ หลายชื่อชี้ไปที่คนเดียวกัน ({dupIds.map(id=>{ const st=owl.find(x=>x.id===id); return (st?st.name:'?')+' ← '+Object.keys(map).filter(k=>map[k]===id).join(', '); }).join(' · ')}) — แถวที่มาทีหลังจะทับแถวแรก เลือก "ข้าม" ให้ชื่อที่ไม่ใช่ก่อนบันทึก</div>}
           {imp.names.map(n=>(
             <div key={n} className="flex items-center gap-2 mb-1">
               <div className="kanit text-[13px]" style={{width:92,flex:'none',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{n}</div>
-              <select value={map[n]||''} onChange={e=>setMap({...map,[n]:e.target.value})} style={{flex:1,padding:'6px 8px',border:'1px solid var(--line)',borderRadius:9,fontSize:13,background:map[n]?'#E8F5E9':'#fff'}}>
+              <select value={map[n]||''} onChange={e=>setMap({...map,[n]:e.target.value})} style={{flex:1,padding:'6px 8px',border:'1px solid '+(map[n]&&dupIds.includes(map[n])?'#B42318':'var(--line)'),borderRadius:9,fontSize:13,background:map[n]&&dupIds.includes(map[n])?'#FDECEC':map[n]?'#E8F5E9':'#fff'}}>
                 <option value="">— ข้าม —</option>
                 {owl.map(st=><option key={st.id} value={st.id}>{st.name}{st.kind==='maid'?' (แม่บ้าน)':''}</option>)}
               </select>
@@ -3608,7 +3629,7 @@ function ScheduleSheet({ ym, staff, schedMap, setSchedMap, onClose }){
           ))}
           <div className="flex gap-2 mt-2">
             <button className="press kanit" disabled={busy} onClick={()=>setImp(null)} style={{flex:1,padding:'10px',border:'1px solid var(--line)',borderRadius:11,background:'#fff',fontSize:13.5}}>ยกเลิก</button>
-            <button className="press kanit" disabled={busy} onClick={doImport} style={{flex:2,padding:'10px',border:'none',borderRadius:11,background:'var(--primary)',color:'#fff',fontWeight:700,fontSize:14}}>{busy?'กำลังบันทึก...':'บันทึกตารางงาน ('+Object.values(map).filter(Boolean).length+' คน)'}</button>
+            <button className="press kanit" disabled={busy||dupIds.length>0} onClick={doImport} style={{flex:2,padding:'10px',border:'none',borderRadius:11,background:'var(--primary)',color:'#fff',fontWeight:700,fontSize:14,opacity:dupIds.length>0?.45:1}}>{busy?'กำลังบันทึก...':dupIds.length>0?'แก้ชื่อซ้ำก่อน':'บันทึกตารางงาน ('+Object.values(map).filter(Boolean).length+' คน)'}</button>
           </div>
         </>)}
       </div>
