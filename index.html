@@ -2977,6 +2977,7 @@ function ocPayCalc(pay,ym){
     /* นับวันที่เข้าสาย — เทียบตารางงานของวันนั้นก่อน (months[ym].sched) ไม่มีค่อยใช้กะประจำในโปรไฟล์ */
     let lateDays=0, lateMin=0; const lateList=[];
     const schedM=m.sched||{};
+    const schedRuleOn = !(String(ym) < String(cfg.otSchedFrom||'2026-10'));
     const shiftInMin = (st.shiftIn? ocPayMin(st.shiftIn) : null);
     const dGrace = (cfg.diligGrace!=null? Number(cfg.diligGrace) : 0);
     for(let d=1;d<=nDays;d++){
@@ -2997,8 +2998,9 @@ function ocPayCalc(pay,ym){
             if(diffM2>gr) otMin+=(diffM2-gr);
             else if(diffM2<-gr) missMin+=(-diffM2-gr);
           } else {
-            /* ใช้กะของวันนั้น (ตารางงาน 06:00-21:00 = กะ 15 ชม. ไม่ใช่ 10) ให้ตรงกับแท็บเวลางาน */
-            const ro=ocPayOtDay(tt, ocPayShiftOf(st, (schedM[d]||{})[st.id]||''), cfg, isPartner);
+            /* ใช้กะของวันนั้น (ตารางงาน 06:00-21:00 = กะ 15 ชม. ไม่ใช่ 10) ให้ตรงกับแท็บเวลางาน
+               — เริ่มใช้ตั้งแต่เดือน cfg.otSchedFrom (ค่าเริ่ม 2026-10) · เดือนก่อนหน้าคงกติกาเดิม (เกิน shiftHrs = OT) ให้ตรงกับสลิปที่จ่ายไปแล้ว */
+            const ro=ocPayOtDay(tt, schedRuleOn? ocPayShiftOf(st, (schedM[d]||{})[st.id]||'') : null, cfg, isPartner);
             otMin+=ro.ot; missMin+=ro.miss;   /* หุ้นส่วนไม่หักชั่วโมงขาด */
           }
           const sv=(schedM[d]||{})[st.id]||'';
@@ -5915,6 +5917,8 @@ function OCTabPay({ toast }){
         <button className="press kanit text-[13.5px] w-full py-2.5 mt-2 rounded-xl" style={{border:'none',background: mo.paid? '#E8F5E9':'#3E7D3E',color: mo.paid?'#1B5E20':'#fff',fontWeight:700}} onClick={()=>setShowPayChk(true)}>
           {mo.paid? ('✓ จ่ายแล้ว '+mo.paid.at+' · '+ocFmt(mo.paid.amount||mo.paid.toPay||0,0)+' ฿ · ดูรายละเอียด') : '💸 จ่ายเงินเดือน · เช็กลิสต์ 5 ข้อ'}
         </button>
+        {(String(ym) < String(cfg.otSchedFrom||'2026-10')) && <div className="text-[11px] mt-1.5 rounded-lg px-2 py-1" style={{background:'var(--soft)',color:'var(--muted)'}}>🔒 เดือนนี้ใช้กติกา OT แบบเดิม (ทำเกิน {cfg.shiftHrs||10} ชม./วัน = OT) · กติกา "OT ตามตารางงาน" เริ่ม {ocPayLabel(cfg.otSchedFrom||'2026-10')}</div>}
+        {mo.paid && mo.paid.total>0 && Math.round(calc.total)!==Math.round(mo.paid.total) && <div className="text-[11.5px] mt-1.5 rounded-lg px-2 py-1.5" style={{background:'#FEF2F2',color:'#B91C1C',fontWeight:600}}>⚠️ ยอดคำนวณตอนนี้ {ocFmt(calc.total,0)} ฿ ไม่ตรงกับตอนจ่าย {ocFmt(mo.paid.total,0)} ฿ — มีข้อมูล/กติกาเปลี่ยนหลังจ่าย ให้ยึดสลิปที่ส่งไปแล้ว</div>}
         {showPayChk && <OCPayCheckSheet pay={pay} ym={ym} calc={calc} toast={toast} onClose={()=>setShowPayChk(false)} onConfirm={confirmPaid} onUndo={undoPaid}/>}
         <input ref={fsRef} type="file" accept=".xlsx,.xls,.csv" onChange={onFsFile} style={{display:'none'}}/>
         <button className="press kanit text-[12px] w-full py-1.5 mt-2 rounded-lg" style={{background:'#fff',color:'var(--primary)',border:'1.5px dashed var(--primary)',fontWeight:600}} onClick={()=>fsRef.current&&fsRef.current.click()}>📂 ลงยอดแก้วจากไฟล์ FoodStory (ยอดขายสินค้าตามวัน · ตัด topping)</button>
@@ -6142,7 +6146,9 @@ function OCTabPay({ toast }){
               <span>ราคาเฉลี่ย</span><OCPayIn value={cfg.avgPrice} onChange={v=>setCfg('avgPrice',v)} w="48px"/>
               <span>OT ×</span><OCPayIn value={cfg.otMult} onChange={v=>setCfg('otMult',v)} w="40px"/>
               <span>ชม./กะ</span><OCPayIn value={cfg.shiftHrs} onChange={v=>setCfg('shiftHrs',v)} w="40px"/>
+              <span>OT ตามตารางงาน เริ่มเดือน</span><input className="num text-[12px] border rounded-lg px-1 py-0.5" style={{width:78,borderColor:'var(--line)'}} placeholder="2026-10" value={cfg.otSchedFrom||''} onChange={e=>upd(p=>{ const v=String(e.target.value||'').trim(); if(v) p.cfg.otSchedFrom=v; else delete p.cfg.otSchedFrom; })}/>
             </div>
+            <div className="text-[11px] mt-1" style={{color:'var(--muted)'}}>เดือนก่อน "OT ตามตารางงาน เริ่มเดือน" ใช้กติกาเดิม: ทำเกิน {cfg.shiftHrs||10} ชม./วัน = OT (สลิปที่จ่ายไปแล้วจะไม่ขยับ)</div>
             <div className="text-[11px] mt-2" style={{color:'var(--muted)'}}>OT ฿/ชม. = ฐาน ÷ ตัวหารวัน ÷ ชม.กะ × ตัวคูณ (เฟส1 ≈ {ocFmt(cfg.base1/(cfg.divisor||26)/(cfg.shiftHrs||10)*(cfg.otMult||2),1)} ฿/ชม.) · ฐานคิดตามวันเข้า = ฐาน ÷ ตัวหาร × วันเข้า</div>
           </div>
         )}
