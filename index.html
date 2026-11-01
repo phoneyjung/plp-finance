@@ -6278,9 +6278,9 @@ function lnPayCalc(pay, ym, shopId, fp){
           const df=Math.round(netMin-shiftHrs*60);
           dOt = df>gr? df-gr : (df<-gr? df+gr : 0);
         }
-        if(!pc.ot) dOt=0;
-        if(dOt>0) otMin+=dOt;
-        else if(dOt<0 && pc.deduct) missMin+=(-dOt);
+        /* "หักชม.ขาด" ทำงานได้แม้ปิด OT (เดิมต้องเปิด OT ก่อนถึงจะหัก) · โหมดรายชั่วโมงไม่หัก เพราะจ่ายตามชั่วโมงจริงอยู่แล้ว */
+        if(dOt>0){ if(!pc.ot) dOt=0; else otMin+=dOt; }
+        else if(dOt<0){ if(pc.deduct && !modeHour) missMin+=(-dOt); else dOt=0; }
         if(dIn!=null&&aIn!=null){ const lt=aIn-dIn; if(lt>dGrace){ lateDays++; lateMin+=lt; lateList.push(d); } }
       }
       const lateRaw=(dIn!=null&&aIn!=null&&!hol)? Math.max(0,aIn-dIn) : 0;
