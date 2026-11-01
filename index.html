@@ -8693,11 +8693,16 @@ function maidParse(XLSX,wb){
     const mm=b1.match(/^(\S+)\s+(\d{4})$/); if(mm && TH_MON_ABBR[mm[1]]){ let y=+mm[2]; if(y>2400) y-=543; ym=`${y}-${pad(TH_MON_ABBR[mm[1]])}`; }
   }
   const days={}; const maids={}; let jobs=0;
-  const blank=()=>({n:0,cash:0,bank:0,dlv:0,dlvCash:0,dlvBank:0,dlvN:0,fold:0,baskets:0});
+  const blank=()=>({n:0,cash:0,bank:0,dlv:0,dlvCash:0,dlvBank:0,dlvN:0,fold:0,baskets:0,
+    wash_cash:0,wash_bank:0,dry_cash:0,dry_bank:0,det_cash:0,det_bank:0,discl_cash:0,discl_bank:0,discp_cash:0,discp_bank:0,cimWash:0,cimDry:0});
+  let detail=false;
   if(wsJ){
     const raw=XLSX.utils.sheet_to_json(wsJ,{header:1,raw:true,defval:''});
     const hs=(raw[0]||[]).map(x=>String(x||'').trim()); const ix=(n)=>hs.indexOf(n);
     const iD=ix('วันที่'), iM=ix('แม่บ้าน'), iTot=ix('ยอดรวม'), iC=ix('เงินสด'), iB=ix('เงินโอน'), iDl=ix('ค่าส่ง'), iF=ix('ค่าพับ'), iBk=ix('ตะกร้าพับ');
+    /* v51: ไฟล์จากแอปแม่บ้านรุ่นใหม่มีรายละเอียดต่อออเดอร์ → ลงแยก ซัก/อบ/น้ำยา/ค่าส่ง × สด/โอน + ส่วนลดเป็นรายจ่าย */
+    const iW=ix('ค่าซัก'), iDr=ix('ค่าอบ'), iDet=ix('น้ำยา'), iLd=ix('ส่วนลดคูปอง'), iPd=ix('ส่วนลดโปร'), iPm=ix('วิธีจ่าย'), iCim=ix('หยอดเข้าเครื่องแล้ว');
+    detail=(iW>=0 && iDr>=0);
     if(iD<0||iTot<0) return null;
     raw.slice(1).forEach(r=>{
       const ds=String(r[iD]||'').trim(); const m=ds.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/); if(!m) return;
@@ -8706,6 +8711,22 @@ function maidParse(XLSX,wb){
       const cash=xAmt(r[iC])||0, bank=xAmt(r[iB])||0, dlv=iDl>=0?(xAmt(r[iDl])||0):0, fold=iF>=0?(xAmt(r[iF])||0):0, bk=iBk>=0?(xAmt(r[iBk])||0):0;
       o.n++; o.cash+=cash; o.bank+=bank; o.dlv+=dlv; o.fold+=fold; o.baskets+=bk;
       if(dlv>0){ o.dlvN++; if(cash>0 && bank<=0) o.dlvCash+=dlv; else o.dlvBank+=dlv; }
+      if(detail){
+        const wash=xAmt(r[iW])||0, dry=xAmt(r[iDr])||0, det=iDet>=0?(xAmt(r[iDet])||0):0, ld=iLd>=0?(xAmt(r[iLd])||0):0, pd=iPd>=0?(xAmt(r[iPd])||0):0, cim=iCim>=0?(xAmt(r[iCim])||0):0;
+        const total=xAmt(r[iTot])||0;
+        /* สัดส่วนเงินสดของออเดอร์: จ่ายสดล้วน=1 · โอนล้วน=0 · แยกจ่าย=ตามยอด · ออเดอร์ 0 บาท ดูช่องวิธีจ่าย */
+        const pmTxt=String(iPm>=0? r[iPm]:'' ).trim();
+        const pc = (cash+bank)>0 ? cash/(cash+bank) : (/สด|cash/i.test(pmTxt)? 1 : 0);
+        /* ส่วนลดที่ลงเป็นรายจ่าย = ส่วนที่หักจริง (ยอดเต็ม − ที่ลูกค้าจ่าย) แบ่งคูปอง/โปรตามสัดส่วน */
+        const gross=wash+dry+det+dlv+fold; const discEff=Math.max(0, gross-total); const dsum=ld+pd;
+        const dl=dsum>0? discEff*ld/dsum : discEff, dp=dsum>0? discEff*pd/dsum : 0;
+        o.wash_cash+=wash*pc; o.wash_bank+=wash*(1-pc); o.dry_cash+=dry*pc; o.dry_bank+=dry*(1-pc);
+        o.det_cash+=det*pc; o.det_bank+=det*(1-pc);
+        o.dlvCashD=(o.dlvCashD||0)+dlv*pc; o.dlvBankD=(o.dlvBankD||0)+dlv*(1-pc);
+        o.discl_cash+=dl*pc; o.discl_bank+=dl*(1-pc); o.discp_cash+=dp*pc; o.discp_bank+=dp*(1-pc);
+        /* เงินสดลูกค้าฝากที่แม่บ้านหยอดเข้าตู้ → ตู้นับซ้ำ แบ่งตามสัดส่วนซัก/อบ ไว้หักฝั่งตู้ */
+        if(cim>0){ const wd=wash+dry; const cw= wd>0? cim*wash/wd : cim/2; o.cimWash+=cw; o.cimDry+=cim-cw; }
+      }
       const mn=String(r[iM]||'').trim()||'(ไม่ระบุ)'; maids[mn]=(maids[mn]||0)+1; jobs++;
     });
   } else {
@@ -8721,8 +8742,10 @@ function maidParse(XLSX,wb){
   const dates=Object.keys(days).sort(); if(!dates.length) return null;
   if(!ym) ym=dates[0].slice(0,7);
   const R=(v)=>Math.round(v*100)/100;
-  const rows=dates.map(d=>{ const o=days[d]; return {date:d,ym:d.slice(0,7),n:o.n,cash:R(o.cash),bank:R(o.bank),dlv:R(o.dlv),dlvCash:R(o.dlvCash),dlvBank:R(o.dlvBank),dlvN:o.dlvN,fold:R(o.fold),baskets:o.baskets}; });
-  return {mode:'maid',brand,ym,rows,maids,jobs,fromJobs:!!wsJ};
+  const rows=dates.map(d=>{ const o=days[d]; const x={date:d,ym:d.slice(0,7),n:o.n,cash:R(o.cash),bank:R(o.bank),dlv:R(o.dlv),dlvCash:R(o.dlvCash),dlvBank:R(o.dlvBank),dlvN:o.dlvN,fold:R(o.fold),baskets:o.baskets};
+    if(detail){ ['wash_cash','wash_bank','dry_cash','dry_bank','det_cash','det_bank','discl_cash','discl_bank','discp_cash','discp_bank','cimWash','cimDry'].forEach(k=>{ x[k]=R(o[k]); }); x.dlvCash=R(o.dlvCashD||0); x.dlvBank=R(o.dlvBankD||0); }
+    return x; });
+  return {mode:'maid',brand,ym,rows,maids,jobs,fromJobs:!!wsJ,detail};
 }
 /* ===== นำเข้า CSV ระบบรับเงินตู้ (QR + เงินสด รายวัน) ===== */
 const EN_MON={jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12};
@@ -8731,6 +8754,21 @@ function kioskParse(XLSX,wb){
   const raw=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:''});
   if(raw.length<2) return null;
   const hs=(raw[0]||[]).map(x=>String(x||'').replace(/^\uFEFF/,'').trim());
+  /* v51: ไฟล์รายวันแยกเครื่อง — วันที่ · ซัก QR · ซัก เหรียญ · อบ QR · อบ เหรียญ (· อื่นๆ QR · อื่นๆ เหรียญ) */
+  const fx=(a,b)=>hs.findIndex(h=>h.indexOf(a)>=0 && /QR/i.test(h)===b);
+  const iD0=hs.findIndex(h=>h==='วันที่'||h.toLowerCase()==='date');
+  const iWq=fx('ซัก',true), iWc=fx('ซัก',false), iDq=fx('อบ',true), iDc=fx('อบ',false), iOq=fx('อื่น',true), iOc=fx('อื่น',false);
+  if(iD0>=0 && iWq>=0 && iDq>=0){
+    const rows=[];
+    raw.slice(1).forEach(r=>{ let key=xDate(r[iD0]);
+      if(!key && typeof r[iD0]==='number' && XLSX.SSF){ const dc=XLSX.SSF.parse_date_code(r[iD0]); if(dc) key=`${dc.y}-${pad(dc.m)}-${pad(dc.d)}`; }
+      if(!key) return;
+      const g=(i)=> i>=0? (xAmt(r[i])||0) : 0; const R2=(v)=>Math.round(v*100)/100;
+      rows.push({date:key,ym:key.slice(0,7),split:true,wq:R2(g(iWq)),wc:R2(g(iWc)),dq:R2(g(iDq)),dc:R2(g(iDc)),oq:R2(g(iOq)),oc:R2(g(iOc)),
+        qr:R2(g(iWq)+g(iDq)+g(iOq)), cash:R2(g(iWc)+g(iDc)+g(iOc))}); });
+    if(!rows.length) return null;
+    return {mode:'kiosk',split:true,rows};
+  }
   const iCat=hs.findIndex(h=>h.toLowerCase()==='category'); if(iCat<0) return null;
   const iPts=hs.findIndex(h=>h.indexOf('ใช้แต้ม')>=0||h.indexOf('สะสมแต้ม')>=0);
   const iQr=hs.findIndex(h=>h.toLowerCase()==='qr'), iCash=hs.findIndex(h=>h==='เงินสด');
@@ -8821,9 +8859,10 @@ function Import({shop,user,toast,onClose,onDone}){
   const [maid,setMaid]=useState(null); const [maidEx,setMaidEx]=useState(null); const [maidBusy,setMaidBusy]=useState(false);
   const [maidStaff,setMaidStaff]=useState([]); const [maidMap,setMaidMap]=useState({});
   const [foldRate,setFoldRate]=useState(0); const [foldExp,setFoldExp]=useState(false); const [foldJob,setFoldJob]=useState(true);
-  const [riderOn,setRiderOn]=useState(true); const [expMethod,setExpMethod]=useState('cash');
+  const [riderOn,setRiderOn]=useState(false); const [expMethod,setExpMethod]=useState('cash');   /* v51: ค่าส่งไรเดอร์ลงเองตอนจ่ายจริง */
   /* ระบบรับเงินตู้ */
   const [kiosk,setKiosk]=useState(null); const [kioskEx,setKioskEx]=useState(null); const [kioskBusy,setKioskBusy]=useState(false);
+  const [kOff,setKOff]=useState({});   /* { 'YYYY-MM-DD': {wash,dry} } เงินสดฝากซักที่หยอดตู้แล้ว */
   const [tdw,setTdw]=useState(null); const [tdwEx,setTdwEx]=useState(null); const [tdwBusy,setTdwBusy]=useState(false);
   const [tdwOther,setTdwOther]=useState([]); const [tdwReplace,setTdwReplace]=useState(true);
   /* ถอนรายการที่นำเข้า */
@@ -8873,8 +8912,10 @@ function Import({shop,user,toast,onClose,onDone}){
       if(kp){
         if(kp.mode==='points'){ toast('ไฟล์แต้ม (ใช้แต้ม/สะสมแต้ม) ยังไม่นำเข้าในรุ่นนี้ — ข้ามไว้ก่อน','err'); setStep('upload'); return; }
         if(shop.type!=='laundry'){ toast('ไฟล์ระบบรับเงินตู้ใช้ได้เฉพาะร้านซักผ้า — สลับร้านก่อนนะคะ','err'); setStep('upload'); return; }
-        setKiosk(kp); setStep('kiosk'); setKioskEx(null);
+        setKiosk(kp); setStep('kiosk'); setKioskEx(null); setKOff({});
         const ex=await loadEx([...new Set(kp.rows.map(r=>r.ym))],'kioskTd');
+        /* เงินสดลูกค้าฝากที่แม่บ้านหยอดเข้าตู้ (บันทึกตอนนำเข้าแอปแม่บ้าน) → หักออกจากเหรียญ ไม่ให้นับซ้ำ */
+        try{ const sn=await db.collection('owlCost').doc('kioskOffset').get(); setKOff(((sn.exists&&sn.data())||{})[shop.id]||{}); }catch(e){ console.error(e); }
         setKioskEx(ex); return;
       }
       const tw=tdWebParse(XLSX,wb);
@@ -9116,9 +9157,16 @@ function Import({shop,user,toast,onClose,onDone}){
   /* ---- แผนนำเข้า: แอปแม่บ้าน ---- */
   const maidDocs=(r)=>{ const d=[];
     const R=(v)=>Math.round(v*100)/100;
+    if(maid&&maid.detail){
+      /* v51: ยอดเต็มแยกหมวด × สด/โอน · ส่วนลดเป็นรายจ่าย (จ่ายด้วยช่องทางเดียวกับออเดอร์ → เงินเข้าจริงตรงกัน) */
+      const INC=[['wash','ซัก-ฝาก'],['dry','อบ-ฝาก'],['det','น้ำยา']];
+      INC.forEach(([k,cat])=>{ ['cash','bank'].forEach(m=>{ const a=R(r[k+'_'+m]||0); if(a>0) d.push({mkey:k+'_'+m,kind:'income',category:cat,method:m,amount:a,note:`แอปแม่บ้าน · ${r.n} งาน · ${m==='cash'?'เงินสด':'โอน'}`}); }); });
+      [['discl','ส่วนลดแอดไลน์'],['discp','ส่วนลดโปร']].forEach(([k,cat])=>{ ['cash','bank'].forEach(m=>{ const a=R(r[k+'_'+m]||0); if(a>0) d.push({mkey:k+'_'+m,kind:'expense',category:cat,method:m,amount:a,note:`แอปแม่บ้าน · ส่วนลดที่ให้ลูกค้า · ${m==='cash'?'เงินสด':'โอน'}`}); }); });
+    } else {
     const svcCash=R(r.cash-r.dlvCash), svcBank=R(r.bank-r.dlvBank);
     if(svcCash>0) d.push({mkey:'svc_cash',kind:'income',category:'บริการ ซัก-อบ-พับ',method:'cash',amount:svcCash,note:`แอปแม่บ้าน · ${r.n} งาน · เงินสด`});
     if(svcBank>0) d.push({mkey:'svc_bank',kind:'income',category:'บริการ ซัก-อบ-พับ',method:'bank',amount:svcBank,note:`แอปแม่บ้าน · ${r.n} งาน · โอน`});
+    }
     if(r.dlvCash>0) d.push({mkey:'dlv_cash',kind:'income',category:'Delivery',method:'cash',amount:r.dlvCash,note:`แอปแม่บ้าน · ค่าส่ง ${r.dlvN} งาน · เงินสด`});
     if(r.dlvBank>0) d.push({mkey:'dlv_bank',kind:'income',category:'Delivery',method:'bank',amount:r.dlvBank,note:`แอปแม่บ้าน · ค่าส่ง ${r.dlvN} งาน · โอน`});
     if(riderOn && r.dlv>0) d.push({mkey:'exp_rider',kind:'expense',category:'ค่าส่งไรเดอร์',method:expMethod,amount:r.dlv,note:`แอปแม่บ้าน · ส่ง ${r.dlvN} งาน (จ่ายเต็มค่าส่ง)`});
@@ -9129,6 +9177,9 @@ function Import({shop,user,toast,onClose,onDone}){
   const mAll=[...mPlan.add,...mPlan.chg,...mPlan.same];
   const mInCash=mSum(mAll,d=>d.kind==='income'&&d.method==='cash'), mInBank=mSum(mAll,d=>d.kind==='income'&&d.method==='bank');
   const mExRider=mSum(mAll,d=>d.mkey==='exp_rider'), mExFold=mSum(mAll,d=>d.mkey==='exp_fold');
+  const mCat=(pre)=>mSum(mAll,d=>d.mkey.indexOf(pre+'_')===0);
+  const mDisc=mSum(mAll,d=>d.mkey.indexOf('discl_')===0||d.mkey.indexOf('discp_')===0);
+  const mCim=(maid&&maid.detail)? maid.rows.reduce((a,r)=>a+(r.cimWash||0)+(r.cimDry||0),0) : 0;
   const jobByStaff=(()=>{ const o={}; if(!maid) return o; Object.keys(maid.maids).forEach(nm=>{ const id=maidMap[nm]; if(id) o[id]=(o[id]||0)+maid.maids[nm]; }); return o; })();
   const mNothing=!mPlan.add.length&&!mPlan.chg.length&&!mPlan.del.length&&!(foldJob&&Object.keys(jobByStaff).length);
 
@@ -9174,6 +9225,11 @@ function Import({shop,user,toast,onClose,onDone}){
     setMaidBusy(true); setProg(0);
     try{
       await runPlan(mPlan,'maidApp',`นำเข้าแอปแม่บ้าน ${maid.ym}`);
+      if(maid.detail){
+        /* บันทึกเงินสดฝากซักที่หยอดตู้แล้ว รายวัน → ตอนนำเข้าไฟล์ตู้จะหักออกจากเหรียญให้ (วันที่ไม่มี = ลบของเก่าทิ้ง) */
+        const off={}; maid.rows.forEach(r=>{ const w=Math.round((r.cimWash||0)*100)/100, dd=Math.round((r.cimDry||0)*100)/100; off[r.date]= (w>0||dd>0)? {wash:w,dry:dd} : FieldValue.delete(); });
+        await db.collection('owlCost').doc('kioskOffset').set({[shop.id]:off},{merge:true});
+      }
       if(foldJob && Object.keys(jobByStaff).length){
         await db.collection('owlCost').doc('laundryPay').set({months:{[maid.ym]:{job:jobByStaff}}},{merge:true});
       }
@@ -9182,13 +9238,31 @@ function Import({shop,user,toast,onClose,onDone}){
     }catch(e){ console.error(e); toast('นำเข้าไม่สำเร็จ: '+(e.message||''),'err'); setMaidBusy(false); }
   };
   /* ---- แผนนำเข้า: ระบบรับเงินตู้ ---- */
-  const kioskDocs=(r)=>{ const d=[];
+  const kioskDocs=(r)=>{ const d=[]; const R=(v)=>Math.round(v*100)/100;
+    const off=kOff[r.date]||{}; const ow=Number(off.wash)||0, od=Number(off.dry)||0;
+    if(r.split){
+      /* v51: แยก ซัก-ตู้ / อบ-ตู้ × QR/เหรียญ · เหรียญหักส่วนที่เป็นเงินลูกค้าฝาก (ลงไว้ที่แอปแม่บ้านแล้ว) */
+      const put=(mk,cat,m,amt,note)=>{ const a=R(amt); if(a>0) d.push({mkey:mk,kind:'income',category:cat,method:m,amount:a,note}); };
+      put('wash_bank','ซัก-ตู้','bank',r.wq,'ระบบรับเงินตู้ · QR');
+      put('dry_bank','อบ-ตู้','bank',r.dq,'ระบบรับเงินตู้ · QR');
+      put('oth_bank','รายได้เครื่อง','bank',r.oq,'ระบบรับเงินตู้ · QR');
+      /* ถ้าเหรียญซักไม่พอหัก ยกส่วนเกินไปหักที่อบ (และกลับกัน) */
+      let wcash=r.wc-ow, dcash=r.dc-od;
+      if(wcash<0){ dcash+=wcash; wcash=0; } if(dcash<0){ wcash+=dcash; dcash=0; } if(wcash<0) wcash=0;
+      put('wash_cash','ซัก-ตู้','cash',wcash, ow>0? `ระบบรับเงินตู้ · เหรียญ ${r.wc} − หยอดแทนลูกค้าฝาก ${R(ow)}` : 'ระบบรับเงินตู้ · เหรียญ');
+      put('dry_cash','อบ-ตู้','cash',dcash, od>0? `ระบบรับเงินตู้ · เหรียญ ${r.dc} − หยอดแทนลูกค้าฝาก ${R(od)}` : 'ระบบรับเงินตู้ · เหรียญ');
+      put('oth_cash','รายได้เครื่อง','cash',r.oc,'ระบบรับเงินตู้ · เหรียญ');
+      return d;
+    }
     if(r.qr>0) d.push({mkey:'qr',kind:'income',category:'รายได้เครื่อง',method:'bank',amount:r.qr,note:'ระบบรับเงินตู้ · QR'});
-    if(r.cash>0) d.push({mkey:'cash',kind:'income',category:'รายได้เครื่อง',method:'cash',amount:r.cash,note:'ระบบรับเงินตู้ · เงินสด'});
+    const cash=R(r.cash-ow-od);
+    if(cash>0) d.push({mkey:'cash',kind:'income',category:'รายได้เครื่อง',method:'cash',amount:cash,note:(ow+od)>0? `ระบบรับเงินตู้ · เงินสด ${r.cash} − หยอดแทนลูกค้าฝาก ${R(ow+od)}` : 'ระบบรับเงินตู้ · เงินสด'});
     return d; };
   const kPlan=(kiosk&&kioskEx)? planDiff(kiosk.rows,kioskDocs,kioskEx) : {add:[],chg:[],same:[],del:[]};
   const kAll=[...kPlan.add,...kPlan.chg,...kPlan.same];
-  const kQr=mSum(kAll,d=>d.mkey==='qr'), kCash=mSum(kAll,d=>d.mkey==='cash');
+  const kQr=mSum(kAll,d=>d.method==='bank'), kCash=mSum(kAll,d=>d.method==='cash');
+  const kWash=mSum(kAll,d=>d.mkey.indexOf('wash_')===0), kDry=mSum(kAll,d=>d.mkey.indexOf('dry_')===0);
+  const kOffSum=(kiosk? kiosk.rows.reduce((a,r)=>{ const o=kOff[r.date]||{}; return a+(Number(o.wash)||0)+(Number(o.dry)||0); },0) : 0);
   const kNothing=!kPlan.add.length&&!kPlan.chg.length&&!kPlan.del.length;
   const doImportKiosk=async()=>{
     if(kNothing){ toast('ยอดตรงกับที่ลงไว้แล้วทุกวัน'); return; }
@@ -9290,6 +9364,13 @@ function Import({shop,user,toast,onClose,onDone}){
           <div style={{display:'flex',gap:8,marginBottom:12}}>
             <Stat l="รายรับเงินสด" v={baht(mInCash)} c="var(--pos)"/><Stat l="รายรับโอน" v={baht(mInBank)} c="var(--pos)"/>
           </div>
+          {maid&&maid.detail && (
+            <div style={{background:'#fff',border:'1px solid var(--line)',borderRadius:12,padding:'8px 12px',marginBottom:12,fontSize:12.5}}>
+              {[['ซัก-ฝาก',mCat('wash')],['อบ-ฝาก',mCat('dry')],['น้ำยา',mCat('det')],['ค่าส่ง (Delivery)',mCat('dlv')]].map(([l,v])=>(
+                <div key={l} style={{display:'flex',justifyContent:'space-between',padding:'4px 0',borderTop:'1px solid var(--soft)'}}><span>{l}</span><b className="num">{baht(v)}</b></div>))}
+              <div style={{display:'flex',justifyContent:'space-between',padding:'4px 0',borderTop:'1px solid var(--soft)',color:'#B91C1C'}}><span>รายจ่าย ส่วนลดแอดไลน์/โปร</span><b className="num">−{baht(mDisc)}</b></div>
+              <div style={{fontSize:11,color:'var(--muted)',marginTop:6,lineHeight:1.5}}>ลงยอดเต็มก่อนหักส่วนลด · ส่วนลดเป็นรายจ่ายช่องทางเดียวกับออเดอร์ → เงินเข้าจริงตรงกับที่ลูกค้าจ่าย{mCim>0? ` · เงินสดลูกค้าฝากที่แม่บ้านหยอดตู้ไปแล้ว ${baht(mCim)} จะถูกหักออกจากเหรียญตอนนำเข้าไฟล์ตู้ (นำเข้าไฟล์นี้ก่อน)` : ''}</div>
+            </div>)}
           <div style={{display:'flex',gap:8,marginBottom:12}}>
             <Stat l="ใหม่" v={mPlan.add.length} c="var(--pos)"/><Stat l="ปรับยอด" v={mPlan.chg.length} c={mPlan.chg.length?'#C2410C':'var(--muted)'}/><Stat l="เหมือนเดิม" v={mPlan.same.length} c="var(--muted)"/>
           </div>
@@ -9366,17 +9447,21 @@ function Import({shop,user,toast,onClose,onDone}){
         <div style={{fontSize:12.5,color:'var(--muted)',marginBottom:12,display:'flex',alignItems:'center',gap:6}}><I.table/> {fileName}</div>
         <div style={{background:'var(--tint)',borderRadius:12,padding:'12px 14px',marginBottom:14}}>
           <div style={{fontSize:14,fontWeight:700,color:'var(--primary)',marginBottom:4}}>📟 ระบบรับเงินตู้ (QR + เงินสด) · {kiosk&&kiosk.rows[0].ym}</div>
-          <div style={{fontSize:12.5,color:'var(--muted)',lineHeight:1.6}}>{kiosk&&kiosk.rows.length} วัน · ไฟล์นี้ไม่ระบุสาขา — จะลงที่ร้าน <b style={{color:'var(--ink)'}}>{shop.name}</b> หมวด "รายได้เครื่อง" · QR = โอน · เงินสด = เงินสด</div>
+          <div style={{fontSize:12.5,color:'var(--muted)',lineHeight:1.6}}>{kiosk&&kiosk.rows.length} วัน · ไฟล์นี้ไม่ระบุสาขา — จะลงที่ร้าน <b style={{color:'var(--ink)'}}>{shop.name}</b> {kiosk&&kiosk.split? <span>แยกหมวด <b style={{color:'var(--ink)'}}>ซัก-ตู้ / อบ-ตู้</b></span> : 'หมวด "รายได้เครื่อง"'} · QR = โอน · เหรียญ = เงินสด</div>
         </div>
         {!kioskEx && <div style={{padding:'20px 0'}}><Loading label="กำลังตรวจรายการที่ลงไว้แล้ว..."/></div>}
         {kioskEx && (<>
-          <div style={{display:'flex',gap:8,marginBottom:12}}><Stat l="QR (โอน)" v={baht(kQr)} c="var(--pos)"/><Stat l="เงินสด" v={baht(kCash)} c="var(--pos)"/></div>
+          <div style={{display:'flex',gap:8,marginBottom:12}}><Stat l="QR (โอน)" v={baht(kQr)} c="var(--pos)"/><Stat l="เหรียญ (เงินสด)" v={baht(kCash)} c="var(--pos)"/></div>
+          {kiosk&&kiosk.split && <div style={{display:'flex',gap:8,marginBottom:12}}><Stat l="ซัก-ตู้" v={baht(kWash)} c="var(--ink)"/><Stat l="อบ-ตู้" v={baht(kDry)} c="var(--ink)"/></div>}
+          <div style={{background: kOffSum>0?'#EFF6FF':'#FFF7ED',border:'1px solid '+(kOffSum>0?'#BFDBFE':'#FED7AA'),borderRadius:12,padding:'9px 12px',marginBottom:12,fontSize:12,lineHeight:1.5,color: kOffSum>0?'#1E3A8A':'#9A3412'}}>
+            {kOffSum>0? `💵 หักเหรียญที่เป็นเงินลูกค้าฝาก (แม่บ้านหยอดตู้แทน) ${baht(kOffSum)} ออกแล้ว ไม่ให้นับซ้ำกับแอปแม่บ้าน` : 'ℹ️ ยังไม่มีข้อมูลเงินฝากซักที่หยอดตู้ของเดือนนี้ — ถ้ามีไฟล์แอปแม่บ้าน ให้นำเข้าไฟล์นั้นก่อน แล้วค่อยนำเข้าไฟล์นี้ (หรือนำเข้าไฟล์นี้ซ้ำทีหลัง ระบบจะปรับยอดให้)'}
+          </div>
           <div style={{display:'flex',gap:8,marginBottom:12}}>
             <Stat l="ใหม่" v={kPlan.add.length} c="var(--pos)"/><Stat l="ปรับยอด" v={kPlan.chg.length} c={kPlan.chg.length?'#C2410C':'var(--muted)'}/><Stat l="เหมือนเดิม" v={kPlan.same.length} c="var(--muted)"/>
           </div>
           <ChgList list={kPlan.chg} color="#9A3412" bg="#FFF7ED" border="#FED7AA" title={`⚠️ ยอดเปลี่ยน ${kPlan.chg.length} รายการ — จะแก้ของเดิม ไม่เพิ่มใหม่`}/>
           <ImportBtn busy={kioskBusy} nothing={kNothing} plan={kPlan} onClick={doImportKiosk}/>
-          <div style={{fontSize:11,color:'var(--muted)',textAlign:'center',marginTop:8,lineHeight:1.6}}>วันละ 2 รายการ (QR / เงินสด) · นำเข้าซ้ำ = ยึดยอดล่าสุด · ไฟล์แต้มยังไม่นำเข้า</div>
+          <div style={{fontSize:11,color:'var(--muted)',textAlign:'center',marginTop:8,lineHeight:1.6}}>{kiosk&&kiosk.split? 'วันละไม่เกิน 4 รายการ (ซัก/อบ × QR/เหรียญ)' : 'วันละ 2 รายการ (QR / เงินสด)'} · นำเข้าซ้ำ = ยึดยอดล่าสุด · ไฟล์แต้มยังไม่นำเข้า</div>
           <button onClick={()=>{ setKiosk(null); setKioskEx(null); setStep('upload'); }} className="press kanit" style={{width:'100%',marginTop:10,padding:'11px',border:'1px solid var(--line)',borderRadius:12,background:'#fff',fontSize:13.5,color:'var(--muted)'}}>เลือกไฟล์อื่น</button>
         </>)}
       </>)}
