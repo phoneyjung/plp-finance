@@ -4979,6 +4979,44 @@ function AttendPanel({ user }){
    👥 ทะเบียนพนักงาน (Owl Cha) — owlCost/payroll · staff[]
    เก็บทั้งคนทำงานอยู่และคนลาออก · หน้าเงินเดือนดึงเฉพาะคนที่ยังอยู่
    ================================================================ */
+/* 🔁 สร้าง/อัปเดตรายชื่อฝั่งร้านซักผ้า (owlCost/laundryPay.staff) จากคนในหน้าพนักงาน Owl ที่ร้านประจำเป็น Teddy 1/2
+   เพิ่มที่เดียวพอ · Otteri ไม่เกี่ยว (แยกต่างหาก) · ฟิลด์ที่ Teddy มีเอง (บัญชีธนาคาร ชื่อจริง ตำแหน่งพิเศษ) ไม่ทับ */
+function lnFromOwl(st, cur){
+  const isTeddy=(st.shop==='teddy1'||st.shop==='teddy2');
+  const o= cur? Object.assign({},cur) : { id:'L'+ocUid(), realName:'', bank:'', bankAcc:'' };
+  o.owlId=st.id;
+  o.name=st.name;
+  o.pos= st.kind==='partner'? 'partner' : ((cur&&cur.pos&&cur.pos!=='partner')? cur.pos : 'maid');
+  o.shop= isTeddy? st.shop : ((cur&&cur.shop)||'teddy2');
+  o.fpId=String(st.fpId||'').trim();
+  /* ค่าที่ฝั่ง Owl ว่าง → คงค่าที่ Teddy ตั้งไว้เอง (เช่น เรท ฿/ชม. กะ เบอร์โทร) */
+  if(st.shiftIn&&st.shiftOut){ o.shiftIn=st.shiftIn; o.shiftOut=st.shiftOut; } else { o.shiftIn=o.shiftIn||''; o.shiftOut=o.shiftOut||''; }
+  if(st.kind==='partner' && st.minHrs!==''&&st.minHrs!=null) o.minHrs=st.minHrs; else if(o.minHrs==null) o.minHrs='';
+  if(Number(st.custom)>0){ o.custom=Number(st.custom); o.customFrom=st.customFrom||''; o.customPrev=Number(st.customPrev)||0; }
+  else { o.custom=Number(o.custom)||0; o.customFrom=o.customFrom||''; o.customPrev=Number(o.customPrev)||0; }
+  o.active= isTeddy? (st.active!==false) : false;
+  if(st.start) o.start=st.start; else o.start=o.start||'';
+  o.end= (st.active===false)? (st.end||o.end||'') : '';
+  if(st.phone) o.phone=String(st.phone); else o.phone=o.phone||'';
+  if(st.note) o.note=String(st.note); else o.note=o.note||'';
+  return o;
+}
+async function lnSyncFromOwl(nextStaff){
+  const ref=db.collection('owlCost').doc('laundryPay');
+  const snap=await ref.get(); const ln=lnNorm(snap.exists? (snap.data()||{}) : {});
+  const lst=(ln.staff||[]).map(x=>Object.assign({},x));
+  let added=0, updated=0;
+  (nextStaff||[]).forEach(st=>{
+    const isTeddy=(st.shop==='teddy1'||st.shop==='teddy2');
+    let i=lst.findIndex(x=>x.owlId===st.id);
+    if(i<0 && isTeddy && st.fpId) i=lst.findIndex(x=>!x.owlId && String(x.fpId||'').trim()===String(st.fpId).trim());   /* จับคู่คนเดิมด้วยรหัสสแกน */
+    if(i<0 && isTeddy) i=lst.findIndex(x=>!x.owlId && String(x.name||'').trim()===String(st.name||'').trim());
+    if(i<0){ if(!isTeddy) return; lst.push(lnFromOwl(st,null)); added++; }
+    else { const nx=lnFromOwl(st,lst[i]); if(JSON.stringify(nx)!==JSON.stringify(lst[i])){ lst[i]=nx; updated++; } }
+  });
+  if(added||updated) await ref.set({ staff: lst },{merge:true});
+  return { added, updated, total:lst.length };
+}
 function StaffPanel({ user, toast }){
   const [pay,setPay]=useState(null);
   const [tab,setTab]=useState('on');
@@ -5019,8 +5057,17 @@ function StaffPanel({ user, toast }){
       await db.collection('owlCost').doc('payroll').set({ staff: next },{merge:true});
       setPay(p=>({ ...(p||{}), staff: next }));
       setEdit(null);
-      setMsg('บันทึกแล้ว'); setTimeout(()=>setMsg(''),1600);
+      let extra='';
+      try{ const r=await lnSyncFromOwl(next); if(r.added||r.updated) extra=' · ซิงก์ไป Teddy '+(r.added?'เพิ่ม '+r.added:'')+(r.added&&r.updated?' / ':'')+(r.updated?'อัปเดต '+r.updated:''); }
+      catch(e2){ console.warn('lnSync',e2); extra=' · ⚠️ ซิงก์ไป Teddy ไม่สำเร็จ'; }
+      setMsg('บันทึกแล้ว'+extra); setTimeout(()=>setMsg(''),2600);
     }catch(e){ setMsg('บันทึกไม่สำเร็จ · '+(e&&e.message?e.message:'')); }
+    setBusy(false);
+  };
+  const syncNow=async()=>{
+    if(!db) return; setBusy(true); setMsg('');
+    try{ const r=await lnSyncFromOwl(staff); setMsg('ซิงก์รายชื่อไป Teddy 1/2 แล้ว · เพิ่ม '+r.added+' · อัปเดต '+r.updated+' (เท่าเดิมไม่แตะ)'); setTimeout(()=>setMsg(''),3200); }
+    catch(e){ setMsg('ซิงก์ไม่สำเร็จ · '+(e&&e.message?e.message:'')); }
     setBusy(false);
   };
 
@@ -5095,6 +5142,12 @@ function StaffPanel({ user, toast }){
         </div>
         {!ro && tab==='on' && (
           <button className="press kanit text-[13.5px] w-full mt-2.5 py-2 rounded-xl text-white" style={{background:'var(--primary)',border:'none',fontWeight:600}} onClick={openNew}>+ เพิ่มพนักงาน</button>
+        )}
+        {!ro && (
+          <div className="flex items-center gap-2 mt-2">
+            <div className="text-[11px]" style={{color:'var(--muted)',flex:1}}>🔁 คนที่ร้านประจำเป็น Teddy 1/2 จะไปขึ้นในรายชื่อ/เงินเดือนของร้านนั้นเองตอนบันทึก (Otteri แยกต่างหาก)</div>
+            <button className="press kanit text-[12px] px-2.5 py-1 rounded-lg" style={{border:'1px solid var(--line)',background:'var(--card)',whiteSpace:'nowrap'}} disabled={busy} onClick={syncNow}>🔁 ซิงก์ตอนนี้</button>
+          </div>
         )}
       </div>
 
@@ -5207,6 +5260,12 @@ function StaffPanel({ user, toast }){
                 </select>
               </div>
             </div>
+            {(edit.shop==='teddy1'||edit.shop==='teddy2') && (
+              <div className="rounded-xl p-2.5 mb-2.5 text-[11.5px]" style={{background:'#EAF4FB',color:'#1D4E89',lineHeight:1.5}}>
+                🔁 บันทึกแล้วจะไปขึ้นที่ <b>{shopInfo(edit.shop).label}</b> อัตโนมัติ (ชื่อ · ตำแหน่ง {edit.kind==='partner'?'หุ้นส่วน':'แม่บ้าน'} · รหัสสแกน · กะ · ฐานเอง · วันเริ่ม/ออก)
+                <br/>ช่อง "ฐานเอง" = เรทของคนนี้ที่ {shopInfo(edit.shop).label} ด้วย — ถ้าตำแหน่งที่ร้านนั้นตั้งเป็น ⏱ รายชั่วโมง ให้ใส่เป็น ฿/ชม. · บัญชีธนาคาร/ชื่อจริง ไปใส่ที่หน้าพนักงานของ {shopInfo(edit.shop).label}
+              </div>
+            )}
 
             <div className="flex gap-2 mb-2.5">
               <div style={{flex:1}}>
@@ -6675,7 +6734,7 @@ function LnStaffPanel({ shop, user, toast }){
               <div style={{flex:1,minWidth:0}}>
                 <div className="kanit text-[14.5px]" style={{fontWeight:600}}>{st.name} <span className="text-[11.5px]" style={{fontWeight:400,color:si.color}}>· {si.emoji} {si.label}</span></div>
                 <div className="text-[12px]" style={{color:'var(--muted)'}}>
-                  {p.name}{rate>0? (lnPosCfg(cfg,st.pos).payMode==='hour'? ' · '+ocFmt(rate,rate%1?2:0)+' ฿/ชม.' : ' · ฐาน '+ocFmt(rate,0)) : ' · ยังไม่ตั้งเรท'}{st.custom>0?' (กำหนดเอง'+(st.customFrom&&Number(st.customPrev)>0?' ตั้งแต่ '+st.customFrom+' · ก่อนนั้น '+ocFmt(st.customPrev,0):'')+')':''}
+                  {st.owlId? '🔁 ซิงก์จากหน้าพนักงาน Owl Cha · ':''}{p.name}{rate>0? (lnPosCfg(cfg,st.pos).payMode==='hour'? ' · '+ocFmt(rate,rate%1?2:0)+' ฿/ชม.' : ' · ฐาน '+ocFmt(rate,0)) : ' · ยังไม่ตั้งเรท'}{st.custom>0?' (กำหนดเอง'+(st.customFrom&&Number(st.customPrev)>0?' ตั้งแต่ '+st.customFrom+' · ก่อนนั้น '+ocFmt(st.customPrev,0):'')+')':''}
                   {st.shiftIn&&st.shiftOut? ' · กะ '+st.shiftIn+'–'+st.shiftOut : ''}
                   {st.fpId? ' · สแกน#'+st.fpId : ' · ยังไม่ผูกรหัสสแกน'}
                 </div>
