@@ -3271,15 +3271,44 @@ async function ocPayPersonImage(pay,ym,stId){
   const calc=ocPayCalc(pay,ym); const r=calc.rows.find(x=>x.st.id===stId); if(!r) return;
   const days=ocPayPersonDays(pay,ym,stId);
   const idx=calc.rows.indexOf(r)+1;
-  const W=900, headH=142, sumH=96, colH=42, rowH=38, footH=112;
+  const num=v=>Math.round(v||0).toLocaleString('en-US');
+  const W=900, headH=142, colH=42, rowH=38, footH=112;
+  const otTotMin=(r.otMin||0), otRest=(r.otRestMin||0);
+  const otBar = (otTotMin>0 || (r.missMin||0)>0)? 36 : 0;
+  /* ---- บัญชีสรุป: เลขแต่ละตัวโผล่ครั้งเดียว ไล่ รายได้ → หัก → ค่าจ้าง → เบิกไปแล้ว → คงเหลือรับ ---- */
+  const led=[];
+  led.push({t:'sec',label:'รายได้',col:'#2E7D32'});
+  led.push({t:'row',label: r.quota!=null
+      ? (r.partialMonth? ('ฐานเงินเดือน · 🌱 เริ่ม/ออกงานเดือนนี้ (ฐาน ÷ '+calc.nDays+' × '+(r.days+r.holDays+(r.sickDays||0))+' วัน)')
+                       : ('ฐานเหมาเดือน (หยุด '+r.offDays+'/'+r.quota+' วัน'+(r.offExcess>0?' · เกิน '+r.offExcess+' วัน':'')+(r.extraDays>0?' · ทำแทนวันหยุด +'+r.extraDays+' วัน':'')+')'))
+      : ('ฐานเงินเดือน · เข้า '+r.days+' วัน'), val:r.base});
+  if(!r.isMaid) led.push({t:'row',label:'คอมกองกลาง (แบ่งตามวันเข้ากะ)',val:r.com});
+  if(!r.isMaid && (r.otH>0||r.otB>0)) led.push({t:'row',label:'OT '+(r.otH||0)+' ชม. × '+(pay.cfg.otMult||2)+' เท่า',val:r.otB});
+  if(r.holPay>0) led.push({t:'row',label:'มาช่วยวันหยุด ค่าแรง ×2 ('+r.holDays+' วัน)',val:r.holPay});
+  if(!r.isMaid){
+    const why = r.diligForced? (r.dl>0?' (ยกเว้นให้)':' (ตัด)') : (r.dl>0? '' : (' (ไม่ได้ · '+(r.lateDays>0? 'สาย '+r.lateDays+' วัน' : 'เข้า '+r.workedDays+'/'+r.diligMinDays+' วัน')+')'));
+    led.push({t:'row',label:'เบี้ยขยัน'+why,val:r.dl,dim:!(r.dl>0)});
+  }
+  if(r.bn) led.push({t:'row',label:'โบนัส / เงินพิเศษ',val:r.bn});
   const dedN=(r.dedList||[]).length, advN=(r.advOnly||[]).length;
-  const advRows=(dedN? dedN+1:0)+(advN? advN+1:0);
-  const footX = r.advT>0? 62 : 0;
-  const H=headH+sumH+colH+Math.max(1,days.length)*rowH+advRows*34+footH+footX+80;
+  if(r.missB>0 || dedN){
+    led.push({t:'sec',label:'หักออกจากค่าจ้าง',col:'#B0483C'});
+    if(r.missB>0) led.push({t:'row',label:'ทำไม่ครบกะ '+(r.missH||0)+' ชม.',val:-r.missB,neg:true});
+    (r.dedList||[]).forEach(e=>led.push({t:'row',label:(e.d?('วันที่ '+e.d+' · '):'')+(e.note||'หักเงิน'),val:-(Number(e.amt)||0),neg:true}));
+  }
+  if(advN) led.push({t:'sub',label:'ค่าจ้างเดือนนี้',val:r.net});   /* ไม่มีเบิก → ค่าจ้าง = ยอดรับ โชว์บรรทัดเดียวพอ */
+  if(advN){
+    led.push({t:'sec',label:'เบิกไปแล้วระหว่างเดือน (รับเงินไปก่อนแล้ว · หักจากยอดรับสิ้นเดือน)',col:'#C2410C'});
+    (r.advOnly||[]).forEach(e=>led.push({t:'row',label:(e.d?('วันที่ '+e.d+' · '):'')+(e.note||'เบิกล่วงหน้า'),val:-(Number(e.amt)||0),adv:true}));
+    if(advN>1) led.push({t:'row',label:'รวมเบิก '+advN+' ครั้ง',val:-r.advT,adv:true,bold:true});
+  }
+  led.push({t:'fin',label: advN? 'คงเหลือรับสิ้นเดือน' : 'ค่าจ้างเดือนนี้ · รับสิ้นเดือน', sub: advN? ('ค่าจ้าง '+num(r.net)+' − เบิกแล้ว '+num(r.advT)) : '', val: advN? r.toPay : r.net});
+  const LH={sec:30,row:34,sub:46,fin:66};
+  const ledH=40+led.reduce((a,x)=>a+LH[x.t],0);
+  const H=headH+12+colH+Math.max(1,days.length)*rowH+otBar+18+ledH+footH+(r.isPartner?22:0)+10;
   const cv=document.createElement('canvas'); cv.width=W*2; cv.height=H*2;
   const g=cv.getContext('2d'); g.scale(2,2);
   const F=(w,s)=>w+' '+s+'px Kanit, "Noto Sans Thai", sans-serif';
-  const num=v=>Math.round(v||0).toLocaleString('en-US');
   g.fillStyle='#FBF6EC'; g.fillRect(0,0,W,H);
   g.fillStyle='#5B4636'; g.fillRect(0,0,W,headH);
   g.fillStyle='#FFFFFF'; g.font=F(700,26); g.textAlign='left';
@@ -3289,17 +3318,13 @@ async function ocPayPersonImage(pay,ym,stId){
   const ab=ocPayAbsent(pay,ym,stId);
   const elsAll=((pay.months[ym]||{}).els)||{};
   const elsCnt=Object.keys(elsAll).filter(function(d9){ return !!((elsAll[d9]||{})[stId]); }).length;
-  g.fillText('ทำงาน '+(r.days+r.holDays)+' วัน'+(r.holDays?(' (วันหยุด×2 '+r.holDays+' วัน)'):'')+(elsCnt? (' · ไปช่วยร้านอื่น '+elsCnt+' วัน'):'')+(r.sickDays? (' · ลาป่วย '+r.sickDays+' วัน (ได้เงิน)') : '')+' · หยุด '+ab.n+' วัน'+(r.quota!=null&&r.partialMonth? ' (🌱 เริ่ม/ออกงานเดือนนี้ · ฐาน÷'+calc.nDays+'×'+(r.days+r.holDays)+' วัน)' : (r.quota!=null?(' (โควตา '+r.quota+(r.offExcess>0?' · เกิน '+r.offExcess+' วัน':'')+(r.extraDays>0?' · ทำแทน +'+r.extraDays+' วัน × '+Math.round(r.extraRate):'')+')'):''))+': '+ab.text,32,106);
-  const chips=[['ฐาน',r.base],['คอม',r.com],['OT '+(r.otH||0)+' ชม.',r.otB],['หยุด×2',r.holPay],['เบี้ยขยัน',r.dl],['โบนัส',r.bn],['หักขาด '+(r.missH||0)+' ชม.',-(r.missB||0)],['หักเงิน',-(r.dedT||0)]];
-  const otTotMin=(r.otMin||0), otRest=(r.otRestMin||0);
-  chips.forEach((c,k)=>{
-    const x=32+k*106;
-    g.font=F(400,13.5); g.fillStyle='#8A8072'; g.textAlign='left'; g.fillText(c[0],x,headH+34);
-    g.font=F(700,18); g.fillStyle= c[1]<0? '#B0483C':'#3B2F24';
-    g.fillText((c[1]<0?'−':'')+num(Math.abs(c[1])),x,headH+62);
-  });
+  g.fillText('ทำงาน '+(r.days+r.holDays)+' วัน'+(r.holDays?(' (วันหยุด×2 '+r.holDays+' วัน)'):'')+(elsCnt? (' · ไปช่วยร้านอื่น '+elsCnt+' วัน'):'')+(r.sickDays? (' · ลาป่วย '+r.sickDays+' วัน (ได้เงิน)') : '')+' · หยุด '+ab.n+' วัน: '+ab.text,32,106);
+  /* ยอดรับสิ้นเดือน โชว์มุมขวาบนให้เห็นทันที (ตัวเดียวกับบรรทัดสุดท้าย) */
+  g.textAlign='right'; g.font=F(400,14); g.fillStyle='#E8DCC8'; g.fillText(advN?'คงเหลือรับสิ้นเดือน':'รับสิ้นเดือน',868,40);
+  g.font=F(800,30); g.fillStyle='#FFFFFF'; g.fillText(num(advN? r.toPay : r.net)+' ฿',868,76);
+  /* ---- ตารางรายวัน ---- */
   const cols=[['วัน',62,'right'],['แก้วร้าน',185,'right'],['คอม',295,'right'],['เข้า',405,'center'],['ออก',505,'center'],['ชม.',600,'right'],['OT',675,'right'],['หมายเหตุ',868,'right']];
-  const ty0=headH+sumH;
+  const ty0=headH+12;
   g.fillStyle='#EFE6D2'; g.fillRect(0,ty0,W,colH);
   g.font=F(600,15); g.fillStyle='#5B4636';
   cols.forEach(c=>{ g.textAlign=c[2]; g.fillText(c[0],c[1],ty0+28); });
@@ -3332,7 +3357,7 @@ async function ocPayPersonImage(pay,ym,stId){
   });
   if(!days.length){ g.fillStyle='#8A8072'; g.font=F(400,15); g.textAlign='left'; g.fillText('ยังไม่มีวันเข้างานเดือนนี้',32,y+25); y+=rowH; }
   /* สรุป OT: รวมนาที → ชั่วโมง */
-  if(otTotMin>0 || (r.missMin||0)>0){
+  if(otBar){
     g.fillStyle='#F1E9D8'; g.fillRect(0,y,W,36);
     g.fillStyle='#5B4636'; g.font=F(600,15); g.textAlign='left';
     g.fillText('รวมเวลาที่ทำเกิน',32,y+24);
@@ -3342,42 +3367,45 @@ async function ocPayPersonImage(pay,ym,stId){
     g.fillText(txt,868,y+24);
     y+=36;
   }
-  const advSec=(title,list,def)=>{
-    if(!list||!list.length) return;
-    g.fillStyle='#EFE6D2'; g.fillRect(0,y,W,34);
-    g.fillStyle='#5B4636'; g.font=F(600,15); g.textAlign='left'; g.fillText(title,32,y+23);
-    g.textAlign='right'; g.fillText('จำนวน (฿)',868,y+23);
-    y+=34;
-    list.forEach((e,i)=>{
-      g.fillStyle= i%2? '#FBF3F0':'#FFFFFF'; g.fillRect(0,y,W,34);
-      g.fillStyle='#3B2F24'; g.font=F(400,15); g.textAlign='left';
-      g.fillText((e.d?('วันที่ '+e.d+' · '):'')+(e.note||def),32,y+23);
-      g.fillStyle='#B0483C'; g.textAlign='right'; g.fillText('−'+num(Number(e.amt)||0),868,y+23);
-      y+=34;
-    });
-  };
-  advSec('➖ รายการหักเงิน (หักในค่าจ้างด้านบนแล้ว)', r.dedList, 'หักเงิน');
-  advSec('💸 รายการเบิกเงินล่วงหน้า (รับไปแล้วระหว่างเดือน)', r.advOnly, 'เบิกล่วงหน้า');
-  if(r.advT>0){
-    g.fillStyle='#FFFFFF'; g.fillRect(0,y,W,62);
-    g.fillStyle='#3B2F24'; g.font=F(600,16); g.textAlign='left'; g.fillText('ค่าจ้างเดือนนี้',32,y+25);
-    g.textAlign='right'; g.fillText(num(r.net)+' ฿',868,y+25);
-    g.fillStyle='#B0483C'; g.font=F(400,15); g.textAlign='left'; g.fillText('เบิกไปแล้วระหว่างเดือน',32,y+50);
-    g.textAlign='right'; g.fillText('−'+num(r.advT)+' ฿',868,y+50);
-    y+=62;
-  }
-  g.fillStyle='#F1E1B4'; g.fillRect(0,y,W,60);
-  g.fillStyle='#5B4636'; g.font=F(700,20); g.textAlign='left'; g.fillText(r.advT>0?'คงเหลือรับสิ้นเดือน':'รวมสุทธิ',32,y+39);
-  g.font=F(800,26); g.textAlign='right'; g.fillText(num(r.advT>0? r.toPay : r.net)+' ฿',868,y+40);
+  /* ---- บัญชีสรุปเงินเดือน ---- */
+  y+=18;
+  g.fillStyle='#FFFFFF'; g.fillRect(24,y,W-48,ledH); g.strokeStyle='#E3D8C2'; g.lineWidth=1.5; g.strokeRect(24,y,W-48,ledH);
+  g.fillStyle='#5B4636'; g.font=F(700,17); g.textAlign='left'; g.fillText('สรุปเงินเดือน',44,y+28);
+  g.font=F(400,13.5); g.fillStyle='#8A8072'; g.textAlign='right'; g.fillText('บาท',856,y+28);
+  y+=40;
+  led.forEach(x=>{
+    const h=LH[x.t];
+    if(x.t==='sec'){
+      g.fillStyle=x.col; g.font=F(700,13.5); g.textAlign='left'; g.fillText(x.label,44,y+21);
+    } else if(x.t==='row'){
+      g.strokeStyle='#F0EAD9'; g.lineWidth=1; g.beginPath(); g.moveTo(44,y+h-0.5); g.lineTo(856,y+h-0.5); g.stroke();
+      const col = x.neg? '#B0483C' : (x.adv? '#C2410C' : (x.dim? '#A09583' : '#3B2F24'));
+      g.fillStyle=col; g.font=F(x.bold?600:400,15.5); g.textAlign='left'; g.fillText(x.label,56,y+23);
+      g.font=F(x.bold?700:600,16.5); g.textAlign='right';
+      g.fillText((x.val<0?'−':'')+num(Math.abs(x.val)),856,y+23);
+    } else if(x.t==='sub'){
+      g.fillStyle='#F7EFD9'; g.fillRect(36,y+4,W-72,h-8);
+      g.fillStyle='#3B2F24'; g.font=F(700,17); g.textAlign='left'; g.fillText(x.label,56,y+30);
+      g.font=F(800,19); g.textAlign='right'; g.fillText(num(x.val)+' ฿',848,y+30);
+    } else if(x.t==='fin'){
+      g.fillStyle='#F1E1B4'; g.fillRect(36,y+6,W-72,h-10);
+      g.fillStyle='#5B4636'; g.font=F(700,20); g.textAlign='left'; g.fillText(x.label,56,y+(x.sub?30:41));
+      if(x.sub){ g.font=F(400,13.5); g.fillStyle='#7A6A55'; g.fillText(x.sub,56,y+51); }
+      g.fillStyle='#5B4636'; g.font=F(800,28); g.textAlign='right'; g.fillText(num(x.val)+' ฿',848,y+43);
+    }
+    y+=h;
+  });
+  y+=0;
+  /* ---- หมายเหตุ ---- */
   g.fillStyle='#9A8F7E'; g.font=F(400,12.5); g.textAlign='left';
-  g.fillText('* OT: หักผ่อนผัน '+(pay.cfg.otGrace!=null?pay.cfg.otGrace:15)+' นาทีแรกออกก่อน (ออกช้า '+((pay.cfg.otGrace!=null?Number(pay.cfg.otGrace):15)+1)+' นาที = OT 1 นาที) · รวมทั้งเดือนแล้วแปลงเป็นชั่วโมง เศษตัดทิ้ง',32,y+80);
-  g.fillText('* จ่าย OT '+(pay.cfg.otMult||2)+' เท่าของค่าจ้างต่อชั่วโมง · หากพบข้อมูลไม่ตรง แจ้งหัวหน้าได้ทันที',32,y+100);
+  g.fillText('* OT: หักผ่อนผัน '+(pay.cfg.otGrace!=null?pay.cfg.otGrace:15)+' นาทีแรกออกก่อน (ออกช้า '+((pay.cfg.otGrace!=null?Number(pay.cfg.otGrace):15)+1)+' นาที = OT 1 นาที) · รวมทั้งเดือนแล้วแปลงเป็นชั่วโมง เศษตัดทิ้ง',32,y+24);
+  g.fillText('* จ่าย OT '+(pay.cfg.otMult||2)+' เท่าของค่าจ้างต่อชั่วโมง · เบิก = เงินที่รับไปก่อนแล้วระหว่างเดือน จึงหักออกจากยอดรับสิ้นเดือน · หากพบข้อมูลไม่ตรง แจ้งหัวหน้าได้ทันที',32,y+44);
   if(r.isPartner){
     g.fillStyle='#8A6410';
-    g.fillText('* หุ้นส่วน: วันที่ทำไม่ถึง '+(r.myMinHrs||5)+' ชม. จะไม่นับเป็นวันทำงาน (ไม่ได้ค่าแรงและคอมวันนั้น) · ไม่มีการหักชั่วโมงขาด',32,y+118);
+    g.fillText('* หุ้นส่วน: วันที่ทำไม่ถึง '+(r.myMinHrs||5)+' ชม. จะไม่นับเป็นวันทำงาน (ไม่ได้ค่าแรงและคอมวันนั้น) · ไม่มีการหักชั่วโมงขาด',32,y+64);
   }
   g.fillStyle='#B7A88F'; g.font=F(400,13); g.textAlign='left';
-  g.fillText('OWL CHA · สาขา ม.ศิลปากร · สร้างจากแอป PLP Finance',32,y+(r.isPartner?150:128));
+  g.fillText('OWL CHA · สาขา ม.ศิลปากร · สร้างจากแอป PLP Finance',32,y+(r.isPartner?92:72));
   const a=document.createElement('a');
   a.download='payslip-'+ym+'-E'+String(idx).padStart(2,'0')+'.png';
   a.href=cv.toDataURL('image/png');
