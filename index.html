@@ -1433,6 +1433,9 @@ async function ocExportExcel(data){
   XLSX.writeFile(wb, 'owl-cost-'+new Date().toISOString().slice(0,10)+'.xlsx');
 }
 
+/* ชั่วโมงทศนิยม → "ชม.:นาที" เช่น 10.233 → 10:14 (อ่านง่ายกว่า 10.2) */
+const hmStr = (h) => { if(h==null||isNaN(h)) return '–'; const m=Math.round(Number(h)*60); return Math.floor(m/60)+':'+String(m%60).padStart(2,'0'); };
+const hmOfMin = (m) => hmStr((Number(m)||0)/60);
 const ocFmt = (n, d=2) => (isFinite(n)? n : 0).toLocaleString('th-TH',{ minimumFractionDigits:d, maximumFractionDigits:d });
 const ocUid = () => Math.random().toString(36).slice(2,9);
 const ocDeepCopy = (o) => JSON.parse(JSON.stringify(o));
@@ -3147,7 +3150,7 @@ function ocPayBuildWorkbook(pay,ym){
     const abE=ocPayAbsent(pay,ym,r.st.id);
     rr.push([cell('ทำงาน '+(r.days+r.holDays)+' วัน · หยุด '+abE.n+' วัน: '+abE.text,{...sTxt,font:{sz:11,color:{rgb:'8A8072'}}})]);
     rr.push([]);
-    rr.push(['วันที่','แก้วทั้งร้าน','คอมที่ได้ (฿)','เวลาเข้า','เวลาออก','ชม.ทำงาน','OT (ชม.)','วันหยุด×2'].map(h=>cell(h,sHead)));
+    rr.push(['วันที่','แก้วทั้งร้าน','คอมที่ได้ (฿)','เวลาเข้า','เวลาออก','ทำงาน (ชม.:นาที)','OT (ชม.)','วันหยุด×2'].map(h=>cell(h,sHead)));
     ocPayPersonDays(pay,ym,r.st.id).forEach(o=>{
       if(o.off){
         const sOff={...sTxt,alignment:{horizontal:'center'},font:{color:{rgb:'B7A88F'}}};
@@ -3156,7 +3159,7 @@ function ocPayBuildWorkbook(pay,ym){
       }
       rr.push([cell(o.d,{...sNum,alignment:{horizontal:'center'}}),cell(o.cups||'',sNum,'#,##0'),cell(o.com?Math.round(o.com):'',sNum,'#,##0'),
         cell(o.tin,{...sTxt,alignment:{horizontal:'center'}}),cell(o.tout,{...sTxt,alignment:{horizontal:'center'}}),
-        cell(o.hrs!=null?Math.round(o.hrs*10)/10:'',sNum,'0.0'),cell(o.otH||'',sNum),cell(o.isHol?'x2':(o.miss?('ขาด '+o.miss+' ชม.'):''),{...sTxt,alignment:{horizontal:'center'}})]);
+        cell(o.hrs!=null? hmStr(o.hrs):'',{...sTxt,alignment:{horizontal:'center'}}),cell(o.otH||'',sNum),cell(o.isHol?'x2':(o.miss?('ขาด '+o.miss+' ชม.'):''),{...sTxt,alignment:{horizontal:'center'}})]);
     });
     rr.push([]);
     rr.push([cell(r.quota!=null?('ฐานเหมา (โควตาหยุด '+r.quota+' วัน)'):'ฐานตามวันเข้า',sTxt),cell(r.base,sNumB,'#,##0'),cell('คอมรวม',sTxt),cell(r.com,sNumB,'#,##0'),cell('OT (฿)',sTxt),cell(r.otB,sNumB,'#,##0'),cell('วันหยุด×2',sTxt),cell(r.holPay,sNumB,'#,##0')]);
@@ -3327,7 +3330,7 @@ async function ocPayPersonImage(pay,ym,stId){
   g.textAlign='right'; g.font=F(400,14); g.fillStyle='#E8DCC8'; g.fillText(advN?'คงเหลือรับสิ้นเดือน':'รับสิ้นเดือน',868,40);
   g.font=F(800,30); g.fillStyle='#FFFFFF'; g.fillText(num(advN? r.toPay : r.net)+' ฿',868,76);
   /* ---- ตารางรายวัน ---- */
-  const cols=[['วัน',62,'right'],['แก้วร้าน',185,'right'],['คอม',295,'right'],['เข้า',405,'center'],['ออก',505,'center'],['ชม.',600,'right'],['OT',675,'right'],['หมายเหตุ',868,'right']];
+  const cols=[['วัน',62,'right'],['แก้วร้าน',185,'right'],['คอม',295,'right'],['เข้า',405,'center'],['ออก',505,'center'],['ชม.:นาที',608,'right'],['OT',675,'right'],['หมายเหตุ',868,'right']];
   const ty0=headH+12;
   g.fillStyle='#EFE6D2'; g.fillRect(0,ty0,W,colH);
   g.font=F(600,15); g.fillStyle='#5B4636';
@@ -3344,7 +3347,7 @@ async function ocPayPersonImage(pay,ym,stId){
     g.fillStyle= o.isHol? '#FBE9E5' : (o.lateWarn? '#FDE4E4' : (i%2? '#F5EEDD':'#FFFFFF')); g.fillRect(0,y,W,rowH);
     g.fillStyle='#3B2F24'; g.font=F(400,15.5);
     const vals=[String(o.d), o.cups?num(o.cups):'–', o.com?num(Math.round(o.com)):'–', o.tin||'–', o.tout||'–',
-      o.hrs!=null?(Math.round(o.hrs*10)/10).toString():'–',
+      o.hrs!=null? hmStr(o.hrs) : '–',
       o.otM? ('+'+o.otM+'น.') : (o.missM? ('−'+o.missM+'น.') : '–'),
       o.isHol?'🆘 ×2':(o.lateWarn? ('⚠ สาย '+o.late+' น.'+(o.sched? ' (กะ '+o.sched+')':'')) : (o.brk?('พัก '+o.brk+' น.'):(o.otM?'ทำเกินเวลา':(o.missM?'ทำไม่ครบกะ':''))))];
     vals.forEach((v,k)=>{
@@ -3987,13 +3990,13 @@ function AttendPanel({ user }){
       const lvv=leaveOf(d,who);
       const hol=isHol(d,who);
       const otMin=(r && !hol)? otMinFrom(who,r,d) : 0;
-      if(r){ wk++; wh+=r.net; wot+=otMin; if(hol){ whol++; wholH+=r.net; } }
+      if(r){ wk++; wh+=(r.netMin||0)/60; wot+=otMin; if(hol){ whol++; wholH+=(r.netMin||0)/60; } }
       else { const t=(lvv&&lvv.t)||'off'; lv[t]=(lv[t]||0)+1; }
       rowsAll.push({ d, r, lv:lvv, dt:new Date(yy,mm-1,d), otMin, hol });
     }
     let lateM=0, overM=0;
     rowsAll.forEach(rr=>{ if(rr.otMin>0) overM+=rr.otMin; else if(rr.otMin<0) lateM+=(-rr.otMin); });
-    return { wk, wh:Math.round(wh*10)/10, wot, whol, wholH:Math.round(wholH*10)/10, lv, rowsAll, lateM, overM };
+    return { wk, wh:hmStr(wh), wot, whol, wholH:hmStr(wholH), lv, rowsAll, lateM, overM };
   },[scans,who,ym,leaveMap,holMap,staff,cfg]);
 
   const stat=React.useMemo(()=>{
@@ -4267,7 +4270,7 @@ function AttendPanel({ user }){
           x.fillStyle='#4A5560'; x.font='400 14px Kanit,sans-serif';
           x.fillText(row.r.pairs.map(pp=>pp.i+'→'+(pp.o||'?')).join('  '), PAD+118, ry+3);
           x.fillStyle= row.r.net>=10? '#2E7D4F':'#243240'; x.font='700 14px Kanit,sans-serif';
-          x.fillText((row.r.net||0)+' ชม.', W-PAD-212, ry+3);
+          x.fillText(hmOfMin(row.r.netMin)+' ชม.', W-PAD-212, ry+3);
           if(row.otMin){ x.fillStyle= row.otMin>0? '#C68B4A':'#CE4A5A'; x.font='700 13px Kanit,sans-serif'; x.fillText((row.otMin>0?'+':'')+row.otMin+'น.', W-PAD-142, ry+3); }
           else { x.fillStyle='#C7CDD4'; x.font='400 13px Kanit,sans-serif'; x.fillText('–', W-PAD-142, ry+3); }
           x.font='400 12px Kanit,sans-serif';
@@ -4533,7 +4536,7 @@ function AttendPanel({ user }){
                       {r.late? ('⚠️ สาย '+r.late+' น.') : ''}{r.late&&sh? ' · ':''}{sh? ('กะ '+sh.i+'→'+sh.o+(schedRange(sv)?'':' (ประจำ)')) : (sv==='off'?'ตารางว่าหยุด':sv==='other'?'ตารางว่าทำที่อื่น':'')}
                     </span>); })()}
                 </div>
-                <div className="num" style={{width:80,padding:'9px 8px',textAlign:'right',fontWeight:700,display:'flex',alignItems:'center',justifyContent:'flex-end',color: hasShop(d,r.pin,'owlcha')? (r.net>=10?'#3E7D3E':'var(--ink)') : 'var(--line)'}}>{hasShop(d,r.pin,'owlcha')? (r.net? r.net+'ช':'–') : <span className="kanit text-[10.5px]" style={{fontWeight:400,color:'var(--muted)'}}>ทำที่อื่น</span>}</div>
+                <div className="num" style={{width:80,padding:'9px 8px',textAlign:'right',fontWeight:700,display:'flex',alignItems:'center',justifyContent:'flex-end',color: hasShop(d,r.pin,'owlcha')? (r.net>=10?'#3E7D3E':'var(--ink)') : 'var(--line)'}}>{hasShop(d,r.pin,'owlcha')? (r.net? hmOfMin(r.netMin):'–') : <span className="kanit text-[10.5px]" style={{fontWeight:400,color:'var(--muted)'}}>ทำที่อื่น</span>}</div>
                 <div className="num" style={{width:62,padding:'9px 4px',textAlign:'right',display:'flex',alignItems:'center',justifyContent:'flex-end',fontWeight:700,fontSize:12,color: r.hol?'#CE4A5A':(r.otMin>0?'#C68B4A':(r.otMin<0?'#CE4A5A':'var(--muted)'))}}>{!hasShop(d,r.pin,'owlcha')? '–' : (r.hol? '×2' : minTxt(r.otMin))}</div>
                 <div style={{width:96,padding:'9px 4px',textAlign:'center',display:'flex',alignItems:'center',justifyContent:'center',gap:4}} className="text-[11px]">
                   <button className="press kanit text-[10.5px]" title="แตะเพื่อเปลี่ยนสถานะ"
@@ -4553,11 +4556,11 @@ function AttendPanel({ user }){
                 <div style={{flex:1,padding:'12px 10px'}} className="kanit">{nameOf(who)} · ทำงาน {pStat.wk} วัน
                   <span className="text-[12px]" style={{fontWeight:400,color:'var(--muted)',marginLeft:8}}>
                     🏠{pStat.lv.off||0} · 🤒{pStat.lv.sick||0} · 📄{pStat.lv.personal||0}
-                    {pStat.whol>0 && <span style={{color:'#CE4A5A'}}> · 🆘{pStat.whol} วัน ({pStat.wholH}ช×2)</span>}
+                    {pStat.whol>0 && <span style={{color:'#CE4A5A'}}> · 🆘{pStat.whol} วัน ({pStat.wholH} ชม.×2)</span>}
                   </span>
                 </div>
                 <div style={{width:236,padding:'12px 6px'}}></div>
-                <div className="num" style={{width:80,padding:'12px 8px',textAlign:'right',color:'var(--primary)'}}>{pStat.wh}ช</div>
+                <div className="num" style={{width:80,padding:'12px 8px',textAlign:'right',color:'var(--primary)'}}>{pStat.wh}</div>
                 <div className="num" style={{width:62,padding:'12px 4px',textAlign:'right',fontSize:12,color: pStat.wot>=0?'#C68B4A':'#CE4A5A'}}>{pStat.wot>0?'+':''}{pStat.wot} น.</div>
                 <div style={{width:96,padding:'12px 4px',textAlign:'center'}} className="num text-[12px]">= {minHr(pStat.wot)}ช</div>
                 <div style={{width:58,padding:'12px 6px'}}></div>
@@ -4628,7 +4631,7 @@ function AttendPanel({ user }){
                   {r.pairs.length>1 && <span className="text-[10.5px]" style={{color:'var(--muted)'}}>{r.pairs.length} ช่วง</span>}
                   {r.fixed>0 && <span className="text-[10.5px]" style={{color:'var(--muted)',opacity:.75}}>ตัดซ้ำ {r.fixed}</span>}
                   {hasShop(d,r.pin,'owlcha')
-                    ? <div className="num text-[13px]" style={{fontWeight:700,color: r.net>=10?'#3E7D3E':'var(--ink)'}}>{r.net? r.net+' ชม.':'–'}</div>
+                    ? <div className="num text-[13px]" style={{fontWeight:700,color: r.net>=10?'#3E7D3E':'var(--ink)'}}>{r.net? hmOfMin(r.netMin)+' ชม.':'–'}</div>
                     : <span className="kanit text-[10.5px]" style={{color:'var(--muted)'}}>ทำที่อื่น</span>}
                   {hasShop(d,r.pin,'owlcha') && !r.hol && r.otMin!==0 && <span className="num text-[11px]" style={{color: r.otMin>0?'#C68B4A':'#CE4A5A',fontWeight:700}}>{minTxt(r.otMin)}</span>}
                   {r.hol && <span className="text-[10.5px]" style={{color:'#CE4A5A',fontWeight:700}}>🆘×2</span>}
@@ -4666,11 +4669,11 @@ function AttendPanel({ user }){
           const lvv=leaveOf(d,detail);
           const hol=isHol(d,detail);
           const otMin=(r && !hol)? otMinFrom(detail,r,d) : 0;
-          if(r){ wk++; wh+=r.net; wot+=otMin; if(hol){ whol++; wholH+=r.net; } }
+          if(r){ wk++; wh+=(r.netMin||0)/60; wot+=otMin; if(hol){ whol++; wholH+=(r.netMin||0)/60; } }
           else { const t=(lvv&&lvv.t)||'off'; lv[t]=(lv[t]||0)+1; }
           rowsAll.push({ d, r, lv:lvv, dt:new Date(Y,M-1,d), otMin, hol });
         }
-        wh=Math.round(wh*10)/10; wholH=Math.round(wholH*10)/10;
+        wh=hmStr(wh); wholH=hmStr(wholH);
         return (
           <Portal>
           <div style={{position:'fixed',inset:0,background:'rgba(20,26,34,.55)',zIndex:118,display:'flex',alignItems: wide?'center':'flex-end',justifyContent:'center',padding: wide?20:0}} onClick={()=>!busy&&setDetail(null)}>
@@ -4726,7 +4729,7 @@ function AttendPanel({ user }){
                             ))}
                             {r.manual && <span className="text-[10.5px]" style={{color:'var(--muted)'}}>&#9999;</span>}
                           </div>
-                          <div className="num" style={{width:66,textAlign:'right',fontWeight:700,color: hasShop(d,detail,'owlcha')? (r.net>=10?'#3E7D3E':'var(--ink)') : 'var(--line)'}}>{hasShop(d,detail,'owlcha')? (r.net? r.net+'ช':'–') : <span className="kanit text-[10px]" style={{fontWeight:400,color:'var(--muted)'}}>ที่อื่น</span>}</div>
+                          <div className="num" style={{width:66,textAlign:'right',fontWeight:700,color: hasShop(d,detail,'owlcha')? (r.net>=10?'#3E7D3E':'var(--ink)') : 'var(--line)'}}>{hasShop(d,detail,'owlcha')? (r.net? hmOfMin(r.netMin):'–') : <span className="kanit text-[10px]" style={{fontWeight:400,color:'var(--muted)'}}>ที่อื่น</span>}</div>
                           <div className="num text-[11.5px]" style={{width:58,textAlign:'right',fontWeight:700,color: hol?'#CE4A5A':(otMin>0?'#C68B4A':(otMin<0?'#CE4A5A':'var(--muted)'))}}>{hol? '×2' : minTxt(otMin)}</div>
                           <div style={{width:52,textAlign:'center'}}>
                             <button className="press kanit text-[10.5px]"
@@ -4826,7 +4829,7 @@ function AttendPanel({ user }){
                 <div className="rounded-xl p-3 mb-3" style={{background:'var(--soft)'}}>
                   <div className="flex items-center justify-between text-[13.5px]">
                     <span style={{color:'var(--muted)'}}>รวมวันนี้</span>
-                    <b className="num" style={{color:'var(--primary)',fontSize:17}}>{net} ชม.</b>
+                    <b className="num" style={{color:'var(--primary)',fontSize:17}}>{hmOfMin(netM)} ชม.</b>
                   </div>
                   <div className="flex items-center justify-between text-[13.5px] mt-1">
                     <span style={{color:'var(--muted)'}}>เทียบกะมาตรฐาน {shiftHrsOf(statEdit.pin)} ชม. (หลังหักพัก)</span>
@@ -5965,7 +5968,7 @@ function OCTabPay({ toast }){
                     const st=pay.staff.find(s=>s.id===id); if(!st) return null;
                     const tt=tms[id]||{};
                     let info='';
-                    if(tt.i&&tt.o){ const h=ocPayNetHrs(tt); if(h!=null){ const ex=Math.floor(Math.max(0,h-ocStdHrs(st,cfg))); const br=Number(tt.b)||0; info=ocFmt(h,1)+' ชม.'+(br>0?' (พัก '+br+'น.)':'')+(ex>0?' · OT '+ocFmt(ex,1):''); } }
+                    if(tt.i&&tt.o){ const h=ocPayNetHrs(tt); if(h!=null){ const ex=Math.floor(Math.max(0,h-ocStdHrs(st,cfg))); const br=Number(tt.b)||0; info=hmStr(h)+' ชม.'+(br>0?' (พัก '+br+'น.)':'')+(ex>0?' · OT '+ocFmt(ex,0)+' ชม.':''); } }
                     return (
                       <div key={id} className="flex items-center gap-1.5 py-0.5 text-[12px] flex-wrap">
                         <span className="kanit" style={{width:44}}>{st.name.slice(0,5)}</span>
