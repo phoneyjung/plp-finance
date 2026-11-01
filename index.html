@@ -5005,14 +5005,43 @@ async function lnSyncFromOwl(nextStaff){
   const ref=db.collection('owlCost').doc('laundryPay');
   const snap=await ref.get(); const ln=lnNorm(snap.exists? (snap.data()||{}) : {});
   const lst=(ln.staff||[]).map(x=>Object.assign({},x));
+  /* คน Owl ที่ไปช่วย Teddy เป็นบางวัน (ติ๊กร้านในแท็บเวลางาน) เดือนนี้/เดือนก่อน → ต้องมีชื่อที่ Teddy ด้วย ไม่งั้นเวลางาน/เงินเดือนฝั่งนั้นไม่ขึ้น */
+  const helpShop={};   /* pin → ร้าน Teddy ที่ไปบ่อยสุด */
+  try{
+    const y0=ymOf(today()), y1=ocPayShift(y0,-1);
+    const docs=await Promise.all([y0,y1].map(y=>db.collection('fpScans').doc(y).get().catch(()=>null)));
+    const cnt={};
+    docs.forEach(d=>{ if(!d||!d.exists) return; const sh=(d.data()||{}).shop||{};
+      Object.keys(sh).forEach(day=>{ Object.keys(sh[day]||{}).forEach(pin=>{ String(sh[day][pin]||'').split(',').forEach(x=>{ if(x==='teddy1'||x==='teddy2'){ const c=(cnt[pin]=cnt[pin]||{}); c[x]=(c[x]||0)+1; } }); }); }); });
+    Object.keys(cnt).forEach(pin=>{ helpShop[pin]=Object.keys(cnt[pin]).sort((a,b)=>cnt[pin][b]-cnt[pin][a])[0]; });
+  }catch(e){ console.warn('helpShop',e); }
   let added=0, updated=0;
   (nextStaff||[]).forEach(st=>{
+    const pin=String(st.fpId||'').trim();
     const isTeddy=(st.shop==='teddy1'||st.shop==='teddy2');
     let i=lst.findIndex(x=>x.owlId===st.id);
-    if(i<0 && isTeddy && st.fpId) i=lst.findIndex(x=>!x.owlId && String(x.fpId||'').trim()===String(st.fpId).trim());   /* จับคู่คนเดิมด้วยรหัสสแกน */
-    if(i<0 && isTeddy) i=lst.findIndex(x=>!x.owlId && String(x.name||'').trim()===String(st.name||'').trim());
-    if(i<0){ if(!isTeddy) return; lst.push(lnFromOwl(st,null)); added++; }
-    else { const nx=lnFromOwl(st,lst[i]); if(JSON.stringify(nx)!==JSON.stringify(lst[i])){ lst[i]=nx; updated++; } }
+    if(i<0 && pin) i=lst.findIndex(x=>!x.owlId && String(x.fpId||'').trim()===pin);   /* จับคู่คนเดิมด้วยรหัสสแกน */
+    if(i<0) i=lst.findIndex(x=>!x.owlId && String(x.name||'').trim()===String(st.name||'').trim() && (isTeddy? true : String(x.fpId||'').trim()===''));
+    if(isTeddy){
+      if(i<0){ lst.push(lnFromOwl(st,null)); added++; }
+      else { const nx=lnFromOwl(st,lst[i]); if(JSON.stringify(nx)!==JSON.stringify(lst[i])){ lst[i]=nx; updated++; } }
+      return;
+    }
+    /* ร้านประจำไม่ใช่ Teddy: มีชื่อที่ Teddy อยู่แล้ว → แค่ผูกรหัสสแกน/ชื่อให้ตรง (ไม่แตะร้าน/เรท/สถานะ) */
+    if(i>=0){
+      const cur=lst[i]; const nx=Object.assign({},cur,{ owlId:st.id, name:st.name });
+      if(pin) nx.fpId=pin;
+      /* เคยซิงก์มาจาก Owl (ร้านประจำเคยเป็น Teddy) แล้วย้ายกลับ Owl / ลาออก และไม่มีวันไปช่วย → พักชื่อฝั่ง Teddy */
+      if(cur.owlId && (st.active===false || !helpShop[pin])) nx.active=false;
+      if(JSON.stringify(nx)!==JSON.stringify(cur)){ lst[i]=nx; updated++; }
+      return;
+    }
+    /* ยังไม่มีชื่อที่ Teddy แต่เดือนนี้/เดือนก่อนไปช่วย Teddy → สร้างให้ (ร้าน = ที่ไปบ่อยสุด) */
+    if(pin && helpShop[pin] && st.active!==false){
+      const nx=lnFromOwl(Object.assign({},st,{shop:helpShop[pin]}),null);
+      nx.note=(nx.note? nx.note+' · ':'')+'ร้านประจำ Owl Cha มาช่วยบางวัน';
+      lst.push(nx); added++;
+    }
   });
   if(added||updated) await ref.set({ staff: lst },{merge:true});
   return { added, updated, total:lst.length };
