@@ -2687,7 +2687,360 @@ function PrintPanel({ user }){
   );
 }
 
-function CostPanel({toast}){
+/* ================ 🛵 OWL DELIVERY — วิเคราะห์ Grab / LINE MAN / ShopeeFood ================
+   Firestore: owlCost/delivery
+     cfg:{ costPct }                                  ต้นทุนวัตถุดิบ+แพ็ก % ของยอดขาย (ไม่รวมค่าแรง/ค่าเช่า)
+     months:{ 'YYYY-MM': { grab|lineman|shopee:{ sales, orders, gp, ads, promo, adj, src },
+                           exp:{ grab:{gp,mk}, ... } } }  ← id รายการรายจ่ายที่ลงไว้แล้ว (กันลงซ้ำ)
+   sales = ยอดขายตามรายงานแพลตฟอร์ม · gp = ค่า GP/คอมมิชชั่น (รวม VAT) · ads = ค่าโฆษณา
+   promo = ส่วนลด/แคมเปญที่ร้านออกเงิน · adj = ปรับยอดที่แพลตฟอร์มคืนให้ (+) · เงินที่ได้ = sales−gp−ads−promo+adj
+   ================================================================ */
+const DLV_PLAT=[
+  { id:'grab',    name:'Grab',       color:'#16A34A', src:'อีเมล "สรุปยอดขายสำหรับคำสั่งซื้อ … GrabFood" มาทุกวัน (ไฟล์ PDF) — รวมของทั้งเดือน: ยอดรายการ / ค่าคอมมิชชั่นและภาษี / โฆษณา / การปรับรายได้' },
+  { id:'lineman', name:'LINE MAN',   color:'#0E7490', src:'อีเมล "แจ้งค่าบริการระบบ LINE MAN GP ประจำเดือน …" (ต้นเดือนถัดไป) + ไฟล์ REPORT_xxx.pdf ในเมลเดียวกัน: รายรับทั้งหมด / ค่า GP / ค่าโฆษณา / ส่วนลดค่าส่ง + ค่า MKT (= โปร)' },
+  { id:'shopee',  name:'ShopeeFood', color:'#EA580C', src:'อีเมล "รายงานการโอนเงินสำหรับ ShopeeFood" ฉบับสุดท้ายของเดือน → หัวข้อ "รายงานยอดขายสะสมประจำเดือน": ยอดรายการ / ค่าธรรมเนียม GP + VAT / เงินอุดหนุนจากร้านค้า (= โปร)' },
+];
+const DLV_CAT_GP='ค่า GP เดลิเวอรี่', DLV_CAT_MK='ค่าโฆษณาเดลิเวอรี่';
+const dlvN=(v)=>{ const n=Number(v); return isFinite(n)? n : 0; };
+const dlvR2=(n)=>Math.round(n*100)/100;
+const dlvLastDay=(ym)=> ym+'-'+String(new Date(+ym.slice(0,4), +ym.slice(5,7), 0).getDate()).padStart(2,'0');
+const dlvDays=(ym)=> new Date(+ym.slice(0,4), +ym.slice(5,7), 0).getDate();
+const dlvHas=(p)=> !!p && (dlvN(p.sales)>0 || dlvN(p.gp)>0 || dlvN(p.ads)>0);
+/* ตัวเลขวิเคราะห์ของ 1 แพลตฟอร์ม/เดือน */
+function dlvCalc(p, costPct){
+  p=p||{};
+  const s=dlvN(p.sales), gp=dlvN(p.gp), ads=dlvN(p.ads), pr=dlvN(p.promo), adj=dlvN(p.adj), o=dlvN(p.orders);
+  const gpNet=gp-adj;                       /* GP สุทธิหลังปรับยอดคืน */
+  const net=s-gpNet-ads-pr;                 /* เงินที่แพลตฟอร์มโอนให้ */
+  const mk=ads+pr;                          /* ค่าการตลาด = โฆษณา + โปร/ส่วนลดที่ร้านออก */
+  const cost=s*dlvN(costPct)/100;           /* ต้นทุนวัตถุดิบ+แพ็ก (ประมาณ) */
+  const profit=net-cost;                    /* กำไรหลังต้นทุนของ (ก่อนค่าแรง/ค่าเช่า) */
+  const pct=(x)=> s>0? x/s*100 : 0;
+  const cm = s>0? 1-gpNet/s-dlvN(costPct)/100 : 0;   /* ยอดขาย 1 บาท เหลือกำไรกี่บาท ก่อนค่าการตลาด */
+  const beSales = cm>0? mk/cm : Infinity;            /* ค่าการตลาดต้องดึงยอดขายมาอย่างน้อยเท่านี้ถึงคุ้ม */
+  return { s,gp,ads,pr,adj,gpNet,net,mk,cost,profit,o,
+    aov:o? s/o:0, netPerOrder:o? net/o:0, profitPerOrder:o? profit/o:0,
+    gpPct:pct(gpNet), adsPct:pct(ads), prPct:pct(pr), mkPct:pct(mk), netPct:pct(net), costPct:dlvN(costPct), profitPct:pct(profit),
+    cm, beSales, bePct: s>0&&isFinite(beSales)? beSales/s*100 : Infinity,
+    roas: mk>0? s/mk : 0, beRoas: cm>0? 1/cm : Infinity };
+}
+function dlvSum(list){ const t={sales:0,orders:0,gp:0,ads:0,promo:0,adj:0}; list.forEach(p=>{ if(!p) return; Object.keys(t).forEach(k=>t[k]+=dlvN(p[k])); }); return t; }
+/* วางแผนโปรเดือนหน้า: เทียบกำไร "ไม่เล่น" กับ "เล่นโปร/ยิงแอด" */
+function dlvPlan(x){
+  const aov=dlvN(x.aov), gp=dlvN(x.gpPct)/100, c=dlvN(x.costPct)/100, d=dlvN(x.disc)/100, dd=dlvN(x.dlvDisc), days=dlvN(x.days)||30;
+  const base=dlvN(x.ordersDay)*days, ads=dlvN(x.adsDay)*days, g=dlvN(x.growth)/100;
+  const m0=aov*(1-gp)-aov*c;                      /* กำไร/ออเดอร์ ไม่มีโปร */
+  const m1=aov*(1-d)*(1-gp)-aov*c-dd;             /* กำไร/ออเดอร์ ระหว่างโปร (GP คิดจากราคาหลังลด) */
+  const P0=base*m0, P1=base*(1+g)*m1-ads;
+  const need = m1>0 && base>0 ? ((P0+ads)/(base*m1)-1)*100 : Infinity;   /* ออเดอร์ต้องเพิ่มกี่ % ถึงกำไรเท่าไม่เล่น */
+  return { m0,m1,P0,P1,need, needOrdersDay: isFinite(need)? dlvN(x.ordersDay)*(1+need/100) : Infinity, base, ads };
+}
+/* เขียนทับทั้งก้อนตาม path (update แทน set-merge เพื่อให้ช่องที่ลบออกหายจริง) · ถ้ายังไม่มีเอกสารให้สร้างก่อน */
+async function dlvUpdate(paths){
+  const ref=db.collection('owlCost').doc('delivery');
+  try{ await ref.update(paths); }
+  catch(e){ await ref.set({ months:{}, cfg:{} },{merge:true}); await ref.update(paths); }
+}
+async function dlvEnsureCats(){
+  const have=(await customCats('owlcha','expense')).map(c=>c.name);
+  if(!have.includes(DLV_CAT_GP)) await addCat('owlcha','expense',DLV_CAT_GP,'#DC2626','percent');
+  if(!have.includes(DLV_CAT_MK)) await addCat('owlcha','expense',DLV_CAT_MK,'#F59E0B','megaphone');
+}
+/* ลง/อัปเดตรายจ่าย GP + ค่าการตลาด ของเดือน ym (1 รายการต่อแพลตฟอร์มต่อหมวด · วันสุดท้ายของเดือน · จ่ายแบบโอน เพราะหักจากยอดที่โอนเข้าบัญชี) */
+async function dlvPostExpenses(ym, month, by){
+  await dlvEnsureCats();
+  const date=dlvLastDay(ym), exp=Object.assign({}, (month&&month.exp)||{});
+  const mLabel=ocPayLabel(ym);
+  let added=0, updated=0, removed=0; const ops=[];
+  for(const pl of DLV_PLAT){
+    const p=(month||{})[pl.id]; const k=dlvCalc(p,0); const cur=Object.assign({}, exp[pl.id]||{});
+    const want={ gp:dlvR2(k.gpNet), mk:dlvR2(k.mk) };
+    for(const part of ['gp','mk']){
+      const amt=want[part], id=cur[part];
+      const doc={ shopId:'owlcha', kind:'expense', category: part==='gp'? DLV_CAT_GP : DLV_CAT_MK, amount:amt, method:'bank',
+        note: pl.name+' · '+(part==='gp'?'ค่า GP/คอมมิชชั่น (รวม VAT)':'ค่าโฆษณา + โปรที่ร้านออก')+' '+mLabel+' · หักจากยอดที่แพลตฟอร์มโอน',
+        date, ym, skey:`owlcha_${ym}`, by: by? {id:by.id||'', name:by.name||''} : null, source:'dlv' };
+      if(id){
+        const ref=db.collection('transactions').doc(id); const snap=await ref.get();
+        if(!(amt>0)){ if(snap.exists){ await ref.delete(); ops.push({id,before:snap.data(),after:null}); removed++; } delete cur[part]; continue; }
+        if(snap.exists){ const b=snap.data(); if(Math.round(dlvN(b.amount)*100)!==Math.round(amt*100) || b.note!==doc.note){ await ref.update({amount:amt, note:doc.note, ts:FieldValue.serverTimestamp()}); ops.push({id,before:{amount:b.amount},after:{amount:amt}}); updated++; } continue; }
+      }
+      if(!(amt>0)) continue;
+      const ref=await db.collection('transactions').add({ ...doc, ts:FieldValue.serverTimestamp() });
+      cur[part]=ref.id; ops.push({id:ref.id,before:null,after:{kind:'expense',category:doc.category,amount:amt,method:'bank',note:doc.note,date}}); added++;
+    }
+    if(Object.keys(cur).length) exp[pl.id]=cur; else delete exp[pl.id];
+  }
+  await dlvUpdate({ ['months.'+ym+'.exp']: exp });
+  if(ops.length) await writeLog('owlcha', by, 'dlv.post', `ลงค่า GP/โฆษณาเดลิเวอรี่ ${mLabel} (เพิ่ม ${added} · แก้ ${updated} · ลบ ${removed})`, ops);
+  return { added, updated, removed, exp };
+}
+
+function DlvBar({ k }){
+  /* แถบ 100% = ยอดขาย · แบ่ง GP / โฆษณา / โปร / ต้นทุนของ / กำไร */
+  const segs=[
+    { v:k.gpPct, c:'#DC2626', t:'GP' }, { v:k.adsPct, c:'#F59E0B', t:'โฆษณา' }, { v:k.prPct, c:'#A855F7', t:'โปร' },
+    { v:k.costPct, c:'#94A3B8', t:'ต้นทุนของ' }, { v:Math.max(0,k.profitPct), c:'#16A34A', t:'กำไร' } ];
+  const tot=segs.reduce((a,x)=>a+Math.max(0,x.v),0)||1; const sc=tot>100? 100/tot : 1;
+  return (
+    <div>
+      <div style={{ display:'flex', height:14, borderRadius:7, overflow:'hidden', background:'var(--soft)' }}>
+        {segs.map((x,i)=> x.v>0 && <div key={i} title={x.t} style={{ width:(x.v*sc)+'%', background:x.c }}/>)}
+      </div>
+      <div className="flex flex-wrap gap-x-2.5 gap-y-0.5 mt-1 text-[10.5px]" style={{ color:'var(--muted)' }}>
+        {segs.map((x,i)=> x.v>0.05 && <span key={i}><span style={{ display:'inline-block', width:8, height:8, borderRadius:2, background:x.c, marginRight:3 }}/>{x.t} {ocFmt(x.v,0)}%</span>)}
+        {k.profitPct<0 && <span style={{ color:'var(--neg)', fontWeight:600 }}>ขาดทุน {ocFmt(-k.profitPct,0)}%</span>}
+      </div>
+    </div>
+  );
+}
+
+function DlvPlatCard({ pl, k, days }){
+  const L=({ label, val, pct, neg, bold, color })=>(
+    <div className="flex justify-between text-[12.5px] py-[1px]">
+      <span style={{ color:'var(--muted)' }}>{label}</span>
+      <span className="num" style={{ fontWeight:bold?700:500, color: color||(neg?'var(--neg)':'var(--ink)') }}>{neg&&val>0?'−':''}{ocFmt(Math.abs(val),0)} ฿{pct!=null && <span style={{ color:'var(--muted)', fontWeight:400 }}> · {ocFmt(pct,1)}%</span>}</span>
+    </div>);
+  const verdict = !(k.mk>0) ? { t:'ไม่มีค่าโฆษณา/โปรเดือนนี้', c:'var(--muted)' }
+    : (!isFinite(k.bePct) || k.bePct>=100) ? { t:'❌ ไม่คุ้ม — ต่อให้ทุกออเดอร์มาจากโฆษณา/โปร กำไรก็ยังไม่พอจ่ายค่าการตลาด', c:'var(--neg)' }
+    : k.bePct>=85 ? { t:'❌ แทบไม่คุ้ม — ถ้าปิดโฆษณา/โปร ยอดต้องหายเกิน '+ocFmt(k.bePct,0)+'% ถึงจะกำไรน้อยกว่าตอนนี้ (แทบเป็นไปไม่ได้) → ลองลดงบ/ปิดดู', c:'var(--neg)' }
+    : k.bePct>=50 ? { t:'⚠️ เสี่ยง — ถ้าปิดโฆษณา/โปรแล้วยอดหายไม่ถึง '+ocFmt(k.bePct,0)+'% จะได้กำไรมากกว่าเปิด', c:'#B45309' }
+    : { t:'✅ พอไหว — ถ้าปิดโฆษณา/โปรแล้วยอดหายเกิน '+ocFmt(k.bePct,0)+'% แปลว่าคุ้มที่เปิดไว้', c:'var(--pos)' };
+  return (
+    <div className="card p-3 mb-2.5">
+      <div className="flex items-center gap-2 mb-1.5">
+        <span style={{ width:10, height:10, borderRadius:99, background:pl.color }}/>
+        <div className="kanit text-[15px]" style={{ fontWeight:600 }}>{pl.name}</div>
+        <div className="text-[11.5px] ml-auto" style={{ color:'var(--muted)' }}>{k.o? ocFmt(k.o,0)+' ออเดอร์ · เฉลี่ย '+ocFmt(k.aov,0)+' ฿' : ''}</div>
+      </div>
+      <DlvBar k={k}/>
+      <div className="mt-2">
+        <L label="ยอดขาย" val={k.s} bold/>
+        <L label="ค่า GP / คอมมิชชั่น" val={k.gpNet} pct={k.gpPct} neg/>
+        {k.ads>0 && <L label="ค่าโฆษณา" val={k.ads} pct={k.adsPct} neg/>}
+        {k.pr>0 && <L label="โปร / ส่วนลดที่ร้านออก" val={k.pr} pct={k.prPct} neg/>}
+        <div style={{ borderTop:'1px dashed var(--line)', margin:'3px 0' }}/>
+        <L label="แพลตฟอร์มโอนให้จริง" val={k.net} pct={k.netPct} bold color="var(--primary)"/>
+        <L label={'ต้นทุนวัตถุดิบ+แพ็ก (~'+ocFmt(k.costPct,0)+'%)'} val={k.cost} neg/>
+        <L label="กำไรหลังต้นทุนของ" val={k.profit} pct={k.profitPct} bold color={k.profit>=0?'var(--pos)':'var(--neg)'}/>
+        {k.o>0 && <div className="text-[11px] mt-0.5" style={{ color:'var(--muted)' }}>ต่อออเดอร์: ได้จริง {ocFmt(k.netPerOrder,1)} ฿ · กำไร {ocFmt(k.profitPerOrder,1)} ฿{k.mk>0? ' · ค่าการตลาด/วัน '+ocFmt(k.mk/(days||30),0)+' ฿':''}</div>}
+      </div>
+      {k.mk>0 && (
+        <div className="rounded-xl p-2.5 mt-2 text-[12px]" style={{ background:'var(--soft)', lineHeight:1.55 }}>
+          <div className="kanit text-[12.5px]" style={{ fontWeight:600 }}>🎯 จุดคุ้มทุนค่าโฆษณา+โปร</div>
+          <div>ยอดขาย 100 ฿ เหลือกำไร <b className="num">{ocFmt(k.cm*100,1)} ฿</b> (หลัง GP + ต้นทุนของ ก่อนค่าการตลาด)</div>
+          <div>ค่าการตลาด <b className="num">{ocFmt(k.mk,0)} ฿</b> → ต้องดึงยอดขายเพิ่ม <b className="num">{isFinite(k.beSales)? ocFmt(k.beSales,0)+' ฿':'∞'}</b>{isFinite(k.bePct)&&<span> (= {ocFmt(k.bePct,0)}% ของยอดเดือนนี้)</span>} ถึงจะคุ้ม</div>
+          <div>จ่ายค่าการตลาด 1 ฿ ตอนนี้ได้ยอดขาย <b className="num">{ocFmt(k.roas,1)} ฿</b> · ต้องได้อย่างน้อย <b className="num">{isFinite(k.beRoas)? ocFmt(k.beRoas,1):'∞'} ฿</b> (กรณีทุกออเดอร์มาจากการตลาด)</div>
+          <div className="mt-1" style={{ color:verdict.c, fontWeight:600 }}>{verdict.t}</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DlvEditSheet({ ym, month, onClose, onSave }){
+  const [f,setF]=useState(()=>{ const o={}; DLV_PLAT.forEach(pl=>{ const p=(month||{})[pl.id]||{}; o[pl.id]={ sales:p.sales??'', orders:p.orders??'', gp:p.gp??'', ads:p.ads??'', promo:p.promo??'', adj:p.adj??'' }; }); return o; });
+  const [busy,setBusy]=useState(false);
+  const set=(pid,key,v)=>setF(s=>({ ...s, [pid]:{ ...s[pid], [key]:v } }));
+  const fields=[['sales','ยอดขาย'],['orders','ออเดอร์'],['gp','ค่า GP (รวม VAT)'],['ads','ค่าโฆษณา'],['promo','โปร/ส่วนลดร้านออก'],['adj','ปรับยอดคืน (+)']];
+  return (
+    <Portal><div style={{ position:'fixed', inset:0, background:'rgba(15,23,42,.45)', zIndex:80, display:'flex', alignItems:'flex-end', justifyContent:'center' }} onClick={onClose}>
+      <div className="fade" style={{ background:'var(--card)', width:'100%', maxWidth:440, maxHeight:'92vh', overflowY:'auto', borderRadius:'18px 18px 0 0', padding:'14px 14px 20px' }} onClick={e=>e.stopPropagation()}>
+        <div className="flex items-center mb-2"><div className="kanit text-[16px]" style={{ fontWeight:600 }}>✏️ ตัวเลขเดลิเวอรี่ · {ocPayLabel(ym)}</div>
+          <button className="press ml-auto text-[18px]" style={{ border:'none', background:'none', color:'var(--muted)' }} onClick={onClose}>✕</button></div>
+        {DLV_PLAT.map(pl=>{ const k=dlvCalc(f[pl.id],0); return (
+          <div key={pl.id} className="rounded-xl p-2.5 mb-2.5" style={{ border:'1px solid var(--line)' }}>
+            <div className="flex items-center gap-1.5"><span style={{ width:9, height:9, borderRadius:99, background:pl.color }}/><b className="kanit text-[14px]">{pl.name}</b>
+              <span className="text-[11.5px] ml-auto num" style={{ color:'var(--primary)' }}>ได้จริง {ocFmt(k.net,2)} ฿</span></div>
+            <div className="text-[10.5px] mt-0.5 mb-1.5" style={{ color:'var(--muted)', lineHeight:1.4 }}>📧 {pl.src}</div>
+            <div className="grid grid-cols-2 gap-x-2 gap-y-1.5">
+              {fields.map(([key,lab])=>(
+                <label key={key} className="text-[11px]" style={{ color:'var(--muted)' }}>{lab}
+                  <input className="num" inputMode="decimal" value={f[pl.id][key]} onChange={e=>set(pl.id,key,e.target.value.replace(/[^\d.\-]/g,''))}
+                    style={{ width:'100%', marginTop:2, padding:'7px 8px', borderRadius:9, border:'1px solid var(--line)', fontSize:14, background:'var(--bg)' }}/>
+                </label>))}
+            </div>
+          </div>); })}
+        <div className="text-[11px] mb-2" style={{ color:'var(--muted)' }}>"ได้จริง" = ยอดขาย − GP − โฆษณา − โปร + ปรับยอดคืน → ควรเท่ากับยอดที่แพลตฟอร์มโอนเข้าบัญชีของเดือนนั้น</div>
+        <button disabled={busy} className="press kanit w-full py-3 rounded-xl text-white text-[15px]" style={{ background:'var(--primary)', border:'none', fontWeight:600 }}
+          onClick={async()=>{ setBusy(true); const out={}; DLV_PLAT.forEach(pl=>{ const x=f[pl.id]; const o={}; Object.keys(x).forEach(k=>{ if(String(x[k]).trim()!=='') o[k]=dlvN(x[k]); }); if(Object.keys(o).length) out[pl.id]=o; else out[pl.id]=null; }); await onSave(out); setBusy(false); }}>บันทึก</button>
+      </div>
+    </div></Portal>
+  );
+}
+
+function OCTabDelivery({ data, toast, user }){
+  const [dv,setDv]=useState(null);
+  const [ym,setYm]=useState(null);
+  const [edit,setEdit]=useState(false);
+  const [busy,setBusy]=useState(false);
+  const [plan,setPlan]=useState({ pid:'grab' });
+  const cfgTimer=useRef(null);
+  const biz=(data&&data.biz)||OC_SEED_BIZ;
+  const defCost = biz.avgPrice>0? Math.round(biz.avgCost/biz.avgPrice*1000)/10 : 40;
+  useEffect(()=>{ (async()=>{
+    try{
+      let d=null;
+      if(db){ const s=await db.collection('owlCost').doc('delivery').get(); d=s.exists? s.data():{}; }
+      else d=window.__dlvSeed||{};
+      d.months=d.months||{}; d.cfg=d.cfg||{};
+      setDv(d);
+      const ms=Object.keys(d.months).filter(m=>DLV_PLAT.some(pl=>dlvHas(d.months[m][pl.id]))).sort();
+      setYm(ms.length? ms[ms.length-1] : ymOf(today()));
+    }catch(e){ console.error(e); setDv({months:{},cfg:{}}); setYm(ymOf(today())); }
+  })(); },[]);
+  if(!dv||!ym) return <div style={{ padding:'30px 0', textAlign:'center', color:'var(--muted)' }}>กำลังโหลดข้อมูลเดลิเวอรี่…</div>;
+  const costPct = dv.cfg.costPct!=null && dv.cfg.costPct!=='' ? dlvN(dv.cfg.costPct) : defCost;
+  const month=dv.months[ym]||{};
+  const months=Object.keys(dv.months).filter(m=>DLV_PLAT.some(pl=>dlvHas(dv.months[m][pl.id]))).sort();
+  const days=dlvDays(ym);
+  const ks=DLV_PLAT.map(pl=>({ pl, k:dlvCalc(month[pl.id], costPct), has:dlvHas(month[pl.id]) }));
+  const tot=dlvCalc(dlvSum(DLV_PLAT.map(pl=>month[pl.id])), costPct);
+  const saveCfg=(patch)=>{ const nd={ ...dv, cfg:{ ...dv.cfg, ...patch } }; setDv(nd);
+    if(cfgTimer.current) clearTimeout(cfgTimer.current);
+    cfgTimer.current=setTimeout(async()=>{ if(db) try{ await db.collection('owlCost').doc('delivery').set({ cfg:nd.cfg },{merge:true}); }catch(e){ toast&&toast('บันทึกไม่สำเร็จ'); } },800); };
+  const saveMonth=async(out)=>{
+    const m={ ...(dv.months[ym]||{}) }; Object.keys(out).forEach(k=>{ if(out[k]) m[k]=out[k]; else delete m[k]; });
+    const nd={ ...dv, months:{ ...dv.months, [ym]:m } }; setDv(nd); setEdit(false);
+    if(db){ try{ const DEL=firebase.firestore.FieldValue.delete(); const paths={}; DLV_PLAT.forEach(pl=>{ paths['months.'+ym+'.'+pl.id]= out[pl.id] || DEL; });
+      await dlvUpdate(paths); toast&&toast('บันทึกแล้ว'); }catch(e){ console.error(e); toast&&toast('บันทึกไม่สำเร็จ'); } }
+  };
+  const post=async()=>{
+    if(!db) return; setBusy(true);
+    try{ const r=await dlvPostExpenses(ym, dv.months[ym], user); setDv(d=>({ ...d, months:{ ...d.months, [ym]:{ ...(d.months[ym]||{}), exp:r.exp } } }));
+      toast&&toast(`ลงรายจ่ายแล้ว · เพิ่ม ${r.added} · แก้ ${r.updated}${r.removed?' · ลบ '+r.removed:''}`); }
+    catch(e){ console.error(e); toast&&toast('ลงรายจ่ายไม่สำเร็จ: '+(e.message||'')); }
+    setBusy(false);
+  };
+  const expDone = month.exp && Object.keys(month.exp).length>0;
+  const shift=(dir)=>setYm(ocPayShift(ym,dir));
+
+  /* แผนเดือนหน้า: ค่าเริ่มต้นจากเดือนที่เลือก */
+  const pk=dlvCalc(month[plan.pid], costPct);
+  const P={ aov: plan.aov ?? (pk.aov? Math.round(pk.aov):''), ordersDay: plan.ordersDay ?? (pk.o? Math.round(pk.o/days*10)/10 : ''),
+    gpPct: plan.gpPct ?? (pk.s? Math.round(pk.gpPct*10)/10 : 30), costPct: plan.costPct ?? costPct,
+    disc: plan.disc ?? 0, dlvDisc: plan.dlvDisc ?? 0, adsDay: plan.adsDay ?? (pk.mk? Math.round(pk.mk/days) : 0), growth: plan.growth ?? 0, days: dlvDays(ocPayShift(ym,1)) };
+  const pr=dlvPlan(P);
+  const setP=(k,v)=>setPlan(s=>({ ...s, [k]:v }));
+  const pin=(k,w,suf)=>(<span className="inline-flex items-center gap-1"><OCNumIn value={P[k]} onChange={v=>setP(k,v)} w={w||'58px'}/>{suf&&<span>{suf}</span>}</span>);
+  const discTable=[0,10,20,30,40].map(d=>{ const r=dlvPlan({ ...P, disc:d }); return { d, ...r }; });
+
+  return (
+    <div className="px-1 pb-6 fade">
+      {/* เลือกเดือน */}
+      <div className="flex items-center gap-2 mt-3">
+        <button className="press kanit px-2.5 py-1 rounded-lg" style={{ border:'1px solid var(--line)', background:'var(--card)' }} onClick={()=>shift(-1)}>◀</button>
+        <div className="kanit text-[15px] flex-1 text-center" style={{ fontWeight:600 }}>{ocPayLabel(ym)}</div>
+        <button className="press kanit px-2.5 py-1 rounded-lg" style={{ border:'1px solid var(--line)', background:'var(--card)' }} onClick={()=>shift(1)}>▶</button>
+      </div>
+
+      {/* สรุปรวม */}
+      <div className="card p-3 mt-2.5">
+        <div className="flex items-center">
+          <div className="kanit text-[14px]">🛵 รวมทุกแอป</div>
+          <button className="press kanit text-[12px] px-2.5 py-1 rounded-lg ml-auto" style={{ background:'var(--soft)', color:'var(--primary)', border:'none' }} onClick={()=>setEdit(true)}>✏️ ใส่/แก้ตัวเลข</button>
+        </div>
+        {tot.s>0 ? (<>
+          <div className="grid grid-cols-3 gap-2 mt-2 text-center">
+            <div><div className="text-[10.5px]" style={{ color:'var(--muted)' }}>ยอดขาย</div><div className="kanit num text-[17px]" style={{ fontWeight:700 }}>{ocFmt(tot.s,0)}</div></div>
+            <div><div className="text-[10.5px]" style={{ color:'var(--muted)' }}>ได้จริง</div><div className="kanit num text-[17px]" style={{ fontWeight:700, color:'var(--primary)' }}>{ocFmt(tot.netPct,0)}%</div></div>
+            <div><div className="text-[10.5px]" style={{ color:'var(--muted)' }}>กำไรหลังต้นทุนของ</div><div className="kanit num text-[17px]" style={{ fontWeight:700, color: tot.profit>=0?'var(--pos)':'var(--neg)' }}>{ocFmt(tot.profit,0)}</div></div>
+          </div>
+          <div className="mt-2"><DlvBar k={tot}/></div>
+          <div className="text-[11.5px] mt-1.5" style={{ color:'var(--muted)', lineHeight:1.5 }}>
+            ค่า GP {ocFmt(tot.gpNet,0)} ฿ · ค่าโฆษณา+โปร <b style={{ color:'#B45309' }}>{ocFmt(tot.mk,0)} ฿</b> ({ocFmt(tot.mkPct,0)}% ของยอด · วันละ ~{ocFmt(tot.mk/days,0)} ฿)
+          </div>
+        </>) : <div className="text-[12.5px] mt-2" style={{ color:'var(--muted)' }}>ยังไม่มีตัวเลขเดือนนี้ — กด "ใส่/แก้ตัวเลข" แล้วกรอกจากอีเมลของแต่ละแอป</div>}
+        <div className="flex items-center gap-1.5 mt-2.5 pt-2 text-[11.5px] flex-wrap" style={{ borderTop:'1px solid var(--line)', color:'var(--muted)' }}>
+          <span>ต้นทุนวัตถุดิบ+แพ็ก</span><OCNumIn value={costPct} onChange={v=>saveCfg({ costPct:v })} w="60px"/><span>% ของยอดขาย</span>
+          <span style={{ fontSize:10.5 }}>(ค่าเริ่มต้น {ocFmt(defCost,1)}% จากต้นทุน/ราคาเฉลี่ยในแท็บรายเดือน · ไม่รวมค่าแรง/ค่าเช่า)</span>
+        </div>
+      </div>
+
+      {/* รายแอป */}
+      <div className="mt-2.5">
+        {ks.filter(x=>x.has).map(x=><DlvPlatCard key={x.pl.id} pl={x.pl} k={x.k} days={days}/>)}
+      </div>
+
+      {/* ลงรายจ่าย */}
+      {tot.s>0 && db && (
+        <div className="card p-3 mb-2.5">
+          <div className="kanit text-[14px]">🧾 ลงเป็นรายจ่ายในบัญชี Owl Cha</div>
+          <div className="text-[11.5px] mt-1" style={{ color:'var(--muted)', lineHeight:1.5 }}>
+            รายได้ POS ลงยอดเต็มอยู่แล้ว → ลง "{DLV_CAT_GP}" {ocFmt(tot.gpNet,0)} ฿ และ "{DLV_CAT_MK}" {ocFmt(tot.mk,0)} ฿ แยกตามแอป วันที่ {dlvLastDay(ym).slice(8)} · จ่ายแบบโอน (หักจากยอดที่แอปโอนให้) · กดซ้ำได้ = อัปเดตยอด ไม่ลงซ้ำ
+          </div>
+          <button disabled={busy} className="press kanit w-full mt-2 py-2.5 rounded-xl text-white text-[14px]" style={{ background: expDone?'#1D6F42':'var(--primary)', border:'none', fontWeight:600, opacity:busy?.6:1 }} onClick={post}>
+            {busy? 'กำลังลง…' : expDone? '✓ ลงแล้ว · กดเพื่ออัปเดตยอด' : 'ลงรายจ่ายเดือนนี้'}</button>
+        </div>
+      )}
+
+      {/* แนวโน้มรายเดือน */}
+      {months.length>0 && (
+        <div className="card p-3 mb-2.5">
+          <div className="kanit text-[14px] mb-1.5">📈 เทียบรายเดือน</div>
+          <div style={{ overflowX:'auto' }}>
+            <table className="text-[11.5px] num" style={{ width:'100%', borderCollapse:'collapse', whiteSpace:'nowrap' }}>
+              <thead><tr style={{ color:'var(--muted)', textAlign:'right' }}>
+                <th style={{ textAlign:'left', fontWeight:500, padding:'2px 4px' }}>เดือน · แอป</th><th style={{ fontWeight:500, padding:'2px 4px' }}>ยอดขาย</th><th style={{ fontWeight:500, padding:'2px 4px' }}>GP%</th><th style={{ fontWeight:500, padding:'2px 4px' }}>ตลาด%</th><th style={{ fontWeight:500, padding:'2px 4px' }}>ได้จริง%</th><th style={{ fontWeight:500, padding:'2px 4px' }}>กำไร</th></tr></thead>
+              <tbody>
+                {months.map(m=>{ const mo=dv.months[m]; const rows=DLV_PLAT.filter(pl=>dlvHas(mo[pl.id])).map(pl=>({ pl, k:dlvCalc(mo[pl.id],costPct) }));
+                  const t=dlvCalc(dlvSum(DLV_PLAT.map(pl=>mo[pl.id])),costPct);
+                  return (<React.Fragment key={m}>
+                    <tr style={{ borderTop:'1px solid var(--line)', fontWeight:600, background: m===ym?'var(--soft)':'transparent', cursor:'pointer' }} onClick={()=>setYm(m)}>
+                      <td className="kanit" style={{ textAlign:'left', padding:'3px 4px' }}>{ocPayLabel(m)}</td><td style={{ textAlign:'right', padding:'3px 4px' }}>{ocFmt(t.s,0)}</td><td style={{ textAlign:'right', padding:'3px 4px' }}>{ocFmt(t.gpPct,0)}</td><td style={{ textAlign:'right', padding:'3px 4px' }}>{ocFmt(t.mkPct,0)}</td><td style={{ textAlign:'right', padding:'3px 4px' }}>{ocFmt(t.netPct,0)}</td><td style={{ textAlign:'right', padding:'3px 4px', color:t.profit>=0?'var(--pos)':'var(--neg)' }}>{ocFmt(t.profit,0)}</td></tr>
+                    {rows.map(({pl,k})=>(<tr key={pl.id} style={{ color:'var(--muted)' }}>
+                      <td style={{ textAlign:'left', padding:'1px 4px 1px 12px' }}><span style={{ display:'inline-block', width:7, height:7, borderRadius:99, background:pl.color, marginRight:4 }}/>{pl.name}</td><td style={{ textAlign:'right', padding:'1px 4px' }}>{ocFmt(k.s,0)}</td><td style={{ textAlign:'right', padding:'1px 4px' }}>{ocFmt(k.gpPct,0)}</td><td style={{ textAlign:'right', padding:'1px 4px' }}>{ocFmt(k.mkPct,0)}</td><td style={{ textAlign:'right', padding:'1px 4px' }}>{ocFmt(k.netPct,0)}</td><td style={{ textAlign:'right', padding:'1px 4px', color:k.profit>=0?'var(--pos)':'var(--neg)' }}>{ocFmt(k.profit,0)}</td></tr>))}
+                  </React.Fragment>); })}
+              </tbody>
+            </table>
+          </div>
+          <div className="text-[10.5px] mt-1" style={{ color:'var(--muted)' }}>ตลาด% = ค่าโฆษณา + โปรที่ร้านออก · กำไร = เงินที่ได้จริง − ต้นทุนวัตถุดิบ+แพ็ก (ยังไม่หักค่าแรง/ค่าเช่า) · แตะเดือนเพื่อดูรายละเอียด</div>
+        </div>
+      )}
+
+      {/* วางแผนโปรเดือนหน้า */}
+      <div className="card p-3 mb-2.5">
+        <div className="kanit text-[14px]">🧮 เดือนหน้าเล่นโปร/ยิงแอดดีไหม · {ocPayLabel(ocPayShift(ym,1))}</div>
+        <div className="flex gap-1.5 mt-2 flex-wrap">
+          {DLV_PLAT.map(pl=>(<button key={pl.id} className="press kanit text-[12px] px-2.5 py-1 rounded-full" onClick={()=>setPlan({ pid:pl.id })}
+            style={ plan.pid===pl.id? { background:pl.color, color:'#fff', border:'none' } : { background:'var(--soft)', color:'var(--ink)', border:'none' } }>{pl.name}</button>))}
+        </div>
+        <div className="text-[12px] mt-2 space-y-1.5" style={{ color:'var(--muted)' }}>
+          <div className="flex items-center gap-1.5 flex-wrap">ออเดอร์/วัน (ถ้าไม่เล่นโปร) {pin('ordersDay',null,null)} · ราคาเฉลี่ย/ออเดอร์ {pin('aov',null,'฿')}</div>
+          <div className="flex items-center gap-1.5 flex-wrap">ค่า GP {pin('gpPct','50px','%')} · ต้นทุนของ {pin('costPct','50px','%')}</div>
+          <div className="flex items-center gap-1.5 flex-wrap">ลดราคา (ร้านออก) {pin('disc','46px','%')} · ลดค่าส่ง (ร้านออก) {pin('dlvDisc','46px','฿/ออเดอร์')}</div>
+          <div className="flex items-center gap-1.5 flex-wrap">งบโฆษณา {pin('adsDay','58px','฿/วัน')} · คาดว่าออเดอร์เพิ่ม {pin('growth','50px','%')}</div>
+        </div>
+        <div className="rounded-xl p-2.5 mt-2 text-[12.5px]" style={{ background:'var(--soft)', lineHeight:1.6 }}>
+          <div className="flex justify-between"><span>กำไร/ออเดอร์ ไม่เล่นโปร</span><b className="num">{ocFmt(pr.m0,1)} ฿</b></div>
+          <div className="flex justify-between"><span>กำไร/ออเดอร์ ระหว่างโปร</span><b className="num" style={{ color: pr.m1>0?'var(--ink)':'var(--neg)' }}>{ocFmt(pr.m1,1)} ฿</b></div>
+          <div className="flex justify-between"><span>กำไรทั้งเดือน ถ้าไม่เล่น</span><b className="num">{ocFmt(pr.P0,0)} ฿</b></div>
+          <div className="flex justify-between"><span>กำไรทั้งเดือน ถ้าเล่น (ออเดอร์ +{ocFmt(dlvN(P.growth),0)}%)</span><b className="num" style={{ color: pr.P1>=pr.P0?'var(--pos)':'var(--neg)' }}>{ocFmt(pr.P1,0)} ฿</b></div>
+          <div className="mt-1.5 kanit" style={{ fontWeight:600, color: isFinite(pr.need)? 'var(--primary)':'var(--neg)' }}>
+            {isFinite(pr.need)
+              ? (pr.need<=0 ? 'โปรนี้ไม่ทำให้กำไรลด — เล่นได้' : `จุดคุ้มทุน: ออเดอร์ต้องเพิ่มอย่างน้อย ${ocFmt(pr.need,0)}% (≈ ${ocFmt(pr.needOrdersDay,1)} ออเดอร์/วัน) ถึงจะได้กำไรเท่าไม่เล่น`)
+              : 'ไม่คุ้มทุกกรณี — ลดราคาเยอะจนขายแล้วขาดทุนทุกออเดอร์'}
+          </div>
+        </div>
+        <div className="mt-2">
+          <div className="text-[11.5px] mb-1" style={{ color:'var(--muted)' }}>จุดคุ้มทุนตามส่วนลด (ใช้งบโฆษณา/ค่าส่งตามที่ตั้งไว้)</div>
+          <table className="text-[12px] num" style={{ width:'100%', borderCollapse:'collapse' }}>
+            <thead><tr style={{ color:'var(--muted)' }}><th style={{ textAlign:'left', fontWeight:500 }}>ลดราคา</th><th style={{ textAlign:'right', fontWeight:500 }}>กำไร/ออเดอร์</th><th style={{ textAlign:'right', fontWeight:500 }}>ออเดอร์ต้องเพิ่ม</th></tr></thead>
+            <tbody>{discTable.map(r=>(<tr key={r.d} style={{ borderTop:'1px solid var(--line)', fontWeight: dlvN(P.disc)===r.d?700:400 }}>
+              <td style={{ padding:'2px 0' }}>{r.d}%</td><td style={{ textAlign:'right', color:r.m1>0?'var(--ink)':'var(--neg)' }}>{ocFmt(r.m1,1)} ฿</td>
+              <td style={{ textAlign:'right', color: !isFinite(r.need)?'var(--neg)': r.need>100?'#B45309':'var(--ink)' }}>{!isFinite(r.need)? 'ขาดทุนทุกออเดอร์' : r.need<=0? '—' : '+'+ocFmt(r.need,0)+'%'}</td></tr>))}</tbody>
+          </table>
+        </div>
+        <div className="text-[10.5px] mt-1.5" style={{ color:'var(--muted)', lineHeight:1.45 }}>คิดแบบเดียวกับรายงานแอป: GP คิดจากราคาหลังลด · ต้นทุนของคิดจากราคาเต็ม · ยังไม่รวมค่าแรง/ค่าเช่า (เท่าเดิมไม่ว่าจะเล่นโปรหรือไม่)</div>
+      </div>
+
+      {edit && <DlvEditSheet ym={ym} month={month} onClose={()=>setEdit(false)} onSave={saveMonth}/>}
+    </div>
+  );
+}
+
+
+function CostPanel({toast,user}){
   const [data,setData] = useState(null);
   const [sub,setSub] = useState('cost');
   const [saveState,setSaveState] = useState('idle');
@@ -2745,6 +3098,7 @@ function CostPanel({toast}){
   const saveLabel = { idle:'', dirty:'· มีการแก้ไข', saving:'· กำลังบันทึก…', saved:'· ✓ บันทึกแล้ว', error:'· ⚠️ บันทึกไม่ได้' }[saveState];
   const SUBTABS = [
     { id:'cost', label:'📊 ต้นทุน' },
+    { id:'dlv',  label:'🛵 เดลิเวอรี่' },
     { id:'biz',  label:'🏢 รายเดือน' },
     { id:'pay',  label:'💰 เงินเดือน' },
     { id:'menu', label:'🧋 เมนู' },
@@ -2774,6 +3128,7 @@ function CostPanel({toast}){
       {sub==='menu' && <OCTabMenu data={data} setData={setData} />}
       {sub==='cost' && <OCTabCost data={data} setData={setData} />}
       {sub==='biz'  && <OCTabBiz  data={data} setData={setData} />}
+      {sub==='dlv'  && <OCTabDelivery data={data} toast={toast} user={user} />}
       {sub==='pay'  && <OCTabPay toast={toast} />}
     </div>
   );
@@ -7592,7 +7947,7 @@ function Main({shop,user,canSwitch,onSwitch,logout}){
         {tab==='stamp' && <StampPanel shop={shop} user={user} toast={toast}/>}
         {tab==='print' && <PrintPanel user={user}/>}
         <TabErrorBoundary key={tab}>
-        {tab==='cost' && <CostPanel toast={toast}/>}
+        {tab==='cost' && <CostPanel toast={toast} user={user}/>}
         {tab==='attend' && <AttendPanel user={user}/>}
         {tab==='staff' && <StaffPanel user={user} toast={toast}/>}
         {tab==='lnattend' && <LnAttendPanel shop={shop} user={user}/>}
