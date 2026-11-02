@@ -941,7 +941,7 @@ function TxnBrowser({shop, user, toast}){
   const shift=(dd)=>{ const dt=new Date(yy,mm-1+dd,1); setYm(`${dt.getFullYear()}-${pad(dt.getMonth()+1)}`); };
   const atCur = ym>=ymOf(today());
   const isInc=kind==='income';
-  const onDel=async(r)=>{ if(!window.confirm('ลบรายการนี้?')) return; try{ await delTxn(r.id,{id:user.id,name:user.name}); await reload(); toast('ลบรายการแล้ว'); }catch(e){ toast('ลบไม่สำเร็จ','err'); } };
+  const onDel=async(r)=>{ if(!(await askDelete(r))) return; try{ await delTxn(r.id,{id:user.id,name:user.name}); await reload(); toast('ลบรายการแล้ว'); }catch(e){ toast('ลบไม่สำเร็จ','err'); } };
 
   return (
     <div style={{padding:'14px 16px 90px'}}>
@@ -8109,6 +8109,45 @@ function PL({label,v,c,big}){
   return <div><div style={{fontSize:11.5, color:'var(--muted)', marginBottom:4}}>{label}</div>
     <div className="num" style={{fontSize:big?19:16, fontWeight:700, color:c}}>{baht(v)}</div></div>;
 }
+/* ---------- ยืนยันก่อนลบ (กันกดผิด) — ใช้: if(!(await askDelete(r))) return; ---------- */
+function DelConfirm({ r, onDone }){
+  const [show,setShow]=useState(true);
+  const k=r.kind;
+  const kindLabel = k==='income'?'รายรับ': k==='expense'?'รายจ่าย': k==='invest'?'เพิ่มทุน': k==='withdraw'?'ถอนทุน': k==='dividend'?'ปันผล':'รายการ';
+  const col = k==='income'||k==='invest'? '#16A34A' : '#DC2626';
+  const a=(r.date||'').split('-'); const dl = a.length===3? `${parseInt(a[2])} ${THAI_MON[parseInt(a[1])-1]} ${(+a[0]+543)}` : (r.date||'');
+  const close=(v)=>{ setShow(false); setTimeout(()=>onDone(v),0); };
+  useEffect(()=>{ const h=(e)=>{ if(e.key==='Escape') close(false); }; window.addEventListener('keydown',h); return ()=>window.removeEventListener('keydown',h); },[]);
+  if(!show) return null;
+  return (
+    <div onClick={()=>close(false)} style={{position:'fixed',inset:0,background:'rgba(15,23,42,.55)',zIndex:200,display:'flex',alignItems:'center',justifyContent:'center',padding:20}}>
+      <div onClick={e=>e.stopPropagation()} className="fade" style={{background:'#fff',borderRadius:18,width:'100%',maxWidth:360,padding:'18px 18px 14px',boxShadow:'0 12px 40px rgba(0,0,0,.28)'}}>
+        <div style={{width:50,height:50,borderRadius:99,background:'#FEE2E2',color:'#DC2626',display:'grid',placeItems:'center',margin:'0 auto 8px'}}><I.trash/></div>
+        <div className="kanit" style={{textAlign:'center',fontWeight:700,fontSize:18}}>ลบ{kindLabel}นี้?</div>
+        <div style={{background:'#F6F7F9',borderRadius:12,padding:'10px 12px',margin:'12px 0 10px',fontSize:13.5,lineHeight:1.6}}>
+          <div style={{display:'flex',justifyContent:'space-between',gap:8}}><span style={{color:'#6B7280'}}>วันที่</span><b>{dl}</b></div>
+          <div style={{display:'flex',justifyContent:'space-between',gap:8}}><span style={{color:'#6B7280'}}>หมวด</span><b style={{textAlign:'right'}}>{r.category||'-'}</b></div>
+          {r.note && <div style={{display:'flex',justifyContent:'space-between',gap:8}}><span style={{color:'#6B7280'}}>หมายเหตุ</span><span style={{textAlign:'right',wordBreak:'break-word'}}>{r.note}</span></div>}
+          <div style={{display:'flex',justifyContent:'space-between',gap:8,alignItems:'baseline'}}><span style={{color:'#6B7280'}}>จำนวน</span><b className="num" style={{fontSize:19,color:col}}>{baht(Number(r.amount)||0)}</b></div>
+          {r.by&&r.by.name && <div style={{fontSize:11.5,color:'#9CA3AF',textAlign:'right'}}>ลงโดย {r.by.name}</div>}
+        </div>
+        <div style={{fontSize:11.5,color:'#6B7280',textAlign:'center',marginBottom:12}}>ถ้าลบผิด กู้คืนได้ที่ ตั้งค่า → ประวัติการใช้งาน → ย้อนกลับ</div>
+        <div style={{display:'flex',gap:10}}>
+          <button onClick={()=>close(false)} className="press kanit" style={{flex:1,padding:'12px',border:'1px solid #E5E7EB',borderRadius:12,background:'#fff',fontWeight:600,fontSize:15}}>ยกเลิก</button>
+          <button onClick={()=>close(true)} className="press kanit" style={{flex:1,padding:'12px',border:'none',borderRadius:12,background:'#DC2626',color:'#fff',fontWeight:700,fontSize:15}}>ลบเลย</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+function askDelete(r){
+  return new Promise(resolve=>{
+    const host=document.createElement('div'); document.body.appendChild(host);
+    const root=ReactDOM.createRoot(host);
+    root.render(<DelConfirm r={r||{}} onDone={(v)=>{ setTimeout(()=>{ try{ root.unmount(); }catch(e){} host.remove(); },0); resolve(!!v); }}/>);
+  });
+}
+
 function TxnRow({r,onDel,onView,onEdit,showDate}){
   const inc=r.kind==='income';
   const dStr=(()=>{ const a=(r.date||'').split('-'); return a.length<3?(r.date||''):`${parseInt(a[2])} ${THAI_MON[parseInt(a[1])-1]}`; })();
@@ -8175,7 +8214,7 @@ function Record({shop,user,readOnly,canSwitch,onSwitch,toast}){
   const inc=sumBy(list,r=>r.kind==='income');
   const exp=sumBy(list,r=>r.kind==='expense');
   const net=inc-exp;
-  const onDel=async(r)=>{ try{ await delTxn(r.id, {id:user.id,name:user.name}); await loadList(true); toast('ลบรายการแล้ว'); }catch(e){ toast('ลบไม่สำเร็จ','err'); } };
+  const onDel=async(r)=>{ if(!(await askDelete(r))) return; try{ await delTxn(r.id, {id:user.id,name:user.name}); await loadList(true); toast('ลบรายการแล้ว'); }catch(e){ toast('ลบไม่สำเร็จ','err'); } };
   const shiftDay=(n)=>{ const d=new Date(selDate+'T00:00:00'); d.setDate(d.getDate()+n); const ds=`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; if(ds<=today()) setSelDate(ds); };
   const atToday=selDate>=today();
   const dLabel=(()=>{ if(selDate===today()) return 'วันนี้'; const a=selDate.split('-'); return `${parseInt(a[2])} ${THAI_MON[parseInt(a[1])-1]} ${a[0]}`; })();
@@ -10721,7 +10760,7 @@ function Capital({shop,user,toast}){
                 {r.method==='cash' && <span style={{fontSize:11,color:'var(--muted)',flexShrink:0}}>💵</span>}
                 {r.method==='bank' && <span style={{fontSize:11,color:'var(--muted)',flexShrink:0}}>🏦</span>}
                 <span className="num" style={{fontWeight:600,fontSize:14,color:col,flexShrink:0}}>{sign}{baht(r.amount)}</span>
-                {isAdmin && <button onClick={async()=>{ if(window.confirm('ลบรายการนี้?')){ await delTxn(r.id, {id:user.id,name:user.name}); reload(); } }} className="press" style={{border:'none',background:'none',color:'#C0C4CC',padding:4,flexShrink:0}}><I.trash/></button>}
+                {isAdmin && <button onClick={async()=>{ if(await askDelete(r)){ await delTxn(r.id, {id:user.id,name:user.name}); reload(); } }} className="press" style={{border:'none',background:'none',color:'#C0C4CC',padding:4,flexShrink:0}}><I.trash/></button>}
               </div>
             );
           })}
