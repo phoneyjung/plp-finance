@@ -314,6 +314,7 @@ async function addTxn({shopId,kind,category,amount,method,note,by,photo,date,tax
     date:ds, ym, skey:`${shopId}_${ym}`, by, source:'manual', hasPhoto:!!photo, ts:FieldValue.serverTimestamp(),
     ...taxFields(tax, amount)
   });
+  monthCacheClear();
   if(photo){ await db.collection('transactions').doc('rcpt_'+ref.id).set({ skey:`${shopId}_RCPT`, txnRef:ref.id, photo, ts:FieldValue.serverTimestamp() }); }
   await writeLog(shopId, by, 'txn.add', `เพิ่ม${kind==='income'?'รายรับ':'รายจ่าย'} ${category} ${baht(Number(amount))}`, [{id:ref.id, before:null, after:{kind,category,amount:Number(amount),method,note:note||'',date:ds,hasPhoto:!!photo}}]);
   return ref.id;
@@ -323,6 +324,7 @@ async function delTxn(id, actor){
   let before=null;
   try{ const d=await db.collection('transactions').doc(id).get(); if(d.exists) before={...d.data()}; }catch(e){}
   await db.collection('transactions').doc(id).delete();
+  monthCacheClear();
   try{ await db.collection('transactions').doc('rcpt_'+id).delete(); }catch(e){}
   if(before){
     const cap=before.source==='capital';
@@ -337,6 +339,7 @@ async function updateTxn(id, {shopId,kind,category,amount,method,note,date,by,ta
   const ds=date||today(), ym=ymOf(ds);
   const after={ kind, category, amount:Number(amount), method, note:note||'', date:ds, ym, skey:`${shopId}_${ym}`, ...taxFields(tax, amount) };
   await db.collection('transactions').doc(id).update(after);
+  monthCacheClear();
   await writeLog(shopId, by, 'txn.edit', `แก้ไข${kind==='income'?'รายรับ':'รายจ่าย'} ${category} ${baht(Number(amount))}`, [{id, before, after}]);
 }
 function resizePhoto(file, maxW=600, q=0.6, mime='image/jpeg'){
@@ -348,6 +351,8 @@ function resizePhoto(file, maxW=600, q=0.6, mime='image/jpeg'){
     img.onerror=()=>rej(new Error('โหลดรูปไม่สำเร็จ')); img.src=URL.createObjectURL(file);
   });
 }
+const MONTH_CACHE={};  /* 'shop_ym' → {t, at} · ล้างทุกครั้งที่เพิ่ม/แก้/ลบรายการ */
+function monthCacheClear(){ Object.keys(MONTH_CACHE).forEach(k=>delete MONTH_CACHE[k]); }
 async function monthTxns(shopId, ym){
   const s=await db.collection('transactions').where('skey','==',`${shopId}_${ym}`).get();
   return s.docs.map(d=>({id:d.id,...d.data()}));
@@ -543,10 +548,13 @@ const DEFAULT_CAT_META={
 };
 const CATMETA={};
 function catMetaOf(shopId,name){ const c=CATMETA[shopId+'|'+name]; if(c) return c; const d=DEFAULT_CAT_META[name]; if(d) return d; return {color:catColor(name), icon:null}; }
-async function loadCatMeta(shopId){
+const CATMETA_AT={};   /* โหลดสี/ไอคอนหมวดแล้วเมื่อไหร่ (ต่อร้าน) — ไม่ต้องโหลดซ้ำทุกครั้งที่เปลี่ยนวัน */
+async function loadCatMeta(shopId, force){
+  if(!force && CATMETA_AT[shopId] && Date.now()-CATMETA_AT[shopId]<120000) return;
   try{
     const arrs=await Promise.all(['income','expense'].map(k=>db.collection('customCategories').where('ckey','==',`${shopId}_${k}`).get()));
     arrs.forEach(s=>s.docs.forEach(d=>{ const x=d.data(); CATMETA[shopId+'|'+x.name]={color:x.color||catColor(x.name), icon:x.icon||null}; }));
+    CATMETA_AT[shopId]=Date.now();
   }catch(e){ console.error('loadCatMeta',e); }
 }
 function CatBadge({shopId,name,size}){ size=size||42; const m=catMetaOf(shopId,name); const Ic=m.icon&&CAT_ICONS[m.icon]; const isz=Math.round(size*0.52);
@@ -8149,18 +8157,25 @@ function Record({shop,user,readOnly,canSwitch,onSwitch,toast}){
   const [viewRcpt,setViewRcpt]=useState(null);
   const [editTxn,setEditTxn]=useState(null);
 
-  const loadList=async()=>{
-    setLoad(true);
-    try{ await loadCatMeta(shop.id); const t=await monthTxns(shop.id, ymOf(selDate)); setList(t.filter(x=>x.date===selDate).sort((a,b)=>(((b.ts&&b.ts.seconds)||0)-((a.ts&&a.ts.seconds)||0)))); }
+  const reqRef=useRef(0);
+  const pickDay=(t,d)=>t.filter(x=>x.date===d).sort((a,b)=>(((b.ts&&b.ts.seconds)||0)-((a.ts&&a.ts.seconds)||0)));
+  /* force=true หลังเพิ่ม/แก้/ลบ → โหลดสดจากเซิร์ฟเวอร์ · ปกติ: มีของเดือนนี้ในเครื่องแล้วโชว์ทันที แล้วอัปเดตเบื้องหลัง */
+  const loadList=async(force)=>{
+    const my=++reqRef.current, d=selDate, ym=ymOf(d), key=shop.id+'_'+ym, c=MONTH_CACHE[key];
+    if(c && !force){ setList(pickDay(c.t,d)); setLoad(false); if(Date.now()-c.at<15000) return; }
+    else setLoad(true);
+    try{ const [,t]=await Promise.all([loadCatMeta(shop.id), monthTxns(shop.id, ym)]);
+      MONTH_CACHE[key]={t, at:Date.now()};
+      if(my===reqRef.current) setList(pickDay(t,d)); }
     catch(e){ console.error(e); }
-    setLoad(false);
+    if(my===reqRef.current) setLoad(false);
   };
   useEffect(()=>{ loadList(); },[shop.id,selDate]);
 
   const inc=sumBy(list,r=>r.kind==='income');
   const exp=sumBy(list,r=>r.kind==='expense');
   const net=inc-exp;
-  const onDel=async(r)=>{ try{ await delTxn(r.id, {id:user.id,name:user.name}); await loadList(); toast('ลบรายการแล้ว'); }catch(e){ toast('ลบไม่สำเร็จ','err'); } };
+  const onDel=async(r)=>{ try{ await delTxn(r.id, {id:user.id,name:user.name}); await loadList(true); toast('ลบรายการแล้ว'); }catch(e){ toast('ลบไม่สำเร็จ','err'); } };
   const shiftDay=(n)=>{ const d=new Date(selDate+'T00:00:00'); d.setDate(d.getDate()+n); const ds=`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; if(ds<=today()) setSelDate(ds); };
   const atToday=selDate>=today();
   const dLabel=(()=>{ if(selDate===today()) return 'วันนี้'; const a=selDate.split('-'); return `${parseInt(a[2])} ${THAI_MON[parseInt(a[1])-1]} ${a[0]}`; })();
@@ -8212,9 +8227,9 @@ function Record({shop,user,readOnly,canSwitch,onSwitch,toast}){
           <I.plus/> เพิ่มรายการ</button>
       )}
 
-      {showEntry && <EntrySheet shop={shop} user={user} initMode={entryMode} initDate={selDate} onClose={()=>setShowEntry(false)} onSaved={()=>{ setShowEntry(false); loadList(); }} toast={toast}/>}
-      {editTxn && <EntrySheet shop={shop} user={user} editTxn={editTxn} onClose={()=>setEditTxn(null)} onSaved={()=>{ setEditTxn(null); loadList(); }} toast={toast}/>}
-      {showImport && <Import shop={shop} user={user} toast={toast} onClose={()=>setShowImport(false)} onDone={()=>{ setShowImport(false); loadList(); }}/>}
+      {showEntry && <EntrySheet shop={shop} user={user} initMode={entryMode} initDate={selDate} onClose={()=>setShowEntry(false)} onSaved={()=>{ setShowEntry(false); loadList(true); }} toast={toast}/>}
+      {editTxn && <EntrySheet shop={shop} user={user} editTxn={editTxn} onClose={()=>setEditTxn(null)} onSaved={()=>{ setEditTxn(null); loadList(true); }} toast={toast}/>}
+      {showImport && <Import shop={shop} user={user} toast={toast} onClose={()=>setShowImport(false)} onDone={()=>{ setShowImport(false); monthCacheClear(); loadList(true); }}/>}
       {viewRcpt && <ReceiptViewer txn={viewRcpt} onClose={()=>setViewRcpt(null)}/>}
     </div>
   );
